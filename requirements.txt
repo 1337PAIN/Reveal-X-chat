@@ -1,0 +1,10 @@
+Flask==3.0.0
+flask-socketio==5.3.5
+python-socketio==5.10.0
+numpy>=1.26.0
+opencv-python-headless>=4.8.1.78
+Pillow>=10.1.0
+gunicorn==21.2.0
+argon2-cffi==23.1.0
+psycopg2-binary>=2.9.9
+cryptography==42.0.5
