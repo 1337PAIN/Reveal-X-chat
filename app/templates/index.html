@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reveal-X | Secure Image Sharing</title>
+    <!-- [MODIFIED] Added CSP meta tag as fallback -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.socket.io; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' ws: wss: https://cdn.socket.io;">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <!-- [NEW] DOMPurify for XSS prevention -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/purify.min.js"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=spinnerfix">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Open accounts" aria-expanded="false">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+                <img src="{{ url_for('static', filename='Xlogo.png') }}" alt="Reveal-X Logo" class="logo-image">
+                <h1>Reveal-X</h1>
+            </div>
+            <div class="header-info">
+                <!-- [NEW] Offline indicator -->
+                <div id="offlineIndicator" class="offline-indicator" title="Offline" aria-live="polite">
+                    <i class="fas fa-wifi-slash"></i>
+                    <span id="reconnectCount" class="reconnect-count" aria-live="polite"></span>
+                </div>
+                <button id="logoutBtn" class="icon-btn" type="button" title="Logout">Logout</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div id="sidebarOverlay" class="sidebar-overlay"></div>
+            <aside id="accountsSidebar" class="sidebar">
+                <div class="sidebar-profile">
+                    <div class="profile-info">
+                        <label class="profile-picker" title="Profile picture">
+                            <img id="profilePreview" alt="" class="profile-preview">
+                            <input type="file" id="profileImageInput" accept="image/*" hidden>
+                        </label>
+                        <div class="profile-details">
+                            <span class="account-name" id="accountName"></span>
+                            <span class="status" id="userStatus">Online</span>
+                        </div>
+                    </div>
+                    <button id="settingsBtn" class="btn-settings" type="button" title="Settings">⚙️</button>
+                </div>
+
+                <div class="sidebar-stats">
+                    <span class="user-count" id="userCount">0 users</span>
+                </div>
+
+                <div class="sidebar-header">
+                    <h3>Accounts</h3>
+                    <input type="search" id="userSearchInput" class="user-search" placeholder="Search accounts..." autocomplete="off">
+                </div>
+                <ul id="usersList" class="users-list">
+                    <li class="empty-state">Log in to see accounts</li>
+                </ul>
+
+                <div class="sidebar-footer">
+                    <button id="reconstructImageBtn" class="icon-btn" type="button" title="Manual image reconstruction">🔄</button>
+                    <button id="themeToggle" class="icon-btn theme-btn" type="button" title="Toggle theme"><span class="theme-icon">🌙</span></button>
+                </div>
+            </aside>
+
+            <section class="chat-section">
+                <div class="chat-header">
+                    <div>
+                        <h2 id="chatTitle">Select a user</h2>
+                        <p id="chatSubtitle">Choose someone online to start a private chat</p>
+                    </div>
+                    <!-- [MODIFIED] Added debounce attribute for search -->
+                    <input type="search" id="messageSearchInput" class="message-search" placeholder="Search chat..." autocomplete="off" debounce="300">
+                </div>
+
+                <div id="messagesContainer" class="messages-container">
+                    <div class="welcome-message">
+                        <div class="welcome-icon">RX</div>
+                        <h2>Private Secure Chat</h2>
+                        <p>Select a user to send encrypted images and messages</p>
+                        <div class="features">
+                            <div class="feature"><span>🔒</span> Secure</div>
+                            <div class="feature"><span>🔑</span> E2EE</div>
+                            <div class="feature"><span>⏳</span> 1h Auto-delete</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="typingIndicator" class="typing-indicator" aria-live="polite"></div>
+
+                <div id="replyBar" class="reply-bar hidden">
+                    <div>
+                        <strong id="replyTitle">Replying</strong>
+                        <span id="replyText"></span>
+                    </div>
+                    <button id="cancelReplyBtn" type="button" aria-label="Cancel reply">×</button>
+                </div>
+
+                <div class="message-input">
+                    <!-- [MODIFIED] Added disabled state and aria-label -->
+                    <button id="shareImageBtn" class="btn btn-image" disabled aria-label="Share image">📷</button>
+                    <input type="file" id="imageInput" accept="image/*" hidden>
+                    <button id="voiceBtn" class="btn btn-image" disabled aria-label="Voice message">🎤</button>
+                    <input
+                        type="text"
+                        id="messageInput"
+                        placeholder="Type a message..."
+                        autocomplete="off"
+                        disabled
+                        aria-label="Message input"
+                        maxlength="500"
+                        pattern="[^\s].*"
+                    >
+                    <button id="sendBtn" class="btn btn-send" disabled aria-label="Send message">Send</button>
+                </div>
+            </section>
+
+            <aside class="reconstruction-panel" id="reconstructionPanel">
+                <div class="panel-header">
+                    <h3>Image Reconstruction</h3>
+                    <button id="closePanel" class="btn-close" aria-label="Close reconstruction panel">×</button>
+                </div>
+                <div class="panel-content">
+                    <div class="share-display">
+                        <div class="share-box">
+                            <h4>Share 1</h4>
+                            <img id="share1Preview" src="" alt="Share 1">
+                            <button id="selectShare1Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
+                            <input type="file" id="share1Input" accept="image/*" hidden>
+                            <!-- [NEW] Revoke share button for share 1 -->
+                            <button id="revokeShare1Btn" class="btn btn-danger btn-revoke-share" type="button" title="Revoke share" disabled>Revoke</button>
+                        </div>
+                        <div class="share-box">
+                            <h4>Share 2</h4>
+                            <img id="share2Preview" src="" alt="Share 2">
+                            <button id="selectShare2Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
+                            <input type="file" id="share2Input" accept="image/*" hidden>
+                            <!-- [NEW] Revoke share button for share 2 -->
+                            <button id="revokeShare2Btn" class="btn btn-danger btn-revoke-share" type="button" title="Revoke share" disabled>Revoke</button>
+                        </div>
+                    </div>
+                    <!-- [MODIFIED] Added loading state to reconstruct button -->
+                    <button id="reconstructBtn" class="btn btn-reconstruct" aria-label="Reconstruct image">
+                        <span id="reconstructBtnText">Reconstruct Image</span>
+                        <span id="reconstructBtnSpinner" class="spinner hidden" aria-label="Loading"></span>
+                    </button>
+                    <div class="reconstructed-display">
+                        <h4>Reconstructed</h4>
+                        <img id="reconstructedPreview" src="" alt="Reconstructed">
+                        <button id="downloadReconstructedBtn" class="btn btn-secondary" disabled>
+                            Download
+                        </button>
+                        <div class="reconstructed-meta">
+                            <!-- [NEW] Expiry timer and warning -->
+                            <span id="reconstructionWarning" class="warning-text"></span>
+                            <span id="expiryTimer" class="expiry-timer"></span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Session Timeout Warning Modal -->
+    <div id="sessionTimeoutModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="sessionTimeoutTitle">
+        <div class="modal-content">
+            <h2 id="sessionTimeoutTitle">Session Expiring</h2>
+            <p>Your session will expire in <span id="timeoutCountdown">2:00</span> minutes due to inactivity.</p>
+            <div class="modal-actions">
+                <button id="extendSessionBtn" class="btn btn-primary">Stay Signed In</button>
+                <button id="endSessionBtn" class="btn btn-secondary">Sign Out</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session List Modal -->
+    <div id="sessionListModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="sessionListTitle">
+        <div class="modal-content">
+            <div class="settings-header">
+                <h2 id="sessionListTitle">Active Sessions</h2>
+                <button id="closeSessionListBtn" class="btn-close" type="button">×</button>
+            </div>
+            <div id="sessionsList" class="sessions-list">
+                <!-- Sessions will be populated here -->
+            </div>
+            <div class="modal-actions">
+                <button id="logoutAllDevicesBtn" class="btn btn-danger">Logout All Devices</button>
+                <button id="closeSessionListBtn2" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Management Modal -->
+    <div id="keyManagerModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="keyManagerTitle">
+        <div class="modal-content">
+            <div class="settings-header">
+                <h2 id="keyManagerTitle">Encryption Keys</h2>
+                <button id="closeKeyManagerBtn" class="btn-close" type="button">×</button>
+            </div>
+            <div class="key-manager-content">
+                <div class="key-info">
+                    <h3>Your Public Key</h3>
+                    <div class="key-display" id="publicKeyDisplay">Loading...</div>
+                    <button id="regenerateKeyBtn" class="btn btn-warning">Regenerate Key Pair</button>
+                </div>
+                <div class="key-exchange-status">
+                    <h3>Key Exchange Status</h3>
+                    <div id="keyExchangeList">
+                        <!-- Key exchange status will be populated here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="closeKeyManagerBtn2" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal hidden">
+        <div class="modal-content settings-content">
+            <div class="settings-header">
+                <h2>Settings</h2>
+                <button id="closeSettingsBtn" class="btn-close" type="button">×</button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-section">
+                    <h3>Profile</h3>
+                    <div class="form-group">
+                        <label>Profile Photo</label>
+                        <div class="profile-photo-upload">
+                            <img id="settingsProfilePreview" src="" alt="Profile photo" class="settings-profile-preview">
+                            <label for="settingsProfileInput" class="btn btn-secondary">Change Photo</label>
+                            <input type="file" id="settingsProfileInput" accept="image/*" hidden>
+                            <p class="photo-hint">Max 512 KB, PNG/JPEG/WebP/BMP</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="settingsUsername">Username</label>
+                        <input type="text" id="settingsUsername" placeholder="Your username" maxlength="30" pattern="[a-zA-Z0-9._-]{3,30}" title="3-30 characters, alphanumeric, dot, underscore, hyphen">
+                    </div>
+                    <div class="form-group">
+                        <label for="settingsBio">Bio</label>
+                        <textarea id="settingsBio" placeholder="Tell us about yourself..." maxlength="150"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="settingsStatus">Status</label>
+                        <select id="settingsStatus">
+                            <option value="online">Online</option>
+                            <option value="away">Away</option>
+                            <option value="dnd">Do Not Disturb</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Security</h3>
+                    <div class="settings-option">
+                        <label for="settingsPasscodeLock">
+                            <input type="checkbox" id="settingsPasscodeLock">
+                            Enable app passcode lock
+                        </label>
+                    </div>
+                    <div class="settings-option">
+                        <label for="settingsScreenshotBlock">
+                            <input type="checkbox" id="settingsScreenshotBlock">
+                            Block screenshots (where supported)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Preferences</h3>
+                    <div class="settings-option">
+                        <label for="settingsNotifications">
+                            <input type="checkbox" id="settingsNotifications" checked>
+                            Enable Notifications
+                        </label>
+                    </div>
+                    <div class="settings-option">
+                        <label for="settingsSounds">
+                            <input type="checkbox" id="settingsSounds" checked>
+                            Sound notifications
+                        </label>
+                    </div>
+                    <div class="settings-option">
+                        <label for="settingsDesktopNotifications">
+                            <input type="checkbox" id="settingsDesktopNotifications" checked>
+                            Desktop notifications
+                        </label>
+                    </div>
+                    <div class="settings-option">
+                        <label for="settingsMentionsOnly">
+                            <input type="checkbox" id="settingsMentionsOnly">
+                            Mentions-only notifications
+                        </label>
+                    </div>
+                    <div class="settings-option">
+                        <label for="settingsReadReceipts">
+                            <input type="checkbox" id="settingsReadReceipts" checked>
+                            Send read receipts
+                        </label>
+                    </div>
+                    <div class="settings-option">
+                        <label for="settingsTypingIndicators">
+                            <input type="checkbox" id="settingsTypingIndicators" checked>
+                            Show typing indicators
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Data & Storage</h3>
+                    <div class="settings-option">
+                        <button id="exportDataBtn" class="btn btn-secondary w-100">Export Chat History</button>
+                    </div>
+                    <div class="settings-option">
+                        <button id="clearCacheBtn" class="btn btn-secondary w-100">Clear Cache</button>
+                    </div>
+                    <div class="settings-option">
+                        <button id="deleteAccountBtn" class="btn btn-danger w-100">Delete Account</button>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-footer">
+                <button id="saveSettingsBtn" class="btn btn-primary" type="button">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legacy Message Badge Style (will be injected via JS) -->
+    <style id="legacy-badge-style"></style>
+
+    <div id="authModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+        <div class="modal-content">
+            <h2 id="authTitle">Welcome to Reveal-X</h2>
+            <p>Log in or register to start a private secure chat.</p>
+            <input
+                type="text"
+                id="usernameInput"
+                placeholder="Username"
+                autocomplete="username"
+                maxlength="30"
+                aria-label="Username"
+            >
+            <input
+                type="password"
+                id="passwordInput"
+                placeholder="Password"
+                autocomplete="current-password"
+                maxlength="128"
+                aria-label="Password"
+            >
+            <div class="modal-actions">
+                <button id="loginBtn" class="btn btn-primary" type="button">Login</button>
+                <button id="registerBtn" class="btn btn-secondary" type="button">Register</button>
+            </div>
+            <div id="authError" class="auth-error" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="imagePreviewModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="imagePreviewTitle">
+        <div class="modal-content image-preview-content">
+            <h2 id="imagePreviewTitle">Send Encrypted Image</h2>
+            <img id="imagePreview" class="image-preview" src="" alt="Selected image preview">
+            <p id="imagePreviewMeta"></p>
+            <div class="modal-actions">
+                <button id="cancelImageBtn" class="btn btn-secondary" type="button">Cancel</button>
+                <button id="confirmImageBtn" class="btn btn-primary" type="button">Encrypt & Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden screen reader announcements -->
+    <div id="srAnnouncements" class="sr-only" aria-live="assertive" aria-atomic="true" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;"></div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/crypto.js') }}?v=loginfix2"></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}?v=sidebarfix"></script>
+</body>
+</html>
