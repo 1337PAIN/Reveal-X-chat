@@ -2,9 +2,14 @@
 (2,2) XOR Visual Cryptography Share Generator
 """
 
+import os
+
 import cv2
 import numpy as np
-from .utils import load_image
+try:
+    from .utils import load_image
+except ImportError:  # standalone validation script
+    from utils import load_image
 
 
 class VisualCryptography:
@@ -34,7 +39,9 @@ class VisualCryptography:
             original = cv2.resize(original, (int(w*scale), int(h*scale)))
 
         original = original.astype(np.uint8)
-        share1 = np.random.randint(0, 256, size=original.shape, dtype=np.uint8)
+        # Cryptographically secure random mask.
+        # np.random is not suitable for security-sensitive share generation.
+        share1 = np.frombuffer(os.urandom(original.size), dtype=np.uint8).reshape(original.shape)
         share2 = cv2.bitwise_xor(original, share1)
 
         return share1, share2, original
