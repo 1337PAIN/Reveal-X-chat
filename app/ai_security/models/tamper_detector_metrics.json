@@ -1,0 +1,57 @@
+{
+  "model_name": "RandomForest VC share tamper detector",
+  "feature_names": [
+    "mean",
+    "std",
+    "entropy",
+    "hist_chi2",
+    "hist_l1_uniform",
+    "corr_h",
+    "corr_v",
+    "laplacian_var",
+    "block_mean_std",
+    "block_std_mean",
+    "unique_ratio",
+    "zero_ratio",
+    "sat_ratio"
+  ],
+  "accuracy": 0.9333333333333333,
+  "confusion_matrix": [
+    [
+      29,
+      1
+    ],
+    [
+      3,
+      27
+    ]
+  ],
+  "classification_report": {
+    "clean": {
+      "precision": 0.90625,
+      "recall": 0.9666666666666667,
+      "f1-score": 0.9354838709677419,
+      "support": 30.0
+    },
+    "tampered": {
+      "precision": 0.9642857142857143,
+      "recall": 0.9,
+      "f1-score": 0.9310344827586207,
+      "support": 30.0
+    },
+    "accuracy": 0.9333333333333333,
+    "macro avg": {
+      "precision": 0.9352678571428572,
+      "recall": 0.9333333333333333,
+      "f1-score": 0.9332591768631813,
+      "support": 60.0
+    },
+    "weighted avg": {
+      "precision": 0.9352678571428572,
+      "recall": 0.9333333333333333,
+      "f1-score": 0.9332591768631813,
+      "support": 60.0
+    }
+  },
+  "training_samples": 240
+}
