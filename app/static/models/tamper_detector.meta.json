@@ -1,0 +1,28 @@
+{
+  "feature_names": [
+    "mean",
+    "std",
+    "entropy",
+    "hist_chi2",
+    "hist_l1_uniform",
+    "corr_h",
+    "corr_v",
+    "laplacian_var",
+    "block_mean_std",
+    "block_std_mean",
+    "unique_ratio",
+    "zero_ratio",
+    "sat_ratio"
+  ],
+  "model_name": "RandomForest VC share tamper detector",
+  "accuracy": 0.9333333333333333,
+  "training_samples": 240,
+  "opset": 15,
+  "input_name": "features",
+  "input_dtype": "float32",
+  "verification": {
+    "samples": 80,
+    "max_probability_delta": 4.6359168170972964e-08,
+    "verdict_disagreements": 0
+  }
+}
