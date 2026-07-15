@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reveal-X — Browser/Server Feature Parity</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/rx_lab.css') }}?v=a11y1">
+    <style>
+        .parity-shell { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+        .case { margin-bottom: 1.75rem; }
+        .case h3 { margin: 0 0 .35rem; font-size: 1rem; }
+        .case .why { margin: 0 0 .6rem; opacity: .72; font-size: .85rem; }
+        table.parity { width: 100%; border-collapse: collapse; font-size: .82rem;
+                       font-variant-numeric: tabular-nums; }
+        table.parity th, table.parity td { padding: .3rem .5rem; text-align: right;
+                                           border-bottom: 1px solid rgba(148,163,184,.18); }
+        table.parity th:first-child, table.parity td:first-child { text-align: left; }
+        .ok    { color: #34d399; font-weight: 600; }
+        .bad   { color: #f87171; font-weight: 700; }
+        .verdict { padding: .55rem .8rem; border-radius: 10px; font-weight: 600;
+                   display: inline-block; margin-bottom: .5rem; }
+        .verdict.ok  { background: rgba(52,211,153,.14); border: 1px solid rgba(52,211,153,.4); }
+        .verdict.bad { background: rgba(248,113,113,.14); border: 1px solid rgba(248,113,113,.45); }
+        #summary { font-size: 1.02rem; margin: 1rem 0 1.5rem; }
+        .muted { opacity: .68; font-size: .84rem; }
+    </style>
+</head>
+<body>
+    <header class="lab-header">
+        <div>
+            <p class="eyebrow">Reveal-X · Milestone M2 evidence</p>
+            <h1>Browser / Server Feature Parity</h1>
+            <p class="subtitle">
+                The tamper model is trained in Python but executed in the browser. It is only
+                meaningful there if both sides compute the same 13 features from the same pixels.
+                This page proves they do — including on the awkward shapes.
+            </p>
+        </div>
+        <nav>
+            <a href="/lab" class="nav-link">Lab</a>
+            <a href="/" class="nav-link">Chat</a>
+        </nav>
+    </header>
+
+    <main class="parity-shell">
+        <button id="runBtn" class="primary-btn">Run parity check</button>
+        <div id="summary" class="muted">Not run yet.</div>
+        <div id="results"></div>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/tamper-onnx.js') }}?v=onnx1"></script>
+    <script src="{{ url_for('static', filename='js/lab-parity.js') }}?v=onnx1"></script>
+</body>
+</html>
