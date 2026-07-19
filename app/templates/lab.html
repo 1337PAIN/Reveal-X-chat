@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reveal-X AI Security Lab</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/rx_lab.css') }}?v=a11y1">
+</head>
+<body>
+    <header class="lab-header">
+        <div>
+            <p class="eyebrow">Reveal-X Final Product</p>
+            <h1>AI Tamper Detection & Visual Cryptography Lab</h1>
+            <p class="subtitle">Generate VC shares, simulate attacks, verify integrity, detect tampering with ML, reconstruct locally, enhance the result, and evaluate PSNR/SSIM.</p>
+        </div>
+        <nav>
+            <a href="/" class="nav-link">Chat App</a>
+            <a href="#results" class="nav-link">Results</a>
+        </nav>
+    </header>
+
+    <main class="lab-shell">
+        <section class="control-card">
+            <div class="step-badge">1</div>
+            <h2>Upload image</h2>
+            <p>Use a document, face, logo, medical scan, or any sensitive grayscale/RGB image for demo.</p>
+            <label class="drop-zone" id="dropZone">
+                <input type="file" id="imageInput" accept="image/*" hidden>
+                <span class="drop-icon">📷</span>
+                <strong>Choose an image</strong>
+                <small>PNG, JPG, WEBP or BMP. The app resizes large images for fast FYP demo.</small>
+            </label>
+            <img id="sourcePreview" class="source-preview" alt="Selected preview">
+        </section>
+
+        <section class="control-card">
+            <div class="step-badge">2</div>
+            <h2>Attack simulation</h2>
+            <p>Select how an attacker modifies Share 1 before the receiver reconstructs the image.</p>
+            <label class="field-label" for="attackSelect">Tamper type</label>
+            <select id="attackSelect" class="field-input">
+                <option value="none">None / clean share</option>
+                <option value="block">Block replacement</option>
+                <option value="brightness">Brightness shift region</option>
+                <option value="blur">Blurred region</option>
+                <option value="scratch">Scratch/line attack</option>
+                <option value="noise">Random noise injection</option>
+                <option value="crop">Crop + resize distortion</option>
+                <option value="jpeg">JPEG compression damage</option>
+            </select>
+            <label class="field-label" for="strengthRange">Attack strength: <span id="strengthValue">35%</span></label>
+            <input id="strengthRange" type="range" min="5" max="75" value="35" class="range-input">
+            <button id="runBtn" class="primary-btn" disabled>Run Reveal-X Analysis</button>
+            <p id="statusText" class="status-text">Choose an image to begin.</p>
+        </section>
+
+        <section class="summary-grid" id="results" aria-live="polite">
+            <article class="summary-card">
+                <span>Cryptographic integrity</span>
+                <strong id="integrityResult">Waiting</strong>
+                <small id="integrityDetail">SHA-256/HMAC check not run yet.</small>
+            </article>
+            <article class="summary-card">
+                <span>ML tamper result</span>
+                <strong id="mlResult">Waiting</strong>
+                <small id="mlDetail">RandomForest detector will classify the received share.</small>
+            </article>
+            <article class="summary-card">
+                <span>In-browser ML (ONNX)</span>
+                <strong id="onnxResult">Waiting</strong>
+                <small id="onnxDetail">Same model, executed locally via onnxruntime-web.</small>
+            </article>
+            <article class="summary-card">
+                <span>PSNR / SSIM</span>
+                <strong id="qualityResult">Waiting</strong>
+                <small id="qualityDetail">Quality metrics appear after reconstruction.</small>
+            </article>
+            <article class="summary-card">
+                <span>Processing time</span>
+                <strong id="timeResult">0 ms</strong>
+                <small>Share generation + ML + reconstruction + enhancement.</small>
+            </article>
+        </section>
+
+        <section class="image-grid">
+            <article class="image-card"><h3>Original</h3><img id="imgOriginal" alt="Original image"><p>Input image after safe resize.</p></article>
+            <article class="image-card"><h3>Share 1 clean</h3><img id="imgShare1Clean" alt="Clean Share 1"><p>Random-looking transmitted share before attack.</p></article>
+            <article class="image-card"><h3>Share 1 received</h3><img id="imgShare1Received" alt="Received Share 1"><p>This is the share analyzed by HMAC and ML.</p></article>
+            <article class="image-card"><h3>Share 2</h3><img id="imgShare2" alt="Share 2"><p>Second share required for reconstruction.</p></article>
+            <article class="image-card"><h3>Tamper heatmap</h3><img id="imgHeatmap" alt="Tamper heatmap"><p>Bright regions are statistically suspicious.</p></article>
+            <article class="image-card"><h3>Reconstructed</h3><img id="imgReconstructed" alt="Reconstructed image"><p>XOR result from received Share 1 and Share 2.</p></article>
+            <article class="image-card"><h3>Enhanced output</h3><img id="imgEnhanced" alt="Enhanced image"><p>Denoised and sharpened output for quality comparison.</p></article>
+            <article class="image-card metric-card"><h3>Model explanation</h3><ul id="explanationList"><li>Run analysis to view reasoning.</li></ul></article>
+        </section>
+
+        <section class="metrics-panel">
+            <h2>Evaluation Dashboard</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Metric</th><th>Reconstructed</th><th>Enhanced</th></tr></thead>
+                    <tbody>
+                        <tr><td>MSE</td><td id="mseReconstructed">-</td><td id="mseEnhanced">-</td></tr>
+                        <tr><td>PSNR</td><td id="psnrReconstructed">-</td><td id="psnrEnhanced">-</td></tr>
+                        <tr><td>SSIM</td><td id="ssimReconstructed">-</td><td id="ssimEnhanced">-</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p id="fallbackNote" class="fallback-note"></p>
+            <pre id="hashBlock" class="hash-block">Hashes will appear here after processing.</pre>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/tamper-onnx.js') }}?v=onnx1"></script>
+    <script src="{{ url_for('static', filename='js/rx_lab.js') }}?v=onnx1"></script>
+</body>
+</html>
