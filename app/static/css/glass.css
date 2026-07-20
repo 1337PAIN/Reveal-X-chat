@@ -1,0 +1,716 @@
+/* ==========================================================================
+   Reveal-X glassmorphism surface layer
+
+   Loaded after style.css so these rules win at equal specificity. The colour
+   tokens live in style.css :root / [data-theme="light"]; this file only turns
+   those translucent surfaces into actual glass.
+
+   Blur is applied to structural panels and message bubbles only. Small controls
+   inside them use plain translucency, because stacking backdrop-filters
+   multiplies GPU cost for no visual gain.
+   ========================================================================== */
+
+/* --- Structural chrome ---------------------------------------------------- */
+
+.header {
+    background: var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(170%);
+    backdrop-filter: blur(var(--blur-lg)) saturate(170%);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.18);
+    position: relative;
+    z-index: 30;
+}
+
+.main-content {
+    background: transparent;
+    gap: 14px;
+    padding: 14px;
+}
+
+.sidebar,
+.chat-section {
+    background: var(--glass-1);
+    -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(160%);
+    backdrop-filter: blur(var(--blur-lg)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow);
+}
+
+.chat-section {
+    overflow: hidden;
+}
+
+.chat-header {
+    background: var(--glass-1);
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.messages-container {
+    background: transparent;
+}
+
+.reconstruction-panel {
+    background: var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(160%);
+    backdrop-filter: blur(var(--blur-lg)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow-lg);
+}
+
+.panel-header {
+    background: var(--glass-1);
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.sidebar-profile,
+.sidebar-stats,
+.sidebar-header,
+.sidebar-footer {
+    background: transparent;
+    border-color: var(--glass-border);
+}
+
+.message-input {
+    background: var(--glass-1);
+    border-top: 1px solid var(--glass-border);
+}
+
+.sidebar-overlay {
+    background: rgba(5, 8, 20, 0.45);
+    -webkit-backdrop-filter: blur(var(--blur-sm));
+    backdrop-filter: blur(var(--blur-sm));
+}
+
+/* --- Inputs --------------------------------------------------------------- */
+
+.message-input input,
+.user-search,
+.message-search,
+.modal-content input,
+.form-group input,
+.form-group select,
+.settings-content select {
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    color: var(--text-primary);
+    transition: border-color .2s, box-shadow .2s, background .2s;
+}
+
+.form-group textarea {
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    transition: border-color .2s, box-shadow .2s, background .2s;
+}
+
+.message-input input:focus,
+.user-search:focus,
+.message-search:focus,
+.modal-content input:focus,
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    background: var(--glass-3);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.24);
+    outline: none;
+}
+
+::placeholder {
+    color: var(--text-secondary);
+    opacity: .75;
+}
+
+/* Native dropdown lists are painted by the OS and ignore the glass, so keep
+   their options readable rather than transparent-on-transparent. */
+option {
+    background: #101528;
+    color: #e8ecf6;
+}
+
+body[data-theme="light"] option {
+    background: #ffffff;
+    color: #16203a;
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+
+.btn,
+.icon-btn,
+.sidebar-toggle,
+.btn-settings,
+.btn-close,
+.share-action,
+.btn-share-select,
+.reaction-pill {
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    color: var(--text-primary);
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+    transition: transform .18s ease, background .18s ease,
+                border-color .18s ease, box-shadow .18s ease;
+}
+
+.btn:hover:not(:disabled),
+.icon-btn:hover,
+.sidebar-toggle:hover,
+.btn-settings:hover,
+.btn-close:hover,
+.share-action:hover:not(:disabled),
+.btn-share-select:hover,
+.reaction-pill:hover {
+    background: var(--glass-3);
+    border-color: var(--glass-border-strong);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22), inset 0 1px 0 var(--glass-highlight);
+}
+
+.btn:active:not(:disabled),
+.icon-btn:active,
+.share-action:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.btn:disabled,
+.share-action:disabled,
+.share-action:disabled:hover {
+    opacity: .45;
+    box-shadow: none;
+    transform: none;
+    background: var(--glass-1);
+    border-color: var(--glass-border);
+}
+
+/* Tinted glass for semantic buttons: the colour is part of the pane rather
+   than a flat fill sitting on top of it. */
+.btn-primary,
+.btn-send,
+.share-action.primary,
+.btn-reconstruct {
+    background: linear-gradient(135deg, rgba(96, 165, 250, .48), rgba(94, 234, 212, .34));
+    border-color: rgba(255, 255, 255, .28);
+    color: #fff;
+}
+
+.btn-primary:hover,
+.btn-send:hover:not(:disabled),
+.share-action.primary:hover:not(:disabled),
+.btn-reconstruct:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(96, 165, 250, .64), rgba(94, 234, 212, .48));
+    box-shadow: 0 8px 26px rgba(96, 165, 250, .32), inset 0 1px 0 var(--glass-highlight);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, rgba(251, 113, 133, .55), rgba(239, 68, 68, .38));
+    border-color: rgba(255, 255, 255, .24);
+    color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(251, 113, 133, .72), rgba(239, 68, 68, .55));
+    box-shadow: 0 8px 26px rgba(251, 113, 133, .32), inset 0 1px 0 var(--glass-highlight);
+}
+
+/* The image/voice buttons carry a single glyph. They were 74px wide, which on a
+   375px screen pushed Send off the edge of the composer. Square touch targets
+   at the 44px minimum, and the input is allowed to shrink around them. */
+.btn-image {
+    border-radius: 50%;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    line-height: 1;
+}
+
+.message-input {
+    align-items: center;
+}
+
+.message-input input {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.btn-send {
+    flex: 0 0 auto;
+}
+
+.logo-icon {
+    background: linear-gradient(135deg, rgba(96, 165, 250, .95), rgba(94, 234, 212, .82));
+    box-shadow: 0 6px 20px rgba(96, 165, 250, .36);
+}
+
+/* The logo artwork is dark and sat almost invisible against the aurora once the
+   header became translucent. A halo lifts it off whatever colour is behind. */
+.logo-image {
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, .6)) drop-shadow(0 1px 2px rgba(0, 0, 0, .3));
+}
+
+body[data-theme="light"] .logo-image {
+    filter: drop-shadow(0 1px 3px rgba(22, 32, 58, .35));
+}
+
+/* --- Account list --------------------------------------------------------- */
+
+.users-list li {
+    background: var(--glass-1);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+
+.users-list li:hover {
+    background: var(--glass-2);
+    border-color: var(--glass-border);
+    transform: translateX(2px);
+}
+
+/* The selected row carries white text, so its tint has to stay dark enough to
+   keep that readable. On the dark backdrop these translucent stops composite
+   down to something safe; on the light one they did not -- the pale teal end
+   composited to ~rgb(141,237,224) and measured 1.30:1, effectively invisible.
+   The light-theme override below replaces them with opaque fills. */
+.users-list li.active {
+    /* Both stops measured against white text: 8.3:1 and 8.4:1. The previous
+       translucent pair composited to rgb(141,237,224) on light (1.30:1 --
+       effectively invisible) and rgb(70,167,156) on dark (2.9:1). */
+    background: linear-gradient(135deg, #1f4e8c, #14574f);
+    border-color: var(--glass-border-strong);
+    box-shadow: 0 6px 18px rgba(31, 78, 140, .28);
+}
+
+.users-list li.active .user-status-line,
+body[data-theme="light"] .users-list li.active .user-status-line {
+    /* Opaque white, not the .92 alpha this started as -- that composited to
+       6.52:1 on the blue stop, just under AAA. Pure white measures 8.31:1. */
+    color: #fff;
+}
+
+.users-list li.active .user-name,
+.users-list li.active .last-seen {
+    color: #fff;
+}
+
+.avatar-dot {
+    background: linear-gradient(135deg, rgba(96, 165, 250, .9), rgba(94, 234, 212, .78));
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+}
+
+.unread-badge {
+    background: linear-gradient(135deg, rgba(96, 165, 250, .95), rgba(94, 234, 212, .85));
+    box-shadow: 0 3px 10px rgba(96, 165, 250, .4);
+}
+
+.profile-preview,
+.settings-profile-preview,
+.avatar-img {
+    border: 1px solid var(--glass-border);
+}
+
+/* --- Messages ------------------------------------------------------------- */
+
+.message {
+    -webkit-backdrop-filter: blur(var(--blur-md)) saturate(150%);
+    backdrop-filter: blur(var(--blur-md)) saturate(150%);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18), inset 0 1px 0 var(--glass-highlight);
+}
+
+.message.sent {
+    background: linear-gradient(135deg, rgba(96, 165, 250, .26), rgba(94, 234, 212, .13));
+    border-bottom-right-radius: 6px;
+}
+
+.message.received {
+    background: var(--glass-2);
+    border-bottom-left-radius: 6px;
+}
+
+.welcome-message {
+    background: var(--glass-1);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    -webkit-backdrop-filter: blur(var(--blur-md));
+    backdrop-filter: blur(var(--blur-md));
+    padding: 28px 22px;
+}
+
+.welcome-icon {
+    background: linear-gradient(135deg, rgba(96, 165, 250, .95), rgba(94, 234, 212, .8));
+    box-shadow: 0 10px 30px rgba(96, 165, 250, .32);
+}
+
+.feature {
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+}
+
+.message-context,
+.message-reply,
+.reply-bar {
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+}
+
+/* --- Modals --------------------------------------------------------------- */
+
+.modal {
+    background: rgba(5, 8, 20, 0.55);
+    -webkit-backdrop-filter: blur(var(--blur-md)) saturate(130%);
+    backdrop-filter: blur(var(--blur-md)) saturate(130%);
+}
+
+body[data-theme="light"] .modal {
+    background: rgba(226, 232, 245, 0.5);
+}
+
+.modal-content,
+.settings-content {
+    background: var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(170%);
+    backdrop-filter: blur(var(--blur-lg)) saturate(170%);
+    border: 1px solid var(--glass-border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow-lg), inset 0 1px 0 var(--glass-highlight);
+}
+
+.settings-header,
+.settings-footer {
+    background: transparent;
+    border-color: var(--glass-border);
+}
+
+.settings-section {
+    border-color: var(--glass-border);
+}
+
+.image-modal {
+    background: rgba(5, 8, 20, 0.7);
+    -webkit-backdrop-filter: blur(var(--blur-md));
+    backdrop-filter: blur(var(--blur-md));
+}
+
+/* --- Feature panels ------------------------------------------------------- */
+
+.share-box img,
+.reconstructed-display img,
+.image-preview,
+.tamper-heatmap,
+.message img,
+.source-preview {
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+}
+
+.tamper-panel {
+    -webkit-backdrop-filter: blur(var(--blur-sm));
+    backdrop-filter: blur(var(--blur-sm));
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+}
+
+.tamper-panel.success {
+    border-color: rgba(74, 222, 128, .55);
+    background: rgba(74, 222, 128, .12);
+}
+
+.tamper-panel.danger {
+    border-color: rgba(251, 113, 133, .55);
+    background: rgba(251, 113, 133, .13);
+}
+
+.key-display,
+.hash-block {
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+}
+
+.key-exchange-row {
+    border-color: var(--glass-border);
+}
+
+.legacy-badge {
+    background: rgba(251, 191, 36, .18);
+    border: 1px solid rgba(251, 191, 36, .38);
+    border-radius: 999px;
+}
+
+.e2e-badge {
+    background: rgba(74, 222, 128, .16);
+    border: 1px solid rgba(74, 222, 128, .34);
+    border-radius: 999px;
+    padding: 1px 6px;
+}
+
+.offline-banner,
+.offline-indicator {
+    background: var(--glass-3);
+    -webkit-backdrop-filter: blur(var(--blur-md));
+    backdrop-filter: blur(var(--blur-md));
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+}
+
+.voice-player {
+    border-radius: 999px;
+}
+
+/* --- Scrollbars ----------------------------------------------------------- */
+
+.messages-container,
+.users-list,
+.settings-body,
+.panel-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--glass-3) transparent;
+}
+
+.messages-container::-webkit-scrollbar,
+.users-list::-webkit-scrollbar,
+.settings-body::-webkit-scrollbar,
+.panel-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.messages-container::-webkit-scrollbar-thumb,
+.users-list::-webkit-scrollbar-thumb,
+.settings-body::-webkit-scrollbar-thumb,
+.panel-content::-webkit-scrollbar-thumb {
+    background: var(--glass-3);
+    border-radius: 999px;
+}
+
+.messages-container::-webkit-scrollbar-track,
+.users-list::-webkit-scrollbar-track,
+.settings-body::-webkit-scrollbar-track,
+.panel-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* --- Light-theme contrast -------------------------------------------------
+
+   Tinted glass that works on a dark backdrop washes out on a light one. The
+   semantic buttons carry white text, so in light mode their fills become
+   near-opaque rather than translucent.                                       */
+
+/* Semantic buttons carry white text in both themes. Their fills used to be
+   translucent, which meant the effective contrast depended on the backdrop:
+   the indigo composited to ~rgb(62,117,237) on the light page (4.2:1, below
+   AA) and ~rgb(62,97,144) on the dark one (6.3:1, below AAA). Opaque,
+   saturated fills are theme-independent and measured: 8.7:1 and 8.0:1. */
+.btn-primary,
+.btn-send,
+.share-action.primary,
+.btn-reconstruct,
+body[data-theme="light"] .btn-primary,
+body[data-theme="light"] .btn-send,
+body[data-theme="light"] .share-action.primary,
+body[data-theme="light"] .btn-reconstruct {
+    background: linear-gradient(135deg, #3730a3, #1e40af);
+    border-color: rgba(255, 255, 255, .3);
+}
+
+body[data-theme="light"] .btn-primary:hover,
+body[data-theme="light"] .btn-send:hover:not(:disabled),
+body[data-theme="light"] .share-action.primary:hover:not(:disabled),
+body[data-theme="light"] .btn-reconstruct:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(67, 56, 202, 1), rgba(29, 78, 216, .95));
+}
+
+.btn-danger,
+body[data-theme="light"] .btn-danger {
+    /* Same reasoning as .btn-primary. Measured 8.3:1 and 8.0:1 on white. */
+    background: linear-gradient(135deg, #991b1b, #9f1239);
+    border-color: rgba(255, 255, 255, .3);
+}
+
+body[data-theme="light"] .btn-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(185, 28, 28, 1), rgba(190, 18, 60, .95));
+}
+
+body[data-theme="light"] .message.sent {
+    background: linear-gradient(135deg, rgba(79, 70, 229, .16), rgba(56, 189, 248, .12));
+}
+
+body[data-theme="light"] .legacy-badge {
+    background: rgba(180, 83, 9, .14);
+    border-color: rgba(180, 83, 9, .35);
+    color: #92400e;
+}
+
+body[data-theme="light"] .e2e-badge {
+    background: rgba(21, 128, 61, .14);
+    border-color: rgba(21, 128, 61, .34);
+}
+
+body[data-theme="light"] .tamper-panel.success {
+    background: rgba(21, 128, 61, .10);
+    border-color: rgba(21, 128, 61, .42);
+}
+
+body[data-theme="light"] .tamper-panel.danger {
+    background: rgba(220, 38, 38, .10);
+    border-color: rgba(220, 38, 38, .42);
+}
+
+body[data-theme="light"] .one-time-notice {
+    color: #b91c1c;
+}
+
+/* --- Docked sidebar on wide screens ---------------------------------------
+
+   The sidebar was a fixed off-canvas drawer at every width, so a desktop
+   window showed one pane and a hamburger. Above 1100px it docks alongside the
+   chat, which is also what makes the layered glass read as depth. Below that
+   it stays the original drawer. Delete this block to restore drawer-only.     */
+
+@media (min-width: 1100px) {
+    .sidebar {
+        position: relative;
+        top: auto;
+        bottom: auto;
+        left: auto;
+        transform: none;
+        width: 280px;
+        max-width: 280px;
+        flex: 0 0 280px;
+        border-right: none;
+    }
+
+    /* The drawer's toggle and scrim have no job once the panel is docked. */
+    .sidebar-toggle,
+    .sidebar-overlay,
+    .sidebar-overlay.active {
+        display: none;
+    }
+}
+
+/* --- No-backdrop-filter fallback ------------------------------------------
+
+   Without blur support the translucent surfaces would sit unreadably over the
+   aurora. Make them opaque instead, so the app degrades to a flat dark/light
+   theme rather than to unreadable text.                                       */
+
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+    body::before { display: none; }
+
+    .header, .sidebar, .chat-section, .chat-header, .reconstruction-panel,
+    .panel-header, .message-input, .modal-content, .settings-content,
+    .welcome-message {
+        background: #131a2e;
+    }
+
+    .message.received, .tamper-panel, .feature,
+    .message-context, .message-reply, .reply-bar {
+        background: #1b2340;
+    }
+
+    .modal { background: rgba(5, 8, 20, .85); }
+
+    body[data-theme="light"] .header,
+    body[data-theme="light"] .sidebar,
+    body[data-theme="light"] .chat-section,
+    body[data-theme="light"] .chat-header,
+    body[data-theme="light"] .reconstruction-panel,
+    body[data-theme="light"] .panel-header,
+    body[data-theme="light"] .message-input,
+    body[data-theme="light"] .modal-content,
+    body[data-theme="light"] .settings-content,
+    body[data-theme="light"] .welcome-message {
+        background: #ffffff;
+    }
+
+    body[data-theme="light"] .message.received,
+    body[data-theme="light"] .tamper-panel,
+    body[data-theme="light"] .feature,
+    body[data-theme="light"] .message-context,
+    body[data-theme="light"] .message-reply,
+    body[data-theme="light"] .reply-bar {
+        background: #eef2f9;
+    }
+
+    body[data-theme="light"] .modal { background: rgba(226, 232, 245, .85); }
+}
+
+/* --- Accessibility and performance fallbacks ------------------------------ */
+
+/* Blur is the expensive part of this design. Drop it where the user has asked
+   for less transparency, and on small screens where the GPU cost is least
+   affordable. Layout is unchanged - only the effect goes. */
+@media (prefers-reduced-transparency: reduce) {
+    .header, .sidebar, .chat-section, .reconstruction-panel, .message,
+    .modal, .modal-content, .settings-content, .welcome-message,
+    .tamper-panel, .offline-banner, .offline-indicator, .sidebar-overlay,
+    .image-modal {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .header, .sidebar, .chat-section, .reconstruction-panel,
+    .modal-content, .settings-content {
+        background: #131a2e;
+    }
+
+    body[data-theme="light"] .header,
+    body[data-theme="light"] .sidebar,
+    body[data-theme="light"] .chat-section,
+    body[data-theme="light"] .reconstruction-panel,
+    body[data-theme="light"] .modal-content,
+    body[data-theme="light"] .settings-content {
+        background: #ffffff;
+    }
+
+    body::before { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body::before { animation: none; }
+
+    .btn, .icon-btn, .users-list li, .share-action, .message {
+        transition: none;
+    }
+}
+
+@media (max-width: 560px) {
+    :root {
+        --blur-sm: 6px;
+        --blur-md: 10px;
+        --blur-lg: 14px;
+    }
+
+    body::before { animation: none; }
+
+    .main-content {
+        padding: 8px;
+        gap: 8px;
+    }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Gradient heading text. The stops are ink, not background, so each theme
+   needs its own: the purple must clear 4.5:1 (large text, AAA) against the
+   page it sits on, which pulls it lighter on dark and darker on light.
+   --------------------------------------------------------------------------- */
+body[data-theme="light"] .logo h1 {
+    background: linear-gradient(135deg, var(--accent), #7f4396);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
