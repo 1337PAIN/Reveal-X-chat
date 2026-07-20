@@ -6,34 +6,101 @@
     box-sizing: border-box;
 }
 
+/* ==========================================================================
+   Glassmorphism design tokens
+
+   The surface variables are translucent, so every existing rule that paints
+   with --bg-secondary / --bg-tertiary / --border becomes glass automatically.
+   The blur itself is applied per-surface further down, and the aurora layer on
+   <body> gives the blur something to refract.
+   ========================================================================== */
+
 :root {
-    --bg-primary: #0f0f1a;
-    --bg-secondary: #1a1a2e;
-    --bg-tertiary: #16213e;
-    --text-primary: #e0e0e0;
-    --text-secondary: #a0a0b0;
-    --accent: #6c63ff;
-    --accent-hover: #5a52d5;
-    --success: #4caf50;
-    --danger: #f44336;
-    --border: #2a2a3e;
-    --message-sent: #1a3a4a;
-    --message-received: #2a2a3e;
+    --bg-primary: #070b18;
+    --bg-secondary: rgba(255, 255, 255, 0.06);
+    --bg-tertiary: rgba(255, 255, 255, 0.10);
+    /* Palette matched to the /lab dashboard: teal primary, blue secondary. */
+    --text-primary: #e8ecf6;
+    /* Solved for 7:1 against the darkest surface it lands on -- the sent
+       bubble, which composites to ~rgb(39,60,91). #9fb1c8 measured 5.1:1
+       there. See docs/ACCESSIBILITY.md. */
+    --text-secondary: #ccd6e2;
+    --accent: #5eead4;
+    --accent-2: #60a5fa;
+    --accent-hover: #7ff3e0;
+    --success: #86efac;
+    --danger: #fb7185;
+    --border: rgba(255, 255, 255, 0.14);
+    --message-sent: rgba(96, 165, 250, 0.20);
+    --message-received: rgba(255, 255, 255, 0.08);
+
+    /* Glass system */
+    --glass-1: rgba(255, 255, 255, 0.05);
+    --glass-2: rgba(255, 255, 255, 0.08);
+    --glass-3: rgba(255, 255, 255, 0.13);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-border-strong: rgba(255, 255, 255, 0.24);
+    --glass-highlight: rgba(255, 255, 255, 0.10);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.38);
+    --glass-shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.48);
+    --blur-sm: 8px;
+    --blur-md: 16px;
+    --blur-lg: 26px;
+    --radius-sm: 10px;
+    --radius-md: 16px;
+    --radius-lg: 22px;
+
+    /* Aurora blobs behind the glass, same field as /lab */
+    --aurora-1: rgba(96, 165, 250, 0.78);
+    --aurora-2: rgba(94, 234, 212, 0.58);
+    --aurora-3: rgba(124, 123, 255, 0.62);
+    --aurora-4: rgba(244, 114, 182, 0.42);
 }
 
 body[data-theme="light"] {
-    --bg-primary: #f5f7fb;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #eef2f7;
-    --text-primary: #1d2433;
-    --text-secondary: #667085;
-    --accent: #3b6cff;
-    --accent-hover: #2f56cc;
-    --success: #208a45;
-    --danger: #d92d20;
-    --border: #d9e0ea;
-    --message-sent: #dcecff;
-    --message-received: #eef2f7;
+    /* A tinted periwinkle-slate light theme, not a white one.
+       The surfaces below are deliberately NOT rgba(255,255,255,...): stacking
+       white glass on a near-white base made every panel composite to about
+       #fbfcfe, so the whole UI read as one flat sheet of paper and the glass
+       effect did nothing. Tinting the fills themselves keeps the layers
+       distinguishable and lets the aurora show through. */
+    --bg-primary: #c3cfe8;
+    --bg-secondary: rgba(218, 229, 247, 0.64);
+    --bg-tertiary: rgba(226, 236, 250, 0.78);
+    --text-primary: #16203a;
+    /* Measured, not eyeballed. Each is solved for 7:1 (WCAG AAA, normal text)
+       against the *hardest* surface it lands on -- the sent message bubble,
+       which is darker than any panel. Passing there means passing on the
+       sidebar, cards and modals too. Re-check with the audit in
+       docs/ACCESSIBILITY.md after touching any surface colour above. */
+    --text-secondary: #333c53;
+    --accent: #08423e;
+    --accent-2: #2563eb;
+    --accent-hover: #062e2b;
+    --success: #0a4020;
+    --danger: #dc2626;
+    --border: rgba(255, 255, 255, 0.58);
+    --message-sent: rgba(37, 99, 235, 0.16);
+    --message-received: rgba(231, 239, 251, 0.85);
+
+    /* Tinted glass. Alphas stay moderate so the aurora reads through them. */
+    --glass-1: rgba(209, 222, 244, 0.55);
+    --glass-2: rgba(217, 229, 247, 0.68);
+    --glass-3: rgba(227, 237, 250, 0.82);
+    /* Rim light is still white -- that highlight is what makes a glass edge
+       legible -- but softer, so panels stop looking cut out of paper. */
+    --glass-border: rgba(255, 255, 255, 0.62);
+    --glass-border-strong: rgba(255, 255, 255, 0.82);
+    --glass-highlight: rgba(255, 255, 255, 0.68);
+    --glass-shadow: 0 8px 32px rgba(28, 40, 90, 0.16);
+    --glass-shadow-lg: 0 24px 64px rgba(28, 40, 90, 0.22);
+
+    /* Stronger than before: with less white on top, the colour field is what
+       gives the theme its depth. */
+    --aurora-1: rgba(96, 165, 250, 0.82);
+    --aurora-2: rgba(94, 234, 212, 0.70);
+    --aurora-3: rgba(129, 140, 248, 0.68);
+    --aurora-4: rgba(244, 114, 182, 0.48);
 }
 
 body {
@@ -42,6 +109,32 @@ body {
     color: var(--text-primary);
     height: 100vh;
     overflow: hidden;
+    position: relative;
+}
+
+/* Aurora field. Fixed and behind everything, so every blurred surface has
+   colour to refract instead of flat grey. */
+body::before {
+    content: '';
+    position: fixed;
+    inset: -25%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(38rem 34rem at 18% 18%, var(--aurora-1), transparent 68%),
+        radial-gradient(34rem 30rem at 82% 12%, var(--aurora-2), transparent 66%),
+        radial-gradient(32rem 32rem at 78% 84%, var(--aurora-3), transparent 66%),
+        radial-gradient(30rem 28rem at 12% 82%, var(--aurora-4), transparent 66%);
+    /* No filter: blur() here. The radial stops already fade to transparent, so a
+       blur adds nothing visually while forcing a full-viewport repaint on every
+       scroll frame. Softness comes from the gradient, not from a filter. */
+    animation: aurora-drift 34s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    50%  { transform: translate3d(2.5%, -2%, 0) scale(1.08); }
+    100% { transform: translate3d(-2%, 2.5%, 0) scale(1.04); }
 }
 
 .hidden {
@@ -130,7 +223,10 @@ body {
 .logo h1 {
     font-size: 22px;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--accent), #9b59b6);
+    /* Gradient *text*: these stops are ink. The purple end has to clear 4.5:1
+       (large text, AAA) against the page, which pulls it lighter on the dark
+       theme and darker on the light one -- hence the override below. */
+    background: linear-gradient(135deg, var(--accent), #b07fc6);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -681,8 +777,11 @@ body {
 }
 
 .message-content audio {
-    max-width: 240px;
-    width: 100%;
+    /* A percentage width collapses inside the shrink-to-fit bubble, leaving just
+       the play button. A fixed basis makes the bubble size to the player. */
+    display: block;
+    width: 240px;
+    max-width: 100%;
 }
 
 .message-context,
@@ -1358,7 +1457,10 @@ body {
    [NEW] Premium Modern Enhancements & WCAG Accessibility
    ========================================== */
 
-/* High Contrast and Focus Indicators for WCAG 2.1 AA */
+/* Focus indicators. Contrast across the app is audited to WCAG 2.1 AAA
+   (1.4.6); see docs/ACCESSIBILITY.md for the measurements and the tool.
+   This comment previously claimed AA, which was untrue at the time --
+   the light theme had eight elements below it. */
 *:focus-visible {
     outline: 3px solid var(--accent) !important;
     outline-offset: 2px !important;
@@ -1482,4 +1584,182 @@ body {
     to {
         transform: translateY(0);
     }
+}
+
+/* ==========================================
+   Real-time share tamper detection
+   ========================================== */
+
+.one-time-notice {
+    font-size: 11px;
+    margin-top: 4px;
+    color: var(--danger);
+    font-weight: 700;
+}
+
+.share-expiry {
+    font-size: 11px;
+    margin-top: 4px;
+    color: var(--text-secondary);
+}
+
+.tamper-panel {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(0, 0, 0, .18);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.tamper-panel.checking {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.tamper-panel.success {
+    border-color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.tamper-panel.danger {
+    border-color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.tamper-panel.unknown {
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+}
+
+.tamper-verdict {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.tamper-panel.success .tamper-verdict { color: var(--success); }
+.tamper-panel.danger .tamper-verdict { color: var(--danger); }
+
+.tamper-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tamper-row.ok { color: var(--success); }
+.tamper-row.bad { color: var(--danger); }
+.tamper-row.muted { color: var(--text-secondary); font-size: 11px; }
+
+.tamper-details {
+    margin-top: 8px;
+}
+
+.tamper-details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 12px;
+}
+
+.tamper-heatmap {
+    display: block;
+    max-width: 180px;
+    width: 100%;
+    margin: 8px 0;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    image-rendering: pixelated;
+}
+
+.tamper-explanation {
+    margin: 6px 0 0 16px;
+    padding: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.tamper-explanation li { margin-bottom: 3px; }
+
+/* Reconstruction panel verdict text */
+
+.warning-text.success { color: var(--success); }
+.warning-text.danger { color: var(--danger); }
+
+/* Message body states */
+
+.message-text.undecryptable {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Key exchange status list */
+
+.key-exchange-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.key-exchange-name { color: var(--text-primary); }
+
+.key-exchange-state {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.key-exchange-row.ready .key-exchange-state { color: var(--success); }
+.key-exchange-row.pending .key-exchange-state { color: var(--accent); }
+.key-exchange-row.unavailable .key-exchange-state { color: var(--danger); }
+
+.key-exchange-fingerprint {
+    grid-column: 1 / -1;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    color: var(--text-secondary);
+    letter-spacing: .5px;
+}
+
+#publicKeyDisplay {
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: 11px;
+}
+
+/* Voice messages */
+
+.voice-player {
+    display: block;
+    width: 240px;
+    max-width: 100%;
+}
+
+.voice-status {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.voice-status:empty { display: none; }
+
+.voice-status.undecryptable { font-style: italic; }
+
+#voiceBtn.recording {
+    background: var(--danger);
+    color: #fff;
+    animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #voiceBtn.recording { animation: none; }
 }
