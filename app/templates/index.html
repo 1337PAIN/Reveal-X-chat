@@ -5,14 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reveal-X | Secure Image Sharing</title>
     <!-- [MODIFIED] Added CSP meta tag as fallback -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.socket.io; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' ws: wss: https://cdn.socket.io;">
+    <!-- Kept in step with the header CSS in routes.add_security_headers. Both are
+         enforced, so the stricter of the two wins: a directive missing here falls
+         back to default-src and silently blocks resources the header allows.
+         media-src must list blob: for decrypted voice playback. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.socket.io https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleusercontent.com; media-src 'self' data: blob:; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' blob: ws: wss: https://cdn.socket.io https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self';">
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <!-- [NEW] DOMPurify for XSS prevention -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/purify.min.js"></script>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=spinnerfix">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=admin1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/glass.css') }}?v=admin1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=admin1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -33,6 +39,10 @@
                     <i class="fas fa-wifi-slash"></i>
                     <span id="reconnectCount" class="reconnect-count" aria-live="polite"></span>
                 </div>
+                <button id="adminBtn" class="icon-btn hidden" type="button" title="Manage accounts">
+                    Admin <span id="adminPendingBadge" class="admin-badge hidden">0</span>
+                </button>
+                <a href="/lab" class="icon-btn" title="AI/ML Lab">AI Lab</a>
                 <button id="logoutBtn" class="icon-btn" type="button" title="Logout">Logout</button>
             </div>
         </header>
@@ -130,22 +140,28 @@
                     <button id="closePanel" class="btn-close" aria-label="Close reconstruction panel">×</button>
                 </div>
                 <div class="panel-content">
+                    <!-- "Select Image" only appears in manual mode (the 🔄 button).
+                         When the panel is opened from a chat message both shares are
+                         already loaded, so picking files there made no sense.
+                         Revoking belongs to the sender, on their own message bubble. -->
                     <div class="share-display">
                         <div class="share-box">
                             <h4>Share 1</h4>
                             <img id="share1Preview" src="" alt="Share 1">
-                            <button id="selectShare1Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
-                            <input type="file" id="share1Input" accept="image/*" hidden>
-                            <!-- [NEW] Revoke share button for share 1 -->
-                            <button id="revokeShare1Btn" class="btn btn-danger btn-revoke-share" type="button" title="Revoke share" disabled>Revoke</button>
+                            <div class="share-box-actions">
+                                <button id="selectShare1Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
+                                <input type="file" id="share1Input" accept="image/*" hidden>
+                                <button id="downloadShare1Btn" class="btn btn-secondary btn-share-download" type="button" disabled>Download</button>
+                            </div>
                         </div>
                         <div class="share-box">
                             <h4>Share 2</h4>
                             <img id="share2Preview" src="" alt="Share 2">
-                            <button id="selectShare2Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
-                            <input type="file" id="share2Input" accept="image/*" hidden>
-                            <!-- [NEW] Revoke share button for share 2 -->
-                            <button id="revokeShare2Btn" class="btn btn-danger btn-revoke-share" type="button" title="Revoke share" disabled>Revoke</button>
+                            <div class="share-box-actions">
+                                <button id="selectShare2Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
+                                <input type="file" id="share2Input" accept="image/*" hidden>
+                                <button id="downloadShare2Btn" class="btn btn-secondary btn-share-download" type="button" disabled>Download</button>
+                            </div>
                         </div>
                     </div>
                     <!-- [MODIFIED] Added loading state to reconstruct button -->
@@ -265,16 +281,23 @@
                 <div class="settings-section">
                     <h3>Security</h3>
                     <div class="settings-option">
-                        <label for="settingsPasscodeLock">
-                            <input type="checkbox" id="settingsPasscodeLock">
-                            Enable app passcode lock
+                        <label for="settingsTotp">
+                            <input type="checkbox" id="settingsTotp">
+                            Two-factor authentication (authenticator app)
                         </label>
+                        <p class="settings-hint">
+                            Asks for a 6-digit code at every sign-in, on top of your password or Google account.
+                        </p>
                     </div>
                     <div class="settings-option">
-                        <label for="settingsScreenshotBlock">
-                            <input type="checkbox" id="settingsScreenshotBlock">
-                            Block screenshots (where supported)
+                        <label for="settingsPasscodeLock">
+                            <input type="checkbox" id="settingsPasscodeLock">
+                            Lock this device with a passcode
                         </label>
+                        <p class="settings-hint">
+                            Locks the app on this browser after it is reopened or left idle.
+                            The passcode is stored as a PBKDF2-SHA256 hash and never leaves this device.
+                        </p>
                     </div>
                 </div>
 
@@ -332,6 +355,7 @@
                 </div>
             </div>
             <div class="settings-footer">
+                <span id="settingsFeedback" class="settings-feedback" aria-live="polite"></span>
                 <button id="saveSettingsBtn" class="btn btn-primary" type="button">Save Changes</button>
             </div>
         </div>
@@ -340,10 +364,64 @@
     <!-- Legacy Message Badge Style (will be injected via JS) -->
     <style id="legacy-badge-style"></style>
 
+    <!-- Administration. Rendered for everyone but revealed only when the server
+         reports role === 'admin'; the server re-checks on every action, so this
+         is presentation, not access control. -->
+    <div id="adminModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+        <div class="modal-content admin-modal">
+            <div class="admin-head">
+                <h2 id="adminTitle">Accounts</h2>
+                <button id="closeAdminBtn" class="close-btn" type="button" aria-label="Close accounts">&times;</button>
+            </div>
+
+            <div id="adminFeedback" class="admin-feedback" aria-live="polite"></div>
+
+            <section class="admin-section">
+                <h3>Create an account</h3>
+                <p class="settings-hint">Created accounts are approved immediately and can sign in straight away.</p>
+                <div class="admin-create-row">
+                    <input type="text" id="adminNewUsername" placeholder="Username" maxlength="30" autocomplete="off" aria-label="New username">
+                    <input type="password" id="adminNewPassword" placeholder="Password (min 8)" maxlength="128" autocomplete="new-password" aria-label="New password">
+                    <button id="adminCreateBtn" class="btn btn-primary" type="button">Create</button>
+                </div>
+                <label class="admin-check hidden" id="adminMakeAdminRow">
+                    <input type="checkbox" id="adminNewIsAdmin"> Make this account an administrator
+                </label>
+            </section>
+
+            <section class="admin-section">
+                <h3>Pending requests <span id="adminPendingCount" class="admin-count">0</span></h3>
+                <ul id="adminPendingList" class="admin-list">
+                    <li class="admin-empty">No requests waiting.</li>
+                </ul>
+            </section>
+
+            <section class="admin-section">
+                <h3>All accounts</h3>
+                <ul id="adminAccountList" class="admin-list"></ul>
+            </section>
+        </div>
+    </div>
+
     <div id="authModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
         <div class="modal-content">
             <h2 id="authTitle">Welcome to Reveal-X</h2>
-            <p>Log in or register to start a private secure chat.</p>
+            <p>Log in, or request an account. New accounts need administrator approval before they can sign in.</p>
+
+            <!-- Shown only when the server reports a working Firebase config. -->
+            <div id="firebaseAuth" class="firebase-auth hidden">
+                <button id="googleSignInBtn" class="btn btn-google" type="button">
+                    <span class="google-mark" aria-hidden="true">G</span> Continue with Google
+                </button>
+                <input type="email" id="firebaseEmailInput" placeholder="Email" autocomplete="email" aria-label="Email">
+                <input type="password" id="firebasePasswordInput" placeholder="Password" autocomplete="current-password" aria-label="Firebase password">
+                <div class="modal-actions">
+                    <button id="firebaseSignInBtn" class="btn btn-primary" type="button">Sign in</button>
+                    <button id="firebaseSignUpBtn" class="btn btn-secondary" type="button">Request account</button>
+                </div>
+                <div class="auth-divider"><span>or use a local account</span></div>
+            </div>
+
             <input
                 type="text"
                 id="usernameInput"
@@ -362,9 +440,10 @@
             >
             <div class="modal-actions">
                 <button id="loginBtn" class="btn btn-primary" type="button">Login</button>
-                <button id="registerBtn" class="btn btn-secondary" type="button">Register</button>
+                <button id="registerBtn" class="btn btn-secondary" type="button">Request account</button>
             </div>
             <div id="authError" class="auth-error" aria-live="polite"></div>
+            <div id="authNotice" class="auth-notice hidden" aria-live="polite"></div>
         </div>
     </div>
 
@@ -380,11 +459,69 @@
         </div>
     </div>
 
+    <!-- Second factor: shown after the first factor succeeds, before any session exists -->
+    <div id="totpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="totpTitle">
+        <div class="modal-content">
+            <h2 id="totpTitle">Two-factor authentication</h2>
+            <p>Enter the 6-digit code from your authenticator app.</p>
+            <input type="text" id="totpCodeInput" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="6" placeholder="000000" aria-label="Authentication code">
+            <div id="totpError" class="auth-error" aria-live="polite"></div>
+            <div class="modal-actions">
+                <button id="totpVerifyBtn" class="btn btn-primary" type="button">Verify</button>
+                <button id="totpCancelBtn" class="btn btn-secondary" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enrolling a new authenticator -->
+    <div id="totpSetupModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="totpSetupTitle">
+        <div class="modal-content">
+            <div class="settings-header">
+                <h2 id="totpSetupTitle">Set up two-factor authentication</h2>
+                <button id="totpSetupCloseBtn" class="btn-close" type="button" aria-label="Close">×</button>
+            </div>
+            <p>Scan this with Google Authenticator, Authy or 1Password, then enter the code it shows.</p>
+            <img id="totpQr" class="totp-qr" alt="Two-factor setup QR code">
+            <p class="totp-secret-label">Or enter this key manually:</p>
+            <code id="totpSecret" class="totp-secret"></code>
+            <input type="text" id="totpSetupCodeInput" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="6" placeholder="000000" aria-label="Authentication code">
+            <div id="totpSetupError" class="auth-error" aria-live="polite"></div>
+            <div class="modal-actions">
+                <button id="totpSetupConfirmBtn" class="btn btn-primary" type="button">Enable</button>
+                <button id="totpSetupCancelBtn" class="btn btn-secondary" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Passcode lock screen (local to this browser) -->
+    <div id="lockScreen" class="lock-screen hidden" role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+        <div class="lock-card">
+            <div class="lock-icon">🔒</div>
+            <h2 id="lockTitle">Reveal-X is locked</h2>
+            <p>Enter your passcode to continue on this device.</p>
+            <input type="password" id="lockPasscodeInput" inputmode="numeric" autocomplete="off"
+                   maxlength="12" aria-label="Passcode" placeholder="Passcode">
+            <div id="lockError" class="auth-error" aria-live="polite"></div>
+            <div class="modal-actions">
+                <button id="lockUnlockBtn" class="btn btn-primary" type="button">Unlock</button>
+                <button id="lockSignOutBtn" class="btn btn-secondary" type="button">Sign out</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Hidden screen reader announcements -->
     <div id="srAnnouncements" class="sr-only" aria-live="assertive" aria-atomic="true" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;"></div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/crypto.js') }}?v=loginfix2"></script>
-    <script src="{{ url_for('static', filename='js/chat.js') }}?v=sidebarfix"></script>
+    <script src="{{ url_for('static', filename='js/firebase-auth.js') }}?v=auth1"></script>
+    <script src="{{ url_for('static', filename='js/e2ee.js') }}?v=auth1"></script>
+    <script src="{{ url_for('static', filename='js/crypto.js') }}?v=auth1"></script>
+    <!-- In-browser tamper detection. Registers window.revealxTamperML but does
+         not download the ~11 MB wasm runtime until something asks for a verdict. -->
+    <script src="{{ url_for('static', filename='js/tamper-onnx.js') }}?v=onnx1"></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}?v=admin1"></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}?v=admin1"></script>
 </body>
 </html>
