@@ -1,10 +1,34 @@
-const CACHE_NAME = 'revealx-cache-v1';
+const CACHE_NAME = 'revealx-cache-v9-admin';
 const ASSETS_TO_CACHE = [
     '/',
     '/static/css/style.css',
+    '/static/css/glass.css',
+    '/static/css/settings.css',
     '/static/js/chat.js',
     '/static/js/crypto.js',
+    '/static/js/e2ee.js',
+    '/static/js/firebase-auth.js',
+    '/static/js/tamper-onnx.js',
+    '/static/js/admin.js',
+    // The ONNX graph and its metadata are small (~45 KB) and worth precaching.
+    // The onnxruntime-web wasm binary is ~11 MB and deliberately NOT listed:
+    // precaching it would cost every first-time visitor that download even if
+    // they never open a share. The runtime fetch handler below caches it after
+    // the first real use, which is when offline support starts to matter.
+    '/static/models/tamper_detector.onnx',
+    '/static/models/tamper_detector.meta.json',
+    '/lab',
+    '/static/css/rx_lab.css',
+    '/static/js/rx_lab.js',
     '/static/Xlogo.png',
+];
+
+// Third-party assets are cached on a best-effort basis. They are deliberately
+// NOT in ASSETS_TO_CACHE: cache.addAll() is atomic, so a single unreachable CDN
+// would reject the whole install and leave the app with no offline cache at all
+// -- silently, because nothing else breaks. Offline support that evaporates the
+// moment a CDN is blocked is not offline support.
+const OPTIONAL_ASSETS = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://cdn.jsdelivr.net/npm/dompurify@3.0.6/purify.min.js'
@@ -13,8 +37,13 @@ const ASSETS_TO_CACHE = [
 // Install Event
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(ASSETS_TO_CACHE);
+        caches.open(CACHE_NAME).then(async (cache) => {
+            // Same-origin assets must all land, or the cache is not usable.
+            await cache.addAll(ASSETS_TO_CACHE);
+            // Third-party ones individually, so one failure costs only itself.
+            await Promise.all(OPTIONAL_ASSETS.map(
+                (url) => cache.add(url).catch(() => {})
+            ));
         }).then(() => self.skipWaiting())
     );
 });
