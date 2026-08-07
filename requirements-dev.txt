@@ -1,0 +1,17 @@
+# Development/test dependencies. Install alongside requirements.txt:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   pytest
+pytest>=8.0.0
+
+# ONNX export toolchain (milestone M2).
+#
+# These are NOT runtime dependencies. The server still classifies with the
+# scikit-learn model; these are needed only to regenerate
+# app/static/models/tamper_detector.onnx via
+#   python scripts/export_tamper_detector_onnx.py
+# and to run tests/test_onnx_export.py, which skips itself when onnxruntime is
+# absent. The browser gets its runtime from app/static/vendor/onnxruntime/,
+# which is vendored in the repo -- no npm, no CDN, works offline.
+skl2onnx>=1.16.0
+onnx>=1.15.0
+onnxruntime>=1.17.0
