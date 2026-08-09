@@ -22,6 +22,6 @@ if __name__ == '__main__':
     print("=" * 50)
 
     port = int(os.environ.get('PORT', 5000))
-    use_ssl = 'adhoc' if not os.environ.get('PORT') else None
+    use_ssl = 'adhoc' if os.environ.get('REVEAL_X_ADHOC_SSL', '').lower() == 'true' else None
     
     socketio.run(app, debug=debug, host='0.0.0.0', port=port, ssl_context=use_ssl, allow_unsafe_werkzeug=True)
