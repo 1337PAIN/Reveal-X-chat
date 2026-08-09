@@ -5,6 +5,7 @@ ENV/
 
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -31,6 +32,11 @@ app/data/
 # Uploads
 app/static/uploads/
 app/shares/
+
+# Firebase service-account keys - never commit these
+serviceAccountKey*.json
+firebase-adminsdk*.json
+*-firebase-adminsdk-*.json
 
 # Environment variables
 .env
