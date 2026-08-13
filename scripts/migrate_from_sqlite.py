@@ -76,6 +76,7 @@ def create_postgres_schema(db_url):
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 profile_image TEXT,
+                public_key TEXT,
                 last_seen TEXT,
                 created_at TEXT NOT NULL
             )

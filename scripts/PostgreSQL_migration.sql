@@ -7,10 +7,11 @@ ALTER TABLE messages
 ADD COLUMN IF NOT EXISTS expires_at TEXT,
 ADD COLUMN IF NOT EXISTS share1_accessed BOOLEAN DEFAULT FALSE;
 
--- Add last_seen and profile_image to users table if missing
+-- Add last_seen, profile_image and the E2EE public key to users if missing
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS last_seen TEXT,
-ADD COLUMN IF NOT EXISTS profile_image TEXT;
+ADD COLUMN IF NOT EXISTS profile_image TEXT,
+ADD COLUMN IF NOT EXISTS public_key TEXT;
 
 -- Add read_at to messages table if missing
 ALTER TABLE messages
