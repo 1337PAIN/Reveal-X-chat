@@ -612,3 +612,55 @@ body[data-theme="light"] .lock-screen {
 
 /* The picker is absolutely positioned against the bubble. */
 .message { position: relative; }
+
+/* --- Show/hide password ---------------------------------------------------
+   The wrapper has to inherit the field's layout role, or wrapping an input
+   that was sized by a flex parent collapses it. */
+
+.password-field {
+    position: relative;
+    display: block;
+    width: 100%;
+}
+
+/* In the admin create row the input carried the flex sizing, so the wrapper
+   takes it over. */
+.admin-create-row .password-field { flex: 1 1 170px; min-width: 0; }
+
+/* Room for the control, so a long password does not run underneath it. */
+.password-field input {
+    width: 100%;
+    padding-right: 42px;
+}
+
+.password-reveal {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: .75;
+    transition: opacity .15s ease, background .15s ease, color .15s ease;
+}
+
+.password-reveal:hover { opacity: 1; background: var(--glass-2); color: var(--text-primary); }
+.password-reveal:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .password-reveal { transition: none; }
+}
+
+/* The admin row sets its inputs to width:auto with an ID selector, which
+   outranks .password-field input and left the field short of its wrapper --
+   so the control floated away from the field's edge. */
+#adminModal .admin-create-row .password-field input { width: 100%; }
