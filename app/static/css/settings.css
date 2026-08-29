@@ -515,3 +515,100 @@ body[data-theme="light"] .lock-screen {
     opacity: .5;
     cursor: not-allowed;
 }
+
+/* Transient failure banner. The server reported these long before anything
+   listened for them; this is where they surface. */
+.send-error-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(140%);
+    z-index: 4000;
+    max-width: min(520px, 92vw);
+    padding: .7rem 1.1rem;
+    border-radius: var(--radius-ms);
+    background: #991b1b;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    opacity: 0;
+    transition: transform .25s ease, opacity .25s ease;
+    pointer-events: none;
+}
+
+.send-error-banner.visible {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .send-error-banner { transition: opacity .25s ease; transform: translateX(-50%); }
+}
+
+/* --- Reactions ------------------------------------------------------------
+   .reaction-pill and .message-reactions were already styled; these are the
+   pieces that were missing along with the client code. */
+
+.btn-react {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: var(--radius-xs);
+    opacity: .75;
+}
+
+.btn-react:hover { opacity: 1; background: var(--glass-2); }
+
+.reaction-pill {
+    padding: 1px 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    cursor: pointer;
+}
+
+/* Your own reaction is outlined, so "who reacted" does not depend on hovering. */
+.reaction-pill.mine {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.reaction-picker {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    right: 8px;
+    z-index: 50;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    margin-bottom: 4px;
+    border-radius: 999px;
+    background: var(--glass-3);
+    border: 1px solid var(--glass-border-strong);
+    box-shadow: var(--glass-shadow);
+}
+
+.reaction-picker button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 17px;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 999px;
+}
+
+.reaction-picker.below {
+    bottom: auto;
+    top: calc(100% + 6px);
+}
+
+.reaction-picker button:hover { background: var(--glass-1); transform: scale(1.15); }
+
+/* The picker is absolutely positioned against the bubble. */
+.message { position: relative; }

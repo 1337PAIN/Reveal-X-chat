@@ -302,3 +302,59 @@ def test_an_oversized_image_is_refused(pair, store):
 
     assert events(a, 'image_error')
     assert os.listdir(store.shares_folder) == []
+
+
+# ----------------------------------------------------------------------
+# Reactions
+#
+# The server accepted react_message and broadcast message_reactions long
+# before any client sent or listened for either. These cover the round trip
+# and the removal path, which the route used to reject before it could reach
+# set_reaction.
+# ----------------------------------------------------------------------
+
+def test_a_reaction_reaches_both_sides(pair, store):
+    a, b, alice, bob = pair
+    a.emit('send_message', {'recipient_id': bob['id'], 'message': 'react to me'})
+    msg = last_message(b)
+
+    b.emit('react_message', {'message_id': msg['id'], 'emoji': '\U0001F44D'}) 
+
+    for sock in (a, b):
+        payload = events(sock, 'message_reactions')[-1]['args'][0]
+        assert payload['reactions']['\U0001F44D'] == [bob['id']]
+
+
+def test_a_reaction_can_be_taken_back(pair, store):
+    """An empty emoji clears it. The route used to drop that before
+    set_reaction saw it, so a reaction could be added and never removed."""
+    a, b, alice, bob = pair
+    a.emit('send_message', {'recipient_id': bob['id'], 'message': 'react to me'})
+    msg = last_message(b)
+
+    b.emit('react_message', {'message_id': msg['id'], 'emoji': '\U0001F44D'})
+    b.emit('react_message', {'message_id': msg['id'], 'emoji': ''})
+
+    assert events(b, 'message_reactions')[-1]['args'][0]['reactions'] == {}
+
+
+def test_one_reaction_per_person(pair, store):
+    a, b, alice, bob = pair
+    a.emit('send_message', {'recipient_id': bob['id'], 'message': 'react to me'})
+    msg = last_message(b)
+
+    b.emit('react_message', {'message_id': msg['id'], 'emoji': '\U0001F44D'})
+    b.emit('react_message', {'message_id': msg['id'], 'emoji': '\U0001F602'})
+
+    reactions = events(b, 'message_reactions')[-1]['args'][0]['reactions']
+    assert reactions == {'\U0001F602': [bob['id']]}
+
+
+def test_an_emoji_outside_the_allowed_set_is_ignored(pair, store):
+    a, b, alice, bob = pair
+    a.emit('send_message', {'recipient_id': bob['id'], 'message': 'react to me'})
+    msg = last_message(b)
+
+    b.emit('react_message', {'message_id': msg['id'], 'emoji': '<img src=x onerror=alert(1)>'})
+
+    assert events(b, 'message_reactions') == []

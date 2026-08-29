@@ -81,7 +81,8 @@ Full numbers, the tool, and its known limits: [docs/ACCESSIBILITY.md](docs/ACCES
 - Private one-to-one messaging with Flask-SocketIO.
 - **End-to-end encrypted text and voice messages** (see section 2).
 - Voice notes recorded in-browser with `MediaRecorder`, capped at 60 seconds and 2 MB.
-- Typing indicators, read receipts, reactions, forwarding, deletion, profile image support, and responsive UI.
+- Typing indicators, read receipts, emoji reactions, forwarding, deletion, profile image support, and responsive UI.
+- **Failures are reported.** The server had always emitted `image_error` and `message_error`; nothing on the client listened, so a refused send -- recipient offline, message too long, unsupported image type -- looked exactly like a successful one. They now surface in a banner that is also announced to screen readers.
 - Messages and shares auto-delete after 1 hour.
 - **Deletion scope depends on who is asking.** The sender owns what they sent, so their delete removes the message for *everyone* — the row and any stored Share 1 are destroyed on both sides. The recipient can only delete their own copy; the sender keeps theirs. The delete control is labelled accordingly (`Delete for everyone` vs `Delete for me`). A recipient who deletes a share also gives up their access to it.
 - XSS protection: message bodies are rendered with `textContent`, so they can never introduce markup. DOMPurify and server-side escaping cover the remaining surfaces.
@@ -478,7 +479,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-254 tests cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), and administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+258 tests cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), and administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
 
 JavaScript/NumPy feature parity cannot be checked from pytest — it needs a real
 browser — so it lives at `/lab/parity` instead. `test_parity_harness_is_wired`

@@ -140,15 +140,6 @@ def _clear_failed_logins(username, address):
         FAILED_LOGINS.pop(key, None)
 
 
-def image_data_url(value):
-    """Return a PNG data URL for either raw base64 or an existing data URL."""
-    if not value:
-        return ''
-    if value.startswith('data:image'):
-        return value
-    return f'data:image/png;base64,{value}'
-
-
 def parse_image_data_url(data_url):
     """Validate and decode an image data URL from the browser."""
     if not data_url or ',' not in data_url:
@@ -1326,7 +1317,12 @@ def handle_reaction(data):
     message_id = data.get('message_id')
     emoji = data.get('emoji') or ''
 
-    if not current_user or emoji not in ALLOWED_REACTIONS:
+    # An empty emoji means "clear my reaction". set_reaction has always
+    # supported that, but this guard rejected it before it could be reached,
+    # so a reaction could be added and never taken back.
+    if not current_user:
+        return
+    if emoji and emoji not in ALLOWED_REACTIONS:
         return
 
     message = chat_room.set_reaction(message_id, current_user['id'], emoji)
