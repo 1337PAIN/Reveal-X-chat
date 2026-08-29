@@ -103,7 +103,8 @@ usernameInput.value = localStorage.getItem('revealx_username') || '';
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/static/sw.js')
+        // Registered from the root so its scope covers the whole origin.
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(reg => console.log('ServiceWorker registered with scope: ', reg.scope))
             .catch(err => console.error('ServiceWorker registration failed: ', err));
     });
