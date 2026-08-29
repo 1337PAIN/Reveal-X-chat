@@ -164,6 +164,29 @@ Three details worth knowing:
 
 Full details: [docs/ADMIN.md](docs/ADMIN.md).
 
+### 2c. Brute-force protection and the audit trail
+
+Sign-in failures are throttled **on the server**. The browser shows an attempts
+counter, but that lives in the client and an attacker scripting the socket never
+sees it -- before this, sixty wrong passwords in a row were accepted and the
+right one still worked immediately afterwards.
+
+Two buckets, because either alone is easy to sidestep:
+
+| Bucket | Limit | Stops |
+| --- | --- | --- |
+| Per account | 8 per 15 min | Grinding a password list against one victim |
+| Per address | 20 per 15 min | Spraying one common password across many accounts |
+
+The refusal message is identical whether or not the account exists, so this does
+not become a way to test which usernames are real, and a successful sign-in
+clears the counter so a few typos leave nothing behind. Locking one account does
+not lock others.
+
+Administrative actions are written to an audit line -- who did what, to whom,
+when. Passwords never appear in it, and a **refused** action is not recorded as
+though it happened, which would be worse than no trail at all.
+
 ### 3. End-to-End Encryption for Text and Voice
 
 Text messages and voice notes are encrypted in the browser before they reach the server.
@@ -455,7 +478,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-218 tests cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), and administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets).
+231 tests cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), and administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), and brute-force throttling with its audit trail.
 
 JavaScript/NumPy feature parity cannot be checked from pytest — it needs a real
 browser — so it lives at `/lab/parity` instead. `test_parity_harness_is_wired`
