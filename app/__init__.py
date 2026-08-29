@@ -76,11 +76,9 @@ def _bootstrap_admin():
         print(f'[admin] Administrator "{username}" is active.')
 
 
-chat_room_initialised = False
 try:
     from app.models import chat_room as _chat_room
     _chat_room.init_db()
     _bootstrap_admin()
-    chat_room_initialised = True
 except Exception as _exc:  # pragma: no cover - surfaced at startup
     print(f'[admin] Startup admin check failed: {_exc}')

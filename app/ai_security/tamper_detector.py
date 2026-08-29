@@ -8,7 +8,6 @@ usable even when the optional model file is missing.
 
 from __future__ import annotations
 
-import json
 import math
 import os
 from dataclasses import dataclass
