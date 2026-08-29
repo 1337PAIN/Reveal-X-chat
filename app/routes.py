@@ -73,8 +73,18 @@ PENDING_TOTP_ENROLMENT = {}
 # someone grinding one password list against one victim; per-address stops
 # spraying one common password across many accounts. Both are needed.
 FAILED_LOGINS = {}
-LOGIN_MAX_ATTEMPTS = 8          # per account, within the window
-LOGIN_IP_MAX_ATTEMPTS = 20      # per address, across all accounts
+LOGIN_MAX_ATTEMPTS = 8           # per account, within the window
+# Per address, across all accounts. Deliberately much looser than the per
+# account limit: everyone behind one router, or one lab machine, shares an
+# address, so a tight value here punishes bystanders for someone else's typos.
+# It exists to catch spraying -- fifty failures from one address in a quarter
+# of an hour is clearly not a person mistyping -- and the per-account limit is
+# what actually protects an individual account.
+#
+# Note this reads request.remote_addr. Behind a reverse proxy that is the
+# proxy, so every user would share one bucket; trusting X-Forwarded-For is a
+# deployment decision and is deliberately not assumed here.
+LOGIN_IP_MAX_ATTEMPTS = 50
 LOGIN_WINDOW_SECONDS = 15 * 60
 
 
@@ -896,7 +906,13 @@ def handle_login(data):
 
         user, error = chat_room.authenticate(username, data.get('password'))
         if error:
-            _record_failed_login(username, address)
+            # Only a wrong password counts toward the throttle. "Awaiting
+            # approval" and "disabled" are returned *after* the password has
+            # already verified, so they are not guesses -- counting them meant
+            # someone who kept trying while waiting for approval was locked out
+            # for 15 minutes the moment an admin approved them.
+            if error == chat_room.ERROR_BAD_CREDENTIALS:
+                _record_failed_login(username, address)
             emit('auth_error', {'error': error}, to=request.sid)
             return
 

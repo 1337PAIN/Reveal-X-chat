@@ -23,7 +23,6 @@ const state = {
     lastTypingTime: 0,
     typingCounter: 0,
     sendCooldownActive: false,
-    loginAttemptsRemaining: 5,
     messageLimit: 50,
     visibleMessagesCount: 50,
     swipeStart: null,
@@ -560,11 +559,11 @@ function submitAuth(mode) {
         return;
     }
 
-    if (state.loginAttemptsRemaining <= 0) {
-        authError.textContent = 'Account login temporarily locked due to excessive failed attempts. Please restart.';
-        return;
-    }
-
+    // No client-side attempt gate here. It never stopped an attacker -- they
+    // script the socket and never run this code -- while it did lock out real
+    // users: it counted "waiting for administrator approval" as a failure, and
+    // once it hit zero it refused to send anything, so the only way out was a
+    // page reload. The server enforces the real limit.
     socket.emit(mode, { username, password });
 }
 
@@ -706,7 +705,6 @@ document.getElementById('totpCancelBtn').addEventListener('click', async () => {
 
 socket.on('auth_success', (data) => {
     state.currentUser = data.user;
-    state.loginAttemptsRemaining = 5;
     const totpChallenge = document.getElementById('totpModal');
     if (totpChallenge) totpChallenge.classList.add('hidden');
     localStorage.setItem('revealx_username', state.currentUser.username);
@@ -738,12 +736,9 @@ socket.on('auth_error', (data) => {
         totpChallenge.classList.add('hidden');
         window.revealxFirebase.signOut();
     }
-    state.loginAttemptsRemaining--;
-    if (state.loginAttemptsRemaining <= 0) {
-        authError.textContent = 'Too many failed login attempts. Locked.';
-    } else {
-        authError.textContent = `${data.error} (${state.loginAttemptsRemaining} attempts remaining)`;
-    }
+    // Report exactly what the server said. It already explains a lockout and
+    // how long it lasts; a second, invented counter only contradicted it.
+    authError.textContent = data.error || 'Sign-in failed';
 });
 
 // admin.js reads the signed-in user from here.

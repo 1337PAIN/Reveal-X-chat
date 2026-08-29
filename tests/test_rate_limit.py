@@ -103,11 +103,12 @@ def test_a_nonexistent_account_is_throttled_the_same_way(store):
 def test_spraying_many_accounts_is_capped_by_the_address_bucket(store):
     """Per-account limits alone are trivially sidestepped by trying one
     password against a hundred accounts instead."""
-    for i in range(30):
+    count = routes.LOGIN_IP_MAX_ATTEMPTS + 10
+    for i in range(count):
         store.create_user(f'user_number_{i}', f'password-for-{i}-x')
 
     sock = socketio.test_client(flask_app)
-    for i in range(30):
+    for i in range(count):
         sock.emit('login', {'username': f'user_number_{i}', 'password': 'Spring2026!'})
 
     assert any('Too many failed attempts' in e for e in errors(sock)), \
@@ -207,3 +208,73 @@ def test_a_refused_action_is_not_audited_as_if_it_happened(store, capsys):
     assert 'action=delete_account' not in capsys.readouterr().out
     assert store.get_user(victim['id']) is not None
     sock.disconnect()
+
+
+# ----------------------------------------------------------------------
+# Only guesses count
+#
+# A refusal for account state happens *after* the password has already
+# verified, so it is not evidence of guessing. Counting it locked legitimate
+# users out: request an account, keep trying while you wait, and the moment an
+# admin approved you the correct password was refused for 15 minutes.
+# ----------------------------------------------------------------------
+
+def test_waiting_for_approval_does_not_burn_the_throttle(store):
+    sock = socketio.test_client(flask_app)
+    sock.emit('register', {'username': 'newperson', 'password': 'their-password-1'})
+
+    for _ in range(routes.LOGIN_MAX_ATTEMPTS * 2):
+        sock.emit('login', {'username': 'newperson', 'password': 'their-password-1'})
+
+    pending = [a for a in store.list_accounts() if a['username'] == 'newperson'][0]
+    store.set_account_state(pending['id'], 'active')
+
+    sock.emit('login', {'username': 'newperson', 'password': 'their-password-1'})
+    assert events(sock, 'auth_success'), 'approved user was locked out by their own waiting'
+    sock.disconnect()
+
+
+def test_a_disabled_account_is_not_throttled_into_a_different_message(store):
+    """The reason must stay honest however many times they try."""
+    user, _ = store.create_user('gone', 'the-real-password-1')
+    store.set_account_state(user['id'], 'disabled')
+
+    sock = socketio.test_client(flask_app)
+    for _ in range(routes.LOGIN_MAX_ATTEMPTS * 2):
+        sock.emit('login', {'username': 'gone', 'password': 'the-real-password-1'})
+
+    assert errors(sock)[-1] == store.ERROR_DISABLED
+    sock.disconnect()
+
+
+def test_a_wrong_password_still_counts(store):
+    """The fix must not have disabled the throttle altogether."""
+    store.create_user('victim', 'the-real-password-1')
+    sock = socketio.test_client(flask_app)
+
+    hammer(sock, 'victim', routes.LOGIN_MAX_ATTEMPTS * 2)
+
+    assert any('Too many failed attempts' in e for e in errors(sock))
+    sock.disconnect()
+
+
+def test_the_address_bucket_is_looser_than_the_account_one(store):
+    """Everyone behind one router shares an address. If the shared bucket were
+    as tight as the per-account one, a single person's typos would lock out
+    the room."""
+    assert routes.LOGIN_IP_MAX_ATTEMPTS > routes.LOGIN_MAX_ATTEMPTS * 4
+
+
+def test_one_persons_failures_do_not_immediately_lock_the_address(store):
+    """Exhausting one account's budget must leave room for other people."""
+    store.create_user('clumsy', 'the-real-password-1')
+    store.create_user('colleague', 'another-password-2')
+
+    sock = socketio.test_client(flask_app)
+    hammer(sock, 'clumsy', routes.LOGIN_MAX_ATTEMPTS + 3)
+    sock.disconnect()
+
+    other = socketio.test_client(flask_app)
+    other.emit('login', {'username': 'colleague', 'password': 'another-password-2'})
+    assert events(other, 'auth_success')
+    other.disconnect()

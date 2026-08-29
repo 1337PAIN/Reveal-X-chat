@@ -354,13 +354,20 @@ class ChatRoom:
             'last_seen': user['created_at'],
         }, None
 
+    # Sign-in failure reasons, named so callers can distinguish a wrong password
+    # from a refusal that has nothing to do with the password. Only the first is
+    # evidence of guessing.
+    ERROR_BAD_CREDENTIALS = 'Invalid username or password'
+    ERROR_PENDING = 'This account is waiting for administrator approval'
+    ERROR_DISABLED = 'This account has been disabled by an administrator'
+
     def authenticate(self, username, password):
         username = (username or '').strip()
         with self._connect() as db:
             row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
 
         if not row or not self._verify_password(password or '', row['password_hash']):
-            return None, 'Invalid username or password'
+            return None, self.ERROR_BAD_CREDENTIALS
 
         # The password check comes first on purpose. Reporting "awaiting
         # approval" to someone who did not supply the right password would
@@ -368,9 +375,9 @@ class ChatRoom:
         keys = row.keys()
         state = (row['account_state'] if 'account_state' in keys else 'active') or 'active'
         if state == 'pending':
-            return None, 'This account is waiting for administrator approval'
+            return None, self.ERROR_PENDING
         if state == 'disabled':
-            return None, 'This account has been disabled by an administrator'
+            return None, self.ERROR_DISABLED
 
         self.update_last_seen(row['id'])
         return {
