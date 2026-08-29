@@ -29,25 +29,6 @@ from attacks import tamper_share
 from tamper_detector import FEATURE_NAMES, TamperDetector
 
 
-def synthetic_original(rng: np.random.Generator, size: int = 128) -> np.ndarray:
-    """Build a pseudo-natural grayscale image without external datasets."""
-    base = rng.integers(0, 256, size=(size, size), dtype=np.uint8)
-    base = cv2.GaussianBlur(base, (9, 9), 0)
-    # Add simple shapes/text-like edges so shares come from varied originals.
-    for _ in range(int(rng.integers(2, 8))):
-        x1, y1 = int(rng.integers(0, size)), int(rng.integers(0, size))
-        x2, y2 = int(rng.integers(0, size)), int(rng.integers(0, size))
-        color = int(rng.integers(0, 256))
-        thickness = int(rng.integers(1, 4))
-        cv2.line(base, (x1, y1), (x2, y2), color, thickness)
-    for _ in range(int(rng.integers(1, 5))):
-        center = (int(rng.integers(0, size)), int(rng.integers(0, size)))
-        radius = int(rng.integers(5, size // 5))
-        color = int(rng.integers(0, 256))
-        cv2.circle(base, center, radius, color, -1)
-    return base
-
-
 def build_dataset(samples: int = 120, size: int = 96, seed: int = 42):
     rng = np.random.default_rng(seed)
     detector = TamperDetector(model_path="__missing__.joblib")
@@ -55,8 +36,12 @@ def build_dataset(samples: int = 120, size: int = 96, seed: int = 42):
     X, y = [], []
 
     for i in range(samples):
-        original = synthetic_original(rng, size=size)
-        share1 = rng.integers(0, 256, size=original.shape, dtype=np.uint8)
+        # Share 1 is a uniform random mask, so it does not depend on the image
+        # it will hide. An earlier version generated a synthetic "original"
+        # here and claimed the shares therefore came from varied images; they
+        # did not -- only its .shape was ever read. Saying so plainly is worth
+        # more than the shapes it drew.
+        share1 = rng.integers(0, 256, size=(size, size), dtype=np.uint8)
         X.append(detector.extract_features(share1))
         y.append(0)
 
