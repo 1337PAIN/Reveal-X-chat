@@ -22,7 +22,7 @@
   "input_dtype": "float32",
   "verification": {
     "samples": 80,
-    "max_probability_delta": 4.6359168170972964e-08,
+    "max_probability_delta": 3.002308046617941e-08,
     "verdict_disagreements": 0
   }
 }
