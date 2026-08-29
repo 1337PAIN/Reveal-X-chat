@@ -412,7 +412,7 @@ body[data-theme="light"] .lock-screen {
     flex-wrap: wrap;
     gap: .6rem;
     padding: .65rem .8rem;
-    border-radius: 12px;
+    border-radius: var(--radius-ms);
     background: var(--glass-2);
     border: 1px solid var(--glass-border);
 }

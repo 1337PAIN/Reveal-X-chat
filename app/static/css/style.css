@@ -51,6 +51,7 @@
        than a matter of taste. --radius-xs was the most common value in the
        stylesheet and had no token at all. */
     --radius-xs: 8px;
+    --radius-ms: 12px;
     --radius-sm: 10px;
     --radius-md: 16px;
     --radius-lg: 22px;
@@ -695,7 +696,7 @@ body::before {
     align-items: center;
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-ms);
     color: var(--accent);
     display: inline-flex;
     font-size: 28px;
@@ -722,7 +723,7 @@ body::before {
 .feature {
     background: var(--bg-tertiary);
     padding: 12px 20px;
-    border-radius: 12px;
+    border-radius: var(--radius-ms);
     font-size: 14px;
 }
 
@@ -735,7 +736,7 @@ body::before {
 .message {
     max-width: 70%;
     padding: 12px 16px;
-    border-radius: 12px;
+    border-radius: var(--radius-ms);
     animation: slideIn 0.3s ease;
 }
 
@@ -1187,7 +1188,7 @@ body::before {
     padding: 0;
     display: flex;
     flex-direction: column;
-    border-radius: 12px;
+    border-radius: var(--radius-ms);
     overflow: hidden;
 }
 
