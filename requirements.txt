@@ -1,5 +1,10 @@
 Flask==3.0.0
-flask-socketio==5.3.5
+# 5.3.6, not 5.3.5. python-socketio 5.10.0 gave each namespace connection its
+# own sid, and 5.3.5's test client still looked packets up by the engine.io
+# sid -- so every emit went out correctly and arrived nowhere. Installing the
+# pins below as written used to leave the whole socket test suite erroring
+# with `IndexError: list index out of range` on the first auth_success.
+flask-socketio==5.3.6
 python-socketio==5.10.0
 numpy>=1.26.0
 opencv-python-headless>=4.8.1.78

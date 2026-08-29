@@ -18,18 +18,56 @@ ten seconds — see [Re-running the audit](#re-running-the-audit).
 
 | Surface | Elements checked | Below AA | Below AAA |
 | --- | --- | --- | --- |
-| Chat + settings, dark and light | 53 | 0 | 0 |
-| Sign-in screen, dark and light | 5 | 0 | 0 |
+| Chat + settings, dark and light | 40 | 0 | 0 |
+| Sign-in screen, dark and light | 14 | 0 | 0 |
 | `/lab` | 56 | 0 | 0 |
 
 Tightest margins, which are the ones to watch when changing colours:
 
 | Element | Ratio | Needs |
 | --- | --- | --- |
-| `.logo h1` gradient wordmark (light) | 5.09 | 4.5 (large) |
-| `.message-time` on a sent bubble (light) | 7.47 | 7 |
-| `.message-username` (dark) | 7.52 | 7 |
-| `.primary-btn` on `/lab`, hover state | 7.72 | 7 |
+| `#userStatus` "Online" (light) | 7.33 | 7 |
+| `#userCount` (light) | 7.63 | 7 |
+| `.summary-card` labels on `/lab` | 7.85 | 7 |
+| `.logo h1` gradient wordmark (dark) | 6.38 | 4.5 (large) |
+
+## Correction: these numbers were wrong once
+
+An earlier revision of this document claimed AAA on the strength of an audit
+that could not see the page's own background.
+
+The design paints its aurora into a **fixed `body::before` at `z-index: -1`**.
+The audit script walked up the DOM to `body`, found `background-color:
+#070b18`, and composited every translucent panel onto *that* — a near-black
+that is nowhere on screen. The pixels actually behind the header are a bright
+blue around `rgb(65,119,191)`. Light ink measured against near-black looks
+excellent and against bright blue does not, so every glass surface in the app
+was over-reported, in some places by a factor of three.
+
+What that hid, measured against the real painted backdrop:
+
+| Element | Reported | Actually | Bar |
+| --- | --- | --- | --- |
+| `.logo h1` wordmark, purple stop (dark) | 5.27 | **1.94** | 3 (AA, large) |
+| `.welcome-icon` "RX" | 1.46 | **1.42** | 3 (AA, large) |
+| `#logoutBtn` / `AI Lab` in the header | 11.05 | **3.87** | 4.5 (AA) |
+| `#settingsBtn` | — | **3.63** | 4.5 (AA) |
+| `#userStatus` "Online" | — | **3.54** | 4.5 (AA) |
+| 21 elements on `/lab` (worst `.summary-card` label) | — | **5.62** | 7 (AAA) |
+
+Five AA failures and thirty-seven AAA failures, in a document that said zero.
+The wordmark one was visible to the naked eye — it is what prompted the
+re-check — and the audit had been signing it off the whole time.
+
+The script now rasterises decorative `html`/`body` pseudo-element backgrounds
+into a viewport-sized canvas and samples each element's own position, including
+the aurora's current animation transform. Rows report `backdropSource:
+"painted"` when they were measured this way and `"cssom"` when they fall back.
+All 110 rows above are `painted`.
+
+**The lesson worth keeping:** a passing audit is only as good as its model of
+the page. This one was precise, well-commented, and confidently wrong, and it
+stayed wrong because its output agreed with what everyone wanted to be true.
 
 ## What had to change
 
@@ -47,6 +85,24 @@ themes had failures once gradients were measured properly.
 | `--accent` (message author name) | 3.95:1 | 7.73:1 |
 | `/lab` run button | 6.50:1, and **5.96:1 on hover** | 9.16:1, 7.72:1 on hover |
 | Wordmark gradient text | 3.54:1 dark | 5.25:1 dark, 5.09:1 light |
+
+Then, in the round that produced the correction above:
+
+| Problem | Was | Now |
+| --- | --- | --- |
+| Dark-theme glass tinted **white** over a bright aurora | `rgba(255,255,255,.05/.08/.13)` | `rgba(11,17,38,.55/.68/.78)` |
+| `/lab` panes, same mistake | `rgba(255,255,255,.06/.10/.14)` | `rgba(11,17,38,.55/.65/.74)` |
+| Wordmark purple stop (dark) | `#b07fc6`, 1.94:1 | `#c79ad9`, 6.38:1 |
+| Wordmark purple stop (light) | `#7f4396`, 4.54:1 | `#63307c`, 6.41:1 |
+| `.welcome-icon` ink left teal after glass.css made the tile teal | `var(--accent)`, 1.42:1 | `#0b1226`, 6.71:1 |
+| `--text-secondary` (light) on the aurora-lit sidebar | `#333c53`, 6.82:1 | `#2d3549`, 7.63:1 |
+
+The first two rows are one idea: **dark themes need dark glass.** The light
+theme already knew this — its note below explains that white glass on a
+near-white base flattened the UI — but the dark theme kept white fills, and
+white glass over a *bright* aurora composites upwards until light ink has
+nothing left to stand on. Tinting with the page's own base colour keeps roughly
+45% of the aurora showing through, so the panes still refract.
 
 Two structural notes:
 
@@ -100,13 +156,27 @@ result while this audit was being done:
 3. **Occlusion.** Text behind an open modal is not visible text. Without a hit
    test, auditing the sign-in screen reports the whole app chrome sitting behind
    the login dialog — twelve "failures" nobody can see.
+4. **Decorative page backdrops.** See the correction above: stopping the walk at
+   `body`'s `background-color` ignores a full-viewport `body::before`, and every
+   glass surface in the app is sitting on one.
+5. **Transitions mid-flight.** Switching theme animates `background` on every
+   control that has a transition, and `getComputedStyle` during the animation
+   returns the interpolated value. Run in a background tab, where frames are
+   throttled and the interpolation never advances, the sweep reads the previous
+   theme's surfaces under the new theme's ink — ten confident AA failures that
+   did not exist. `revealxContrastSweep` now freezes transitions while it
+   measures.
 
 ### Known limits
 
-- Elements using `backdrop-filter` are flagged `blur: true`. Their true backdrop
-  is whatever pixels are behind them, which cannot be read from the CSSOM. The
-  composited layer colours are the standard approximation and are what automated
-  tooling uses, but a strong image behind a blurred panel could differ.
+- `backdrop-filter: blur()` is approximated as identity. `saturate()` and
+  `brightness()` are applied properly, but a blur is only a no-op when the
+  backdrop is locally smooth. That holds for this aurora — a broad gradient
+  field — and would not hold for a photograph or a busy pattern. Rows carrying
+  a backdrop-filter are still flagged `blur: true`.
+- The backdrop rasteriser understands the gradient forms this codebase uses:
+  `radial-gradient` with explicit pixel radii, and `linear-gradient` with an
+  angle. Anything else marks the run `painted-partial` rather than guessing.
 - Only **contrast** (1.4.3 / 1.4.6) is measured. WCAG AAA as a whole includes
   criteria this project does not claim — sign-language alternatives for video
   (1.2.6), extended audio description (1.2.7), reading level (3.1.5) and

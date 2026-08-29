@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v11-nostale';
+const CACHE_NAME = 'revealx-cache-v12-logo';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -24,6 +24,7 @@ const ASSETS_TO_CACHE = [
     '/static/css/rx_lab.css',
     '/static/js/rx_lab.js',
     '/static/Xlogo.png',
+    '/static/icon-192.png',
 ];
 
 // Third-party assets are cached on a best-effort basis. They are deliberately

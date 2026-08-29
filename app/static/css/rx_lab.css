@@ -8,9 +8,14 @@
 
 :root {
     --bg: #070b18;
-    --panel: rgba(255, 255, 255, 0.06);
-    --panel-2: rgba(255, 255, 255, 0.10);
-    --panel-3: rgba(255, 255, 255, 0.14);
+    /* Tinted dark, not white -- same correction as the chat's glass tokens.
+       White panes over the aurora composite upwards, and --muted (#9fb1c8) on
+       the result measured 5.62:1 at worst against a 7:1 bar. Twenty-one
+       elements on this page were below AAA and none of them looked wrong,
+       which is exactly why it needs measuring rather than eyeballing. */
+    --panel: rgba(11, 17, 38, 0.55);
+    --panel-2: rgba(11, 17, 38, 0.65);
+    --panel-3: rgba(11, 17, 38, 0.74);
     --line: rgba(255, 255, 255, 0.14);
     --line-strong: rgba(255, 255, 255, 0.26);
     --highlight: rgba(255, 255, 255, 0.10);

@@ -252,10 +252,12 @@ body[data-theme="light"] option {
     box-shadow: 0 6px 20px rgba(96, 165, 250, .36);
 }
 
-/* The logo artwork is dark and sat almost invisible against the aurora once the
-   header became translucent. A halo lifts it off whatever colour is behind. */
+/* A 5px white glow used to sit behind this to lift a dark mark off a bright
+   aurora. With the glass tinting dark and the artwork rendering at full size,
+   the glow only blurred it -- at 21x18px effective it read as a smudge rather
+   than a logo. What is left is a plain contact shadow for depth. */
 .logo-image {
-    filter: drop-shadow(0 0 5px rgba(255, 255, 255, .6)) drop-shadow(0 1px 2px rgba(0, 0, 0, .3));
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .45));
 }
 
 body[data-theme="light"] .logo-image {
@@ -348,9 +350,14 @@ body[data-theme="light"] .users-list li.active .user-status-line {
     padding: 28px 22px;
 }
 
+/* style.css sets `color: var(--accent)` on this, which was right against the
+   flat --bg-tertiary it used to have. Painting a blue-to-teal plate here left
+   teal ink on a teal tile: 1.42:1, the worst contrast in the app. The plate is
+   bright, so the ink has to be dark. */
 .welcome-icon {
     background: linear-gradient(135deg, rgba(96, 165, 250, .95), rgba(94, 234, 212, .8));
     box-shadow: 0 10px 30px rgba(96, 165, 250, .32);
+    color: #0b1226;
 }
 
 .feature {
@@ -710,7 +717,9 @@ body[data-theme="light"] .one-time-notice {
    page it sits on, which pulls it lighter on dark and darker on light.
    --------------------------------------------------------------------------- */
 body[data-theme="light"] .logo h1 {
-    background: linear-gradient(135deg, var(--accent), #7f4396);
+    /* #7f4396 measured 4.54:1 on the lit part of the header -- level with the
+       4.5 bar and below it for part of the aurora's drift. */
+    background: linear-gradient(135deg, var(--accent), #63307c);
     -webkit-background-clip: text;
     background-clip: text;
 }

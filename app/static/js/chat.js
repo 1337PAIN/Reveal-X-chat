@@ -1813,7 +1813,7 @@ async function notifyForIncoming(msg) {
     playNotificationSound();
     showNotification(`New message from ${msg.username}`, {
         body: preview,
-        icon: '/static/Xlogo.png'
+        icon: '/static/icon-192.png'
     });
 }
 
