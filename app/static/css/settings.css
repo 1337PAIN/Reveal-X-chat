@@ -399,7 +399,7 @@ body[data-theme="light"] .lock-screen {
 
 .admin-empty {
     padding: .7rem .8rem;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     background: var(--glass-1);
     color: var(--text-secondary);
     font-size: 13px;
@@ -454,7 +454,7 @@ body[data-theme="light"] .lock-screen {
 .auth-notice {
     margin-top: .6rem;
     padding: .6rem .75rem;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     background: rgba(30, 64, 175, .14);
     border: 1px solid rgba(30, 64, 175, .4);
     font-size: 13px;
