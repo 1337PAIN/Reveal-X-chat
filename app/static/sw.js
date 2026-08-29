@@ -1,6 +1,10 @@
-const CACHE_NAME = 'revealx-cache-v10-reactions';
+const CACHE_NAME = 'revealx-cache-v11-nostale';
+// The HTML pages are deliberately NOT precached. An app shell held in the
+// cache is the classic reason a deploy "needs a hard refresh": the page is
+// served from cache, still listing the old scripts, so nothing new is ever
+// requested. They are still cached at runtime by the fetch handler below, so
+// offline use works -- they are just never preferred over the network.
 const ASSETS_TO_CACHE = [
-    '/',
     '/static/css/style.css',
     '/static/css/glass.css',
     '/static/css/settings.css',
@@ -17,7 +21,6 @@ const ASSETS_TO_CACHE = [
     // the first real use, which is when offline support starts to matter.
     '/static/models/tamper_detector.onnx',
     '/static/models/tamper_detector.meta.json',
-    '/lab',
     '/static/css/rx_lab.css',
     '/static/js/rx_lab.js',
     '/static/Xlogo.png',
@@ -70,8 +73,16 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // fetch() inside a worker still consults the browser's HTTP cache, so a
+    // heuristically cached page could be returned without touching the
+    // network -- "network first" in name only. For navigations, bypass it.
+    const isNavigation = event.request.mode === 'navigate';
+    const request = isNavigation
+        ? new Request(event.request, { cache: 'no-store' })
+        : event.request;
+
     event.respondWith(
-        fetch(event.request)
+        fetch(request)
             .then((response) => {
                 // If valid network response, cache it (except POSTs)
                 if (response && response.status === 200 && event.request.method === 'GET') {
