@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reveal-X — Browser/Server Feature Parity</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/rx_lab.css') }}?v=a11y1">
+    <link rel="stylesheet" href="{{ asset('css/rx_lab.css') }}">
     <style>
         .parity-shell { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
         .case { margin-bottom: 1.75rem; }
@@ -48,7 +48,7 @@
         <div id="results"></div>
     </main>
 
-    <script src="{{ url_for('static', filename='js/tamper-onnx.js') }}?v=onnx1"></script>
-    <script src="{{ url_for('static', filename='js/lab-parity.js') }}?v=onnx1"></script>
+    <script src="{{ asset('js/tamper-onnx.js') }}"></script>
+    <script src="{{ asset('js/lab-parity.js') }}"></script>
 </body>
 </html>

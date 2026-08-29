@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reveal-X AI Security Lab</title>
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/rx_lab.css') }}?v=a11y1">
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <link rel="stylesheet" href="{{ asset('css/rx_lab.css') }}">
 </head>
 <body>
     <header class="lab-header">
@@ -111,7 +111,7 @@
         </section>
     </main>
 
-    <script src="{{ url_for('static', filename='js/tamper-onnx.js') }}?v=onnx1"></script>
-    <script src="{{ url_for('static', filename='js/rx_lab.js') }}?v=onnx1"></script>
+    <script src="{{ asset('js/tamper-onnx.js') }}"></script>
+    <script src="{{ asset('js/rx_lab.js') }}"></script>
 </body>
 </html>

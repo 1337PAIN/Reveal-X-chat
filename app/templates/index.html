@@ -11,14 +11,14 @@
          media-src must list blob: for decrypted voice playback. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.socket.io https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleusercontent.com; media-src 'self' data: blob:; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' blob: ws: wss: https://cdn.socket.io https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self';">
     <!-- PWA Manifest -->
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
     <!-- [NEW] DOMPurify for XSS prevention -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/purify.min.js"></script>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=admin1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/glass.css') }}?v=admin1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=admin1">
+    <link rel="stylesheet" href="{{ asset('css/style.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/glass.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/settings.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -30,7 +30,7 @@
                     <span></span>
                     <span></span>
                 </button>
-                <img src="{{ url_for('static', filename='Xlogo.png') }}" alt="Reveal-X Logo" class="logo-image">
+                <img src="{{ asset('Xlogo.png') }}" alt="Reveal-X Logo" class="logo-image">
                 <h1>Reveal-X</h1>
             </div>
             <div class="header-info">
@@ -515,13 +515,13 @@
     <div id="srAnnouncements" class="sr-only" aria-live="assertive" aria-atomic="true" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;"></div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/firebase-auth.js') }}?v=auth1"></script>
-    <script src="{{ url_for('static', filename='js/e2ee.js') }}?v=auth1"></script>
-    <script src="{{ url_for('static', filename='js/crypto.js') }}?v=auth1"></script>
+    <script src="{{ asset('js/firebase-auth.js') }}"></script>
+    <script src="{{ asset('js/e2ee.js') }}"></script>
+    <script src="{{ asset('js/crypto.js') }}"></script>
     <!-- In-browser tamper detection. Registers window.revealxTamperML but does
          not download the ~11 MB wasm runtime until something asks for a verdict. -->
-    <script src="{{ url_for('static', filename='js/tamper-onnx.js') }}?v=onnx1"></script>
-    <script src="{{ url_for('static', filename='js/chat.js') }}?v=admin1"></script>
-    <script src="{{ url_for('static', filename='js/admin.js') }}?v=admin1"></script>
+    <script src="{{ asset('js/tamper-onnx.js') }}"></script>
+    <script src="{{ asset('js/chat.js') }}"></script>
+    <script src="{{ asset('js/admin.js') }}"></script>
 </body>
 </html>

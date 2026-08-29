@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v9-admin';
+const CACHE_NAME = 'revealx-cache-v10-reactions';
 const ASSETS_TO_CACHE = [
     '/',
     '/static/css/style.css',

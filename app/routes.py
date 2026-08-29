@@ -10,7 +10,7 @@ import secrets
 import time
 
 import cv2
-from flask import abort, jsonify, render_template, request, send_file, redirect
+from flask import abort, jsonify, render_template, request, send_file, redirect, url_for
 from flask_socketio import emit
 import numpy as np
 
@@ -347,6 +347,25 @@ def lab_features():
         'probability_tampered': prediction.probability_tampered,
         'model_name': prediction.model_name,
     })
+
+
+@app.template_global()
+def asset(filename):
+    """Static URL with a cache-buster derived from the file itself.
+
+    The version used to be a literal typed into the template -- ?v=admin1 --
+    which meant every edit needed a matching hand-edit somewhere else. Miss it
+    and returning browsers keep serving the old file: the code is deployed,
+    the tests pass, and the user sees none of it. That happened twice.
+
+    The modification time removes the coupling. It changes exactly when the
+    file does, and never when it does not.
+    """
+    try:
+        stamp = int(os.path.getmtime(os.path.join(app.static_folder, filename)))
+    except OSError:
+        stamp = 0
+    return f"{url_for('static', filename=filename)}?v={stamp}"
 
 
 def _share_hmac(image):
