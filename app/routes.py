@@ -65,6 +65,54 @@ MAX_TOTP_ATTEMPTS = 5
 # TOTP secrets that have been shown to a user but not yet proven with a code.
 PENDING_TOTP_ENROLMENT = {}
 
+# Failed password attempts: {key: [timestamps]}. The client shows an attempts
+# counter, but that lives in the browser and an attacker scripting the socket
+# never sees it -- so the limit has to be enforced here as well.
+#
+# Two buckets, because either alone is easy to sidestep. Per-account stops
+# someone grinding one password list against one victim; per-address stops
+# spraying one common password across many accounts. Both are needed.
+FAILED_LOGINS = {}
+LOGIN_MAX_ATTEMPTS = 8          # per account, within the window
+LOGIN_IP_MAX_ATTEMPTS = 20      # per address, across all accounts
+LOGIN_WINDOW_SECONDS = 15 * 60
+
+
+def _login_keys(username, address):
+    return ('account', (username or '').strip().lower()), ('address', address or 'unknown')
+
+
+def _login_blocked(username, address):
+    """Is either bucket over its limit? Returns seconds to wait, or 0."""
+    now = time.time()
+    account_key, address_key = _login_keys(username, address)
+    for key, limit in ((account_key, LOGIN_MAX_ATTEMPTS),
+                       (address_key, LOGIN_IP_MAX_ATTEMPTS)):
+        hits = [t for t in FAILED_LOGINS.get(key, []) if now - t < LOGIN_WINDOW_SECONDS]
+        FAILED_LOGINS[key] = hits
+        if len(hits) >= limit:
+            return int(LOGIN_WINDOW_SECONDS - (now - hits[0])) + 1
+    return 0
+
+
+def _record_failed_login(username, address):
+    now = time.time()
+    for key in _login_keys(username, address):
+        FAILED_LOGINS.setdefault(key, []).append(now)
+    # The dict is only ever appended to, so drop buckets that have aged out
+    # rather than growing it forever.
+    if len(FAILED_LOGINS) > 2048:
+        for key in list(FAILED_LOGINS):
+            FAILED_LOGINS[key] = [t for t in FAILED_LOGINS[key]
+                                  if now - t < LOGIN_WINDOW_SECONDS]
+            if not FAILED_LOGINS[key]:
+                del FAILED_LOGINS[key]
+
+
+def _clear_failed_logins(username, address):
+    for key in _login_keys(username, address):
+        FAILED_LOGINS.pop(key, None)
+
 
 def image_data_url(value):
     """Return a PNG data URL for either raw base64 or an existing data URL."""
@@ -230,6 +278,22 @@ def auth_config():
         'password_login': True,
         'totp': True,
     })
+
+
+@app.route('/sw.js')
+def service_worker():
+    """Serve the service worker from the root.
+
+    A worker registered at /static/sw.js gets the scope /static/, so it can
+    never control '/' or '/lab' -- the offline cache existed but applied to
+    nothing the user actually visits. Serving it from the root gives it the
+    whole-origin scope it was written for.
+    """
+    response = send_file(os.path.join(app.static_folder, 'sw.js'),
+                         mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 
 @app.route('/lab/parity')
@@ -548,6 +612,29 @@ def _require_admin():
     return current_user
 
 
+def _audit(actor, action, target=None, detail=''):
+    """Record an administrative action.
+
+    Destructive admin actions previously left no trace at all: an account
+    could be deleted, or its password reset, with nothing to show who did it
+    or when. Writes to the log rather than the database on purpose -- an audit
+    trail an admin can edit through the same panel is not much of one.
+
+    Deliberately records usernames and never passwords.
+    """
+    target_name = ''
+    if target:
+        record = chat_room.get_user(target) if isinstance(target, str) else target
+        target_name = (record or {}).get('username', target if isinstance(target, str) else '')
+    stamp = datetime.utcnow().isoformat(timespec='seconds')
+    line = f"[audit] {stamp}Z actor={actor['username']} action={action}"
+    if target_name:
+        line += f" target={target_name}"
+    if detail:
+        line += f" {detail}"
+    print(line, flush=True)
+
+
 def _require_superadmin():
     current_user = _require_admin()
     if not current_user:
@@ -646,6 +733,7 @@ def handle_admin_set_state(data):
         emit('admin_error', {'error': error}, to=request.sid)
         return
 
+    _audit(admin, 'set_state', target_id, f'state={state}')
     if state != 'active':
         _disconnect_user_sessions(target_id, 'Your account was disabled by an administrator.')
     _push_accounts_to_admins()
@@ -674,6 +762,8 @@ def handle_admin_create_account(data):
     if error:
         emit('admin_error', {'error': error}, to=request.sid)
         return
+    _audit(admin, 'create_account', user['id'],
+           f"role={'admin' if make_admin else 'user'}")
     _push_accounts_to_admins()
     emit('admin_ok', {'message': f"Created {user['username']}."}, to=request.sid)
     emit_users()
@@ -691,6 +781,7 @@ def handle_admin_reset_password(data):
     if not ok:
         emit('admin_error', {'error': error}, to=request.sid)
         return
+    _audit(admin, 'reset_password', data.get('user_id'))
     # Old sessions keep working after a reset, which would defeat the point of
     # resetting a compromised account's password.
     _disconnect_user_sessions(data.get('user_id'),
@@ -710,6 +801,7 @@ def handle_admin_delete_account(data):
         return
     target = chat_room.get_user(target_id)
 
+    _audit(admin, 'delete_account', target)
     _disconnect_user_sessions(target_id, 'Your account was removed by an administrator.')
     chat_room.purge_user(target_id)
     _push_accounts_to_admins()
@@ -738,6 +830,8 @@ def handle_admin_set_role(data):
     if not ok:
         emit('admin_error', {'error': error}, to=request.sid)
         return
+
+    _audit(admin, 'set_role', target_id, f"role={data.get('role')}")
 
     # Their session caches a role, and the roster they can see depends on it.
     _disconnect_user_sessions(target_id, 'Your account permissions were changed.')
@@ -787,10 +881,26 @@ def handle_login(data):
     """Log in with a persisted account."""
     try:
         data = data or {}
-        user, error = chat_room.authenticate(data.get('username'), data.get('password'))
+        username = data.get('username')
+
+        address = request.remote_addr or 'unknown'
+
+        wait = _login_blocked(username, address)
+        if wait:
+            # Deliberately the same message whether or not the account exists,
+            # so this does not become a way to test which usernames are real.
+            emit('auth_error', {
+                'error': f'Too many failed attempts. Try again in {max(wait // 60, 1)} minute(s).',
+            }, to=request.sid)
+            return
+
+        user, error = chat_room.authenticate(username, data.get('password'))
         if error:
+            _record_failed_login(username, address)
             emit('auth_error', {'error': error}, to=request.sid)
             return
+
+        _clear_failed_logins(username, address)
         _complete_sign_in(user)
     except Exception as exc:
         print(f"Login failed: {exc}")
