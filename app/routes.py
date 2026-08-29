@@ -88,6 +88,22 @@ LOGIN_IP_MAX_ATTEMPTS = 50
 LOGIN_WINDOW_SECONDS = 15 * 60
 
 
+def _client_address():
+    """The address to throttle against.
+
+    request.remote_addr is the proxy when one is in front, which would put
+    every user in a single bucket. X-Forwarded-For fixes that but is trivially
+    spoofable by the client, so trusting it is opt-in: set REVEALX_TRUST_PROXY
+    only when a proxy you control actually sets that header.
+    """
+    if os.environ.get('REVEALX_TRUST_PROXY', '').lower() == 'true':
+        forwarded = request.headers.get('X-Forwarded-For', '')
+        if forwarded:
+            # Left-most entry is the original client; the rest are proxies.
+            return forwarded.split(',')[0].strip()
+    return request.remote_addr or 'unknown'
+
+
 def _login_keys(username, address):
     return ('account', (username or '').strip().lower()), ('address', address or 'unknown')
 
@@ -893,7 +909,7 @@ def handle_login(data):
         data = data or {}
         username = data.get('username')
 
-        address = request.remote_addr or 'unknown'
+        address = _client_address()
 
         wait = _login_blocked(username, address)
         if wait:
