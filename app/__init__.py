@@ -11,6 +11,11 @@ import secrets
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('REVEAL_X_SECRET_KEY') or secrets.token_urlsafe(32)
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
+# Jinja caches compiled templates and, outside debug mode, never re-checks the
+# file. Editing a template then reloading would keep serving the old page --
+# which looks exactly like the edit having no effect. The cost is one stat()
+# per render.
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SHARES_FOLDER'] = os.path.join(app.root_path, 'shares')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
