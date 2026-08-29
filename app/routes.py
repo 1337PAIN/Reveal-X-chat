@@ -528,6 +528,17 @@ def add_security_headers(response):
     elif force_https and request.url.startswith('http://'):
         return redirect(request.url.replace('http://', 'https://'), code=301)
 
+    # HTML carries no cache headers of its own, so browsers fall back to
+    # heuristic caching and may serve the page from cache without asking. The
+    # assets are fine either way -- they are revalidated and versioned -- but a
+    # cached *page* still lists the old ones, so a newly added script tag never
+    # appears and the fix looks like it did not work until a hard refresh.
+    #
+    # no-cache does not mean "do not store"; it means "ask before reusing", so
+    # an unchanged page still costs only a 304.
+    if response.mimetype == 'text/html':
+        response.headers['Cache-Control'] = 'no-cache'
+
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['Referrer-Policy'] = 'same-origin'
