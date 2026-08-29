@@ -34,9 +34,20 @@
 
         const wrap = document.createElement('div');
         wrap.className = 'password-field';
-        // Carry the field's own layout role, so wrapping does not collapse it
-        // inside a flex row.
         input.parentNode.insertBefore(wrap, input);
+
+        // The field's outer spacing has to move to the wrapper. Left on the
+        // input it still counts toward the wrapper's height -- 42px field plus
+        // a 16px bottom margin makes a 58px box -- so a control centred on the
+        // wrapper sits half the margin too low. Reading it here rather than
+        // hard-coding keeps this right for fields with different spacing.
+        const spacing = getComputedStyle(input);
+        wrap.style.marginTop = spacing.marginTop;
+        wrap.style.marginBottom = spacing.marginBottom;
+        wrap.style.marginLeft = spacing.marginLeft;
+        wrap.style.marginRight = spacing.marginRight;
+        input.style.margin = '0';
+
         wrap.appendChild(input);
 
         const button = document.createElement('button');
