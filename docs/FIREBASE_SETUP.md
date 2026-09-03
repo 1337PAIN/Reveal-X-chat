@@ -16,7 +16,21 @@ Firebase is **optional**. With nothing configured the app runs exactly as before
 ## 1. Create the Firebase project
 
 1. Go to <https://console.firebase.google.com> and **Add project**. Analytics is not needed.
-2. In the project, open **Build → Authentication → Get started**.
+2. Open **Authentication**, then **Get started**.
+
+   The console no longer has a "Build" section — that navigation was reorganised.
+   Authentication is pinned under **Project shortcuts** in the left sidebar, or go
+   straight to `https://console.firebase.google.com/project/<project-id>/authentication/providers`.
+
+   **Get started is not optional.** Registering a web app gives you a config
+   snippet, which makes it look like Firebase is ready, but it does not create
+   the Auth configuration. Until you click it, sign-in fails with
+   `auth/configuration-not-found` and this probe returns `CONFIGURATION_NOT_FOUND`:
+
+   ```bash
+   curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=$FIREBASE_API_KEY"         -H "Content-Type: application/json"         -d '{"identifier":"probe@example.com","continueUri":"http://localhost:5000"}'
+   ```
+
 3. On the **Sign-in method** tab, enable:
    - **Google** (pick a support email)
    - **Email/Password**
@@ -57,7 +71,18 @@ Windows PowerShell, for one session:
 $env:FIREBASE_API_KEY="AIza..."; $env:FIREBASE_AUTH_DOMAIN="your-project.firebaseapp.com"; $env:FIREBASE_PROJECT_ID="your-project"; $env:FIREBASE_APP_ID="1:123:web:abc"; $env:FIREBASE_CREDENTIALS_FILE="C:\keys\serviceAccountKey.json"; python run.py
 ```
 
-## 5. Check it
+## 5. Install the Admin SDK
+
+```bash
+pip install "firebase-admin>=6.5.0"
+```
+
+It is in `requirements.txt`, but the app treats it as optional: without it
+`firebase_enabled()` reports False and the Google button simply never appears —
+no error, no warning. If the button is missing and your config looks right,
+check this first.
+
+## 6. Check it
 
 ```bash
 curl http://127.0.0.1:5000/api/auth/config
@@ -130,7 +155,8 @@ Firebase multi-factor requires upgrading the project to **Identity Platform** on
 
 | Symptom | Cause |
 | --- | --- |
-| Google button never appears | `/api/auth/config` returns `firebase: null` — a variable is missing or the service-account key failed to load |
+| Google button never appears | `/api/auth/config` returns `firebase: null` — a variable is missing, `firebase-admin` is not installed, or the service-account key failed to load |
+| `auth/configuration-not-found` | Authentication was never switched on. Registering a web app gives you a config snippet without creating any Auth config, so this looks like a working setup right up until someone tries to sign in. Open Authentication → **Get started** |
 | `auth/unauthorized-domain` | Add the host to Firebase → Authentication → Settings → Authorized domains |
 | `auth/operation-not-allowed` | The provider is not enabled on the Sign-in method tab |
 | `auth/popup-blocked` | The browser blocked the popup; allow popups for this origin |
