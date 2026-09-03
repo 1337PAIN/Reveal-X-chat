@@ -41,6 +41,10 @@ firebase-adminsdk*.json
 # Environment variables
 .env
 .env.local
+# Local launcher carrying the Firebase web config. Those values are public, but
+# GitHub's secret scanner flags AIza... keys, so keep it out of commits.
+run-firebase.ps1
+run-firebase.sh
 
 # Logs
 *.log
