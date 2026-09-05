@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v12-logo';
+const CACHE_NAME = 'revealx-cache-v13-scope';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -68,11 +68,59 @@ self.addEventListener('activate', (event) => {
 });
 
 // Fetch Event (Network First, Cache Fallback)
-self.addEventListener('fetch', (event) => {
-    // Avoid caching Socket.IO long-polling requests
-    if (event.request.url.includes('/socket.io/')) {
-        return;
+/* Third-party origins whose assets are worth keeping offline. Anything else
+   cross-origin is left completely alone. */
+const CACHEABLE_ORIGINS = [
+    'https://fonts.googleapis.com',
+    'https://fonts.gstatic.com',
+    'https://cdnjs.cloudflare.com',
+    'https://cdn.jsdelivr.net',
+    'https://cdn.socket.io',
+];
+
+/**
+ * Should this worker take over the request at all?
+ *
+ * Answering "no" means never calling respondWith(), which leaves the request
+ * exactly as the browser would have made it. That matters more than it sounds:
+ * a worker that proxies *everything* through fetch() re-issues cross-origin
+ * requests itself, and sign-in flows do not survive that. Firebase's popup
+ * sign-in talks to accounts.google.com, identitytoolkit.googleapis.com and an
+ * iframe on <project>.firebaseapp.com, with redirects and credentials the
+ * worker has no business replaying -- the visible symptom was
+ * `auth/internal-error`, thrown only in browsers where the worker was
+ * registered, which is why it never reproduced in a test harness.
+ *
+ * The rule: same-origin GETs, plus the CDNs above. Nothing else.
+ */
+function shouldHandle(request) {
+    // A cache can only answer GETs, and a POST proxied through here is a POST
+    // sent twice as far as any server-side effect is concerned.
+    if (request.method !== 'GET') return false;
+
+    let url;
+    try {
+        url = new URL(request.url);
+    } catch (err) {
+        return false;
     }
+
+    // Socket.IO long-polling: never cacheable, and latency-sensitive.
+    if (url.pathname.startsWith('/socket.io/')) return false;
+
+    if (url.origin === self.location.origin) {
+        // API responses are per-session. /api/auth/config in particular decides
+        // whether the Google button appears; a cached copy from before Firebase
+        // was configured would keep hiding it.
+        if (url.pathname.startsWith('/api/')) return false;
+        return true;
+    }
+
+    return CACHEABLE_ORIGINS.includes(url.origin);
+}
+
+self.addEventListener('fetch', (event) => {
+    if (!shouldHandle(event.request)) return;
 
     // fetch() inside a worker still consults the browser's HTTP cache, so a
     // heuristically cached page could be returned without touching the
@@ -86,10 +134,13 @@ self.addEventListener('fetch', (event) => {
         fetch(request)
             .then((response) => {
                 // If valid network response, cache it (except POSTs)
-                if (response && response.status === 200 && event.request.method === 'GET') {
+                if (response && response.status === 200 && response.type !== 'opaque') {
                     const responseToCache = response.clone();
                     caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseToCache);
+                        // Still guard the put: an opaque or partial response
+                        // rejects here, and an unhandled rejection in a worker
+                        // is invisible from the page.
+                        cache.put(event.request, responseToCache).catch(() => {});
                     });
                 }
                 return response;
