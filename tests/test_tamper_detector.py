@@ -1,6 +1,5 @@
 """ML tamper detection over VC shares."""
 
-import os
 
 import numpy as np
 import pytest
@@ -28,18 +27,24 @@ def fallback_detector():
 def test_clean_shares_are_rarely_misclassified(detector):
     """False positives are a rate, not an absolute.
 
-    The classifier misreads roughly 0.5% of genuine random shares as tampered,
-    so asserting on a single sample would make this suite flake about once in
-    200 runs. Assert the rate instead, with headroom.
+    Measured over 3000 shares, the classifier misreads 0.73% of genuine random
+    ones as tampered. An earlier version of this test drew 30 shares from
+    os.urandom and allowed 2 -- which at the true rate fails about once in 724
+    runs, and duly did.
+
+    Seeding fixes that properly: the sample is the same every run, so the test
+    either always passes or always fails, and a failure means the model changed
+    rather than that the dice did. 200 samples with a ceiling of 8 (4%) still
+    leaves a real bound -- more than five times the measured rate, so a genuine
+    regression trips it.
     """
-    samples = 30
+    rng = np.random.default_rng(20260906)
+    samples = 200
     misclassified = sum(
-        detector.predict(
-            np.frombuffer(os.urandom(96 * 96), dtype=np.uint8).reshape((96, 96))
-        ).tampered
+        detector.predict(rng.integers(0, 256, (96, 96), dtype=np.uint8)).tampered
         for _ in range(samples)
     )
-    assert misclassified <= 2, f'{misclassified}/{samples} clean shares flagged as tampered'
+    assert misclassified <= 8, f'{misclassified}/{samples} clean shares flagged as tampered'
 
 
 def test_clean_share_prediction_is_well_formed(detector, random_share):
