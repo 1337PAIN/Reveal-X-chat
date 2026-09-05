@@ -65,6 +65,29 @@ FIREBASE_CREDENTIALS_FILE=/absolute/path/to/serviceAccountKey.json
 
 `FIREBASE_CREDENTIALS_JSON` accepts the JSON inline instead, if a file path is awkward (e.g. on a PaaS).
 
+`FIREBASE_CLOCK_SKEW_SECONDS` (optional, default **30**, capped at 60) is the tolerance
+for clock drift when checking token timestamps. You should not need to touch it —
+see below for why it is not zero.
+
+### Why token checking tolerates clock drift
+
+Google stamps an ID token's `iat` from *its* clock. The Admin SDK defaults to
+`clock_skew_seconds=0`, so a server running even **one second** behind Google
+rejects every token:
+
+```
+InvalidIdTokenError: Token used too early, 1788637184 < 1788637185.
+```
+
+This deployment was 1s out, which is well inside normal NTP drift and invisible
+to anyone looking at their clock — and it failed **100%** of Google sign-ins. It
+is not something a user can be asked to fix, so the tolerance defaults to 30
+seconds.
+
+That widens `iat`/`nbf` and `exp` by the same amount. Against a one-hour token
+30 seconds is immaterial: a replayed token still has to be used inside its own
+lifetime, which is what `exp` enforces. `check_revoked` stays on.
+
 Windows PowerShell, for one session:
 
 ```powershell
@@ -160,5 +183,5 @@ Firebase multi-factor requires upgrading the project to **Identity Platform** on
 | `auth/unauthorized-domain` | Add the host to Firebase → Authentication → Settings → Authorized domains |
 | `auth/operation-not-allowed` | The provider is not enabled on the Sign-in method tab |
 | `auth/popup-blocked` | The browser blocked the popup; allow popups for this origin |
-| "Sign-in token was rejected" | The server's service account belongs to a different project than the web config |
+| "Sign-in token was rejected" | **The server log now says why** — it is printed there and deliberately not sent to the browser. Most often clock drift (see below) or a service account belonging to a different project than the web config |
 | Popup opens then closes with no result | Serving over plain `http://` on a non-localhost host; Google requires `https` or `localhost` |

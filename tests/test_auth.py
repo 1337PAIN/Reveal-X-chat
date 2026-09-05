@@ -7,7 +7,15 @@ import pytest
 
 from app import app as flask_app, socketio
 from app.auth import totp as totp_module
-from app.auth.firebase_auth import FirebaseAuthError, claims_to_identity
+from app.auth import firebase_auth as firebase_auth_module
+from app.auth.firebase_auth import (
+    DEFAULT_CLOCK_SKEW_SECONDS,
+    MAX_CLOCK_SKEW_SECONDS,
+    FirebaseAuthError,
+    _clock_skew_seconds,
+    claims_to_identity,
+    verify_id_token,
+)
 from app.auth.totp import (
     generate_totp_secret,
     totp_provisioning_uri,
@@ -407,3 +415,65 @@ def test_auth_config_never_leaks_the_service_account(client, monkeypatch):
     body = client.get('/api/auth/config').get_data(as_text=True)
     assert 'SUPER-SECRET' not in body
     assert 'private_key' not in body
+
+
+# --- Clock drift ------------------------------------------------------------
+#
+# Google stamps an ID token's `iat` from its own clock and the Admin SDK
+# defaults to zero tolerance, so a server one second behind Google rejects every
+# token with "Token used too early". That is not a hypothetical: it is what this
+# deployment did, and it fails 100% of sign-ins on a machine whose clock looks
+# fine to its owner.
+
+
+def test_token_verification_allows_for_clock_drift(monkeypatch):
+    """The tolerance must actually reach the SDK, not just exist as a constant."""
+    monkeypatch.delenv('FIREBASE_CLOCK_SKEW_SECONDS', raising=False)
+    seen = {}
+
+    def fake_verify(token, app=None, check_revoked=False, clock_skew_seconds=0):
+        seen['check_revoked'] = check_revoked
+        seen['clock_skew_seconds'] = clock_skew_seconds
+        return {'uid': 'firebase-uid-123'}
+
+    monkeypatch.setattr(firebase_auth_module, '_get_app', lambda: object())
+    monkeypatch.setattr(firebase_auth_module.firebase_auth_sdk, 'verify_id_token', fake_verify)
+
+    assert verify_id_token('a-token')['uid'] == 'firebase-uid-123'
+    assert seen['clock_skew_seconds'] == DEFAULT_CLOCK_SKEW_SECONDS
+    # Widening the clock window must not quietly drop the revocation check.
+    assert seen['check_revoked'] is True
+
+
+@pytest.mark.parametrize('value, expected', [
+    (None, DEFAULT_CLOCK_SKEW_SECONDS),
+    ('', DEFAULT_CLOCK_SKEW_SECONDS),
+    ('5', 5),
+    ('0', 0),
+    ('-10', 0),                          # clamped, not passed through
+    ('600', MAX_CLOCK_SKEW_SECONDS),     # the SDK rejects >60 outright
+    ('banana', DEFAULT_CLOCK_SKEW_SECONDS),
+])
+def test_clock_skew_setting_is_clamped(monkeypatch, value, expected):
+    """A typo here must not turn into "no Firebase sign-in at all"."""
+    if value is None:
+        monkeypatch.delenv('FIREBASE_CLOCK_SKEW_SECONDS', raising=False)
+    else:
+        monkeypatch.setenv('FIREBASE_CLOCK_SKEW_SECONDS', value)
+    assert _clock_skew_seconds() == expected
+
+
+def test_rejection_reason_is_logged_but_not_sent_to_the_client(monkeypatch, capsys):
+    """Why a token failed describes the server; the client is told only that it did."""
+    def boom(token, app=None, check_revoked=False, clock_skew_seconds=0):
+        raise ValueError('Token used too early, 1788637184 < 1788637185')
+
+    monkeypatch.setattr(firebase_auth_module, '_get_app', lambda: object())
+    monkeypatch.setattr(firebase_auth_module.firebase_auth_sdk, 'verify_id_token', boom)
+
+    with pytest.raises(FirebaseAuthError) as excinfo:
+        verify_id_token('a-token')
+
+    assert 'used too early' not in str(excinfo.value)
+    assert str(excinfo.value) == 'Sign-in token was rejected'
+    assert 'used too early' in capsys.readouterr().out

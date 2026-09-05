@@ -34,6 +34,35 @@ _init_lock = threading.Lock()
 _app = None
 _init_failed = False
 
+# Google stamps an ID token's `iat` from its own clock, and the Admin SDK
+# defaults to zero tolerance -- so a server running a single second behind
+# Google rejects every token with "Token used too early", and Google sign-in
+# fails 100% of the time on a machine whose clock looks perfectly fine. Ours was
+# 1s out. NTP drift of a few seconds is normal and not something a user can be
+# asked to fix.
+#
+# The window widens `iat`/`nbf` and `exp` by the same amount. Against a one-hour
+# token, 30 seconds is immaterial: a replay still has to happen inside the
+# token's own lifetime, which is what `exp` is for. The SDK caps this at 60.
+DEFAULT_CLOCK_SKEW_SECONDS = 30
+MAX_CLOCK_SKEW_SECONDS = 60
+
+
+def _clock_skew_seconds() -> int:
+    """Tolerance for clock drift when checking token timestamps."""
+    raw = os.environ.get('FIREBASE_CLOCK_SKEW_SECONDS', '').strip()
+    if not raw:
+        return DEFAULT_CLOCK_SKEW_SECONDS
+    try:
+        value = int(raw)
+    except ValueError:
+        print(f'FIREBASE_CLOCK_SKEW_SECONDS={raw!r} is not a number; '
+              f'using {DEFAULT_CLOCK_SKEW_SECONDS}')
+        return DEFAULT_CLOCK_SKEW_SECONDS
+    # The SDK rejects anything outside 0-60 outright, which would turn a typo
+    # into "no Firebase sign-in at all".
+    return max(0, min(value, MAX_CLOCK_SKEW_SECONDS))
+
 
 class FirebaseAuthError(Exception):
     """Raised when an ID token cannot be trusted."""
@@ -123,8 +152,19 @@ def verify_id_token(id_token: str) -> dict:
 
     try:
         # check_revoked catches tokens issued before a forced sign-out.
-        claims = firebase_auth_sdk.verify_id_token(id_token, app=app, check_revoked=True)
+        claims = firebase_auth_sdk.verify_id_token(
+            id_token,
+            app=app,
+            check_revoked=True,
+            clock_skew_seconds=_clock_skew_seconds(),
+        )
     except Exception as exc:
+        # The client is told only that the token was rejected -- why it was
+        # rejected can describe the server's state, and is not the client's
+        # business. But swallowing it entirely made a one-second clock
+        # difference indistinguishable from a forged token, from the wrong
+        # project, from an expired session. Say so in the log.
+        print(f'Firebase token rejected: {type(exc).__name__}: {exc}')
         raise FirebaseAuthError('Sign-in token was rejected') from exc
 
     if not claims.get('uid') and not claims.get('sub'):
