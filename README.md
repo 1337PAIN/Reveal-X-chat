@@ -476,14 +476,40 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest
+pytest                          # 286 server tests
+node --test "tests/js/*.test.mjs"   # 59 browser tests
 ```
 
-258 tests cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), and administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+Both run on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+CI also boots the production server from the `Procfile` and asserts it serves,
+completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
+because gunicorn does not run on Windows and an unverified deployment command is
+just a note.
 
-JavaScript/NumPy feature parity cannot be checked from pytest — it needs a real
-browser — so it lives at `/lab/parity` instead. `test_parity_harness_is_wired`
-guarantees that harness and its reference endpoint keep working.
+**286 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+
+**59 browser tests** run the shipped `app/static/js` files verbatim on Node's
+built-in runner — no build step, no npm dependency added to a Python project.
+They cover the E2EE session (two independent sessions, so a symmetrically broken
+key agreement cannot pass by talking to itself), the escaping layer, and the
+service worker's request scoping.
+
+### Feature parity (M2)
+
+The browser detector reproducing the server's was previously demonstrated at
+`/lab/parity` — a page someone had to open and read. That page is still there
+and is still the best way to *show* it, but the claim is now also asserted
+automatically: `scripts/generate_feature_parity_fixture.py` records the server's
+feature vectors for ten images, and `tests/js/tamper-features.test.mjs` compares
+them against the browser extractor at 1e-9 relative tolerance. CI regenerates
+the fixture and fails on any diff, so the server's implementation cannot drift
+away from what the fixture claims it does.
+
+Regenerate after changing either extractor:
+
+```bash
+python scripts/generate_feature_parity_fixture.py
+```
 
 ---
 
@@ -557,7 +583,7 @@ scripts/
   export_tamper_detector_onnx.py   # joblib -> ONNX, refuses to write unless verified
   validate_final_product.py
   migrate_from_sqlite.py
-tests/                      # pytest suite
+tests/                      # pytest suite, plus tests/js for the browser tests
 run.py
 requirements.txt
 requirements-dev.txt
