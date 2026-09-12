@@ -205,40 +205,11 @@ document.addEventListener('keydown', (event) => {
 // ==========================================
 // 3. Security, escaping and DOMPurify fallback
 // ==========================================
-
-/**
- * HTML Escaper helper
- */
-function escapeHtml(text) {
-    const map = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-    };
-    return String(text || '').replace(/[&<>"']/g, (match) => map[match]);
-}
-
-/**
- * Safely sanitize HTML string using DOMPurify with strict HTML Escaping fallback
- * @param {string} html - HTML string
- * @returns {string} Sanitized string
- */
-function cleanHTML(html) {
-    if (typeof DOMPurify !== 'undefined') {
-        return DOMPurify.sanitize(html);
-    }
-    return escapeHtml(html);
-}
-
-/**
- * Client-side input validator matching server rules
- */
-function validateUsername(username) {
-    const usernameRe = /^[A-Za-z0-9_.-]{3,30}$/;
-    return usernameRe.test(username);
-}
+//
+// escapeHtml, cleanHTML and validateUsername now live in sanitize.js, which is
+// loaded before this file. They are the boundary between text someone else
+// typed and HTML this app builds, and they were untestable while they sat in
+// the middle of this file. See tests/js/sanitize.test.mjs.
 
 // ==========================================
 // 4. Session Warning & Inactivity Monitor
@@ -511,13 +482,7 @@ document.querySelectorAll('#closeKeyManagerBtn, #closeKeyManagerBtn2').forEach(b
 // 7. Search Debouncing & Utilities
 // ==========================================
 
-function debounce(func, delay = 300) {
-    let timer = null;
-    return function (...args) {
-        clearTimeout(timer);
-        timer = setTimeout(() => func.apply(this, args), delay);
-    };
-}
+// debounce() is in sanitize.js, loaded before this file.
 
 // Attach debounced filter elements
 messageSearchInput.addEventListener('input', debounce(filterVisibleMessages, 300));
