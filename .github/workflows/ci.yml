@@ -53,6 +53,48 @@ jobs:
       - name: Run the suite
         run: pytest -q --cov=app --cov-report=term-missing:skip-covered
 
+  javascript:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    # The security-critical half of this project runs in the browser: E2EE key
+    # agreement, the tamper detector, the service worker's request scoping. It
+    # had no automated test at all until these.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python dependencies
+        # Needed to regenerate the parity fixture from the server's own detector.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: The feature-parity fixture is current
+        # The browser/server parity test compares against recorded server output.
+        # If someone changes the Python extractor without regenerating, that test
+        # keeps passing against stale numbers -- hiding exactly the drift it is
+        # there to catch. So regenerate and require no diff.
+        run: |
+          python scripts/generate_feature_parity_fixture.py
+          if ! git diff --exit-code -- tests/js/fixtures/feature-parity.json; then
+            echo
+            echo "The server's tamper features changed but the fixture was not regenerated."
+            echo "Run: python scripts/generate_feature_parity_fixture.py"
+            exit 1
+          fi
+          echo "OK: fixture matches the current server implementation"
+
+      - name: Run the browser tests
+        run: node --test "tests/js/*.test.mjs"
+
   production-server:
     name: Production server boots and serves
     runs-on: ubuntu-latest
