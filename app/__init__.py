@@ -9,7 +9,18 @@ import secrets
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('REVEAL_X_SECRET_KEY') or secrets.token_urlsafe(32)
+_secret_key = os.environ.get('REVEAL_X_SECRET_KEY')
+if not _secret_key:
+    # A generated key is the right default -- refusing to start would make the
+    # project harder to run than it needs to be, and nobody sets an env var
+    # before their first `python run.py`. But it is regenerated on every start,
+    # which silently invalidates every session cookie on restart. Say so, so
+    # that "everyone got logged out again" is a known cause rather than a
+    # mystery.
+    _secret_key = secrets.token_urlsafe(32)
+    print('REVEAL_X_SECRET_KEY is not set: using a random key for this run. '
+          'Sessions will not survive a restart. See docs/DEPLOYMENT.md.')
+app.config['SECRET_KEY'] = _secret_key
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
 # Jinja caches compiled templates and, outside debug mode, never re-checks the
 # file. Editing a template then reloading would keep serving the old page --

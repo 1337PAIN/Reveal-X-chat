@@ -1,6 +1,13 @@
 """
 Reveal-X: Secure Image Sharing Chat Application.
-Run this file to start the server.
+
+The **development** entry point. It reloads templates, prints the LAN URL and
+fails loudly when the port is taken -- all useful while working, none of it what
+should face a network.
+
+Werkzeug's server needs allow_unsafe_werkzeug=True below to start at all under
+Flask-SocketIO, which is the library stating plainly that it is not a production
+server. For deployment use the Procfile (gunicorn); see docs/DEPLOYMENT.md.
 """
 
 import os
@@ -12,8 +19,10 @@ if __name__ == '__main__':
     debug = os.environ.get('FLASK_DEBUG', '').lower() == 'true'
 
     print("=" * 50)
-    print("REVEAL-X SERVER STARTING")
+    print("REVEAL-X DEVELOPMENT SERVER STARTING")
     print("=" * 50)
+    print("\nNot for deployment -- use the Procfile (gunicorn).")
+    print("See docs/DEPLOYMENT.md")
     print("\nOpen your browser and go to:")
     print("   http://localhost:5000")
     print("\nShare this URL with others on your network:")
