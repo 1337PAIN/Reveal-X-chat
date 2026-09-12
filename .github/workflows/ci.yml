@@ -81,16 +81,13 @@ jobs:
         # The browser/server parity test compares against recorded server output.
         # If someone changes the Python extractor without regenerating, that test
         # keeps passing against stale numbers -- hiding exactly the drift it is
-        # there to catch. So regenerate and require no diff.
-        run: |
-          python scripts/generate_feature_parity_fixture.py
-          if ! git diff --exit-code -- tests/js/fixtures/feature-parity.json; then
-            echo
-            echo "The server's tamper features changed but the fixture was not regenerated."
-            echo "Run: python scripts/generate_feature_parity_fixture.py"
-            exit 1
-          fi
-          echo "OK: fixture matches the current server implementation"
+        # there to catch.
+        #
+        # Compared numerically rather than byte-for-byte: the correlation
+        # features differ in the last bits between numpy builds (1.8e-14
+        # Windows vs Ubuntu, summation order) and a byte-exact check fails on
+        # every platform except whichever one generated the file.
+        run: python scripts/generate_feature_parity_fixture.py --check
 
       - name: Run the browser tests
         run: node --test "tests/js/*.test.mjs"

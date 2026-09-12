@@ -11,10 +11,22 @@ same numbers, on every push, without a browser.
 Regenerate after changing either extractor:
 
     python scripts/generate_feature_parity_fixture.py
+
+CI verifies the fixture is still current with:
+
+    python scripts/generate_feature_parity_fixture.py --check
+
+That comparison is numerical, not byte-for-byte. The correlation features come
+out differing in the last few bits between numpy builds -- 1.8e-14 relative
+between Windows and Ubuntu, from summation order, not from any change in the
+algorithm -- so a byte-exact check fails on every platform but the one that
+generated the file. What matters is that nobody changed the extractor without
+re-recording it, and a real change moves a feature by vastly more than that.
 """
 
 import base64
 import json
+import math
 import pathlib
 import sys
 
@@ -61,6 +73,58 @@ def cases():
     yield 'two-tone', ((rng.integers(0, 2, (96, 96))) * 200 + 20).astype(np.uint8)
 
 
+# Comfortably above the ~2e-14 of cross-platform float noise, and a thousand
+# times tighter than the 1e-9 the browser parity test allows. A genuine change
+# to the extractor lands far outside both.
+CHECK_TOLERANCE = 1e-12
+
+
+def check(entries) -> int:
+    """Compare freshly computed features against the committed fixture."""
+    if not OUT.exists():
+        print(f'{OUT.relative_to(ROOT)} does not exist; run without --check first.')
+        return 1
+
+    recorded = json.loads(OUT.read_text(encoding='utf-8'))
+    names = recorded['featureNames']
+    by_name = {case['name']: case for case in recorded['cases']}
+
+    problems = []
+    if names != [str(n) for n in FEATURE_NAMES]:
+        problems.append(f'feature list changed: {names} -> {list(FEATURE_NAMES)}')
+
+    for entry in entries:
+        was = by_name.pop(entry['name'], None)
+        if was is None:
+            problems.append(f"{entry['name']}: not in the fixture")
+            continue
+        if was['pixels'] != entry['pixels']:
+            problems.append(f"{entry['name']}: the test image itself changed")
+        for name, new_value, old_value in zip(names, entry['features'], was['features']):
+            scale = max(abs(old_value), 1e-12)
+            delta = abs(new_value - old_value) / scale
+            if not math.isfinite(new_value) or delta > CHECK_TOLERANCE:
+                problems.append(
+                    f"{entry['name']}/{name}: fixture {old_value!r} -> now {new_value!r} "
+                    f"(relative {delta:.3e})"
+                )
+
+    for leftover in by_name:
+        problems.append(f'{leftover}: in the fixture but no longer generated')
+
+    if problems:
+        print('The fixture no longer matches the server implementation:')
+        for problem in problems:
+            print('  -', problem)
+        print()
+        print('If the change was intended, re-record it:')
+        print('    python scripts/generate_feature_parity_fixture.py')
+        return 1
+
+    print(f'OK: {len(entries)} cases match the fixture within {CHECK_TOLERANCE:g} relative')
+    return 0
+
+
 def main() -> int:
     detector = TamperDetector()
     entries = []
@@ -79,6 +143,9 @@ def main() -> int:
         })
         if not np.all(np.isfinite(features)):
             print(f'  WARNING: {name} produced a non-finite feature')
+
+    if '--check' in sys.argv:
+        return check(entries)
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps({
