@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reveal-X AI Security Lab</title>
     <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <meta name="theme-color" content="#070b18">
+
+    <!-- iOS ignores the web app manifest entirely: without these, "Add to Home
+         Screen" gives a screenshot of the page as the icon and launches inside
+         Safari's chrome rather than standalone. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Reveal-X">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
+
     <link rel="stylesheet" href="{{ asset('css/rx_lab.css') }}">
 </head>
 <body>

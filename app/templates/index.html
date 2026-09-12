@@ -12,6 +12,17 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.socket.io https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleusercontent.com; media-src 'self' data: blob:; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' blob: ws: wss: https://cdn.socket.io https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self';">
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <meta name="theme-color" content="#070b18">
+
+    <!-- iOS ignores the web app manifest entirely: without these, "Add to Home
+         Screen" gives a screenshot of the page as the icon and launches inside
+         Safari's chrome rather than standalone. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Reveal-X">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
+
     <!-- [NEW] DOMPurify for XSS prevention -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/purify.min.js"></script>
     <!-- Font Awesome for icons -->

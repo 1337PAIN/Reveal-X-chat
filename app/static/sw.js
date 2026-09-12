@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v15-ux';
+const CACHE_NAME = 'revealx-cache-v16-pwa';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -26,6 +26,7 @@ const ASSETS_TO_CACHE = [
     '/static/js/rx_lab.js',
     '/static/Xlogo.png',
     '/static/icon-192.png',
+    '/static/apple-touch-icon.png',
 ];
 
 // Third-party assets are cached on a best-effort basis. They are deliberately
