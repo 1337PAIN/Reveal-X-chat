@@ -1388,7 +1388,9 @@ body::before {
     border-radius: var(--radius-xs);
 }
 
-@media (max-width: 900px) {
+/* 899, not 900: the sidebar docks at min-width 900px, and at exactly 900 both
+   queries would match -- giving a docked panel a width of 100%. */
+@media (max-width: 899px) {
     .main-content {
         position: relative;
     }
@@ -1415,16 +1417,30 @@ body::before {
 }
 
 @media (max-width: 560px) {
+    /* One row, not a column. Stacking the logo above the buttons made the
+       header 123px tall on an 812px phone -- 15% of the screen spent on
+       chrome, on the device with the least of it to spare.
+
+       It was never necessary: measured at 320px, the narrowest target worth
+       supporting, the row needs 280px of the 288px available. Tightening the
+       gaps is enough, so the wordmark keeps its 22px. That matters beyond
+       looks -- below 18.66px bold it stops counting as WCAG "large text" and
+       its contrast requirement jumps from 4.5:1 to 7:1, which at its measured
+       6.38:1 it would fail. Header height: 123px -> 77px. */
     .header {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 10px;
+        align-items: center;
+        gap: 8px;
         padding: 12px 16px;
     }
 
+    .logo {
+        gap: 6px;
+        min-width: 0;
+    }
+
     .header-info {
-        flex-wrap: wrap;
-        gap: 10px;
+        flex-wrap: nowrap;
+        gap: 8px;
     }
 
     .message-input {

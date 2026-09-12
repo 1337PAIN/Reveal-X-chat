@@ -199,6 +199,9 @@ document.addEventListener('keydown', (event) => {
         const timeoutModal = document.getElementById('sessionTimeoutModal');
         if (timeoutModal) timeoutModal.classList.add('hidden');
         if (reconstructionPanel) reconstructionPanel.classList.remove('active');
+        // The drawer covers the conversation, so Escape has to dismiss it too.
+        // It was the one overlay this handler did not close.
+        closeSidebar(true);
     }
 });
 
@@ -2753,12 +2756,60 @@ function showWelcome() {
     messageSearchInput.value = '';
 }
 
-function closeSidebar() {
+/* The accounts drawer.
+ *
+ * Below 900px this is a drawer over the conversation; at 900px and up it is
+ * docked and the toggle is display:none, so none of the focus handling here
+ * runs -- it is all conditioned on the toggle being visible.
+ *
+ * A drawer that opens without taking focus is a drawer a keyboard user cannot
+ * reach: Tab from the toggle went straight past it into the chat behind.
+ */
+
+/** True only when the sidebar is acting as an overlay drawer. */
+function sidebarIsDrawer() {
+    return sidebarToggle && getComputedStyle(sidebarToggle).display !== 'none';
+}
+
+function sidebarFocusables() {
+    return [...accountsSidebar.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
+    )].filter((el) => el.offsetParent !== null);
+}
+
+/** Keep Tab inside the drawer while it covers the page. */
+function trapSidebarFocus(event) {
+    if (event.key !== 'Tab' || !accountsSidebar.classList.contains('open')) return;
+    const focusable = sidebarFocusables();
+    if (!focusable.length) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    // The toggle stays reachable: it is what closes the drawer again.
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === sidebarToggle)) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        sidebarToggle.focus();
+    }
+}
+
+/**
+ * @param {boolean} restoreFocus Put focus back on the toggle. Skipped when the
+ *   drawer closes because a conversation was picked -- selectUser() moves focus
+ *   to the composer, and two things claiming focus is worse than neither.
+ */
+function closeSidebar(restoreFocus = false) {
+    const wasOpen = accountsSidebar.classList.contains('open');
     accountsSidebar.classList.remove('open');
     sidebarOverlay.classList.remove('active');
     sidebarToggle.classList.remove('active');
     sidebarToggle.setAttribute('aria-expanded', 'false');
     sidebarToggle.setAttribute('aria-label', 'Open accounts');
+    document.removeEventListener('keydown', trapSidebarFocus, true);
+
+    if (restoreFocus && wasOpen && sidebarIsDrawer()) sidebarToggle.focus();
 }
 
 function openSidebar() {
@@ -2767,12 +2818,19 @@ function openSidebar() {
     sidebarToggle.classList.add('active');
     sidebarToggle.setAttribute('aria-expanded', 'true');
     sidebarToggle.setAttribute('aria-label', 'Close accounts');
+
+    if (!sidebarIsDrawer()) return;
+    document.addEventListener('keydown', trapSidebarFocus, true);
+    // Land on the search box: the drawer exists to find someone, and typing is
+    // the fastest way through a list that grows.
+    const target = userSearchInput || sidebarFocusables()[0];
+    if (target) target.focus();
 }
 
 if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
         if (accountsSidebar.classList.contains('open')) {
-            closeSidebar();
+            closeSidebar(true);
         } else {
             openSidebar();
         }
@@ -2780,7 +2838,7 @@ if (sidebarToggle) {
 }
 
 if (sidebarOverlay) {
-    sidebarOverlay.addEventListener('click', closeSidebar);
+    sidebarOverlay.addEventListener('click', () => closeSidebar(true));
 }
 
 if (logoutBtn) {
@@ -2852,3 +2910,25 @@ socket.on('disconnect', () => {
 // Set default chat placeholder
 setChatEnabled(false);
 showWelcome();
+
+/* Put the cursor in the username box.
+ *
+ * Focus started on <body>, so the first thing every visitor had to do was click
+ * a field the page had already decided they wanted. The `autofocus` attribute
+ * is not enough on its own here: it only fires on the initial parse, and this
+ * dialog is shown and hidden by script.
+ *
+ * Deferred so it does not race the passcode lock, which is shown on the same
+ * load and has the stronger claim -- it is covering the page. A timeout rather
+ * than requestAnimationFrame: rAF does not run in a background tab, so a page
+ * restored into one would come back with no cursor anywhere. */
+setTimeout(() => {
+    const locked = lockScreen && !lockScreen.classList.contains('hidden');
+    const authVisible = authModal && getComputedStyle(authModal).display !== 'none';
+    if (locked || !authVisible) return;
+
+    const username = document.getElementById('usernameInput');
+    // Do not pull focus from someone already typing (a password manager may
+    // have filled and focused a field before this ran).
+    if (username && document.activeElement === document.body) username.focus();
+});

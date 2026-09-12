@@ -588,7 +588,16 @@ body[data-theme="light"] .one-time-notice {
    chat, which is also what makes the layered glass read as depth. Below that
    it stays the original drawer. Delete this block to restore drawer-only.     */
 
-@media (min-width: 1100px) {
+/* Docked from 900px, not 1100px.
+
+   Between 561 and 1099 the sidebar was a drawer behind the hamburger while the
+   empty state still read "Select a user -- choose someone online to start a
+   private chat": an instruction pointing at something invisible. iPad landscape
+   is 1024px and sat squarely in that gap.
+
+   At 900px the panel takes 280px and leaves 620px for the conversation, which
+   is more than the chat needs. */
+@media (min-width: 900px) {
     .sidebar {
         position: relative;
         top: auto;
