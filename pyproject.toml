@@ -3,6 +3,9 @@ name = "reveal-x-chat"
 version = "0.1.0"
 description = "Reveal-X Chat"
 requires-python = ">=3.9"
+dependencies = [
+    "flask",
+]
 
 [tool.vercel]
 entrypoint = "app:app"
