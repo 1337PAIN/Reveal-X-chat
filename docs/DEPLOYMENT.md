@@ -13,6 +13,51 @@ that file with `sed`, booted, and asked for a page, a Socket.IO handshake and
 `/api/auth/config` on every push. If the deployment recipe breaks, the build goes
 red rather than the discovery waiting for a demo.
 
+## Hosting it
+
+Two supported ways in, both running the same gunicorn command:
+
+**Render (one click).** Push to GitHub, then Render → New → Blueprint → pick
+this repo. `render.yaml` creates the web service and a Postgres database,
+generates `REVEAL_X_SECRET_KEY`, and sets the proxy and HTTPS flags. Nothing in
+that file is a secret: the admin and Firebase variables are `sync: false`, so
+you fill them in the dashboard after the first deploy.
+
+**Docker (anywhere else).**
+
+```bash
+docker build -t reveal-x .
+docker run -p 5000:5000 -e REVEAL_X_SECRET_KEY="$(openssl rand -hex 32)" reveal-x
+```
+
+CI builds that image on every push, starts it, and asserts it serves the app
+shell, completes a Socket.IO handshake, imports the ML stack, and is not running
+as root. The Dockerfile's `CMD` and the `Procfile` web command are asserted
+identical by `tests/test_deployment.py`, so a platform cannot end up running a
+command nobody tested.
+
+### Two things the container does not keep
+
+The filesystem is wiped on every deploy.
+
+- **The database.** On SQLite that means every account disappears when you push.
+  The Render blueprint provisions Postgres and wires `DATABASE_URL` for this
+  reason. Anywhere else, set `DATABASE_URL` or mount a volume at
+  `/app/app/data`.
+- **Stored Share 1 images** under `/app/app/shares`. These expire after an hour
+  by design, so losing them on a deploy costs only in-flight shares — but a
+  reconstruction in progress across a restart will fail. Mount a volume there if
+  that matters for your demo.
+
+### Why not Vercel
+
+Vercel's functions are request-scoped and stateless. Flask-SocketIO keeps each
+client's session, room membership and pending packets in the worker process, so
+a handshake on one invocation and a poll on the next is an unknown session —
+the chat would connect and then silently drop messages. This needs a long-lived
+process. The same rules out any serverless platform without a hosted Socket.IO
+service in front.
+
 ## Why not `python run.py`
 
 `run.py` starts Werkzeug's development server. It needs

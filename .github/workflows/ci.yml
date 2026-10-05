@@ -92,6 +92,78 @@ jobs:
       - name: Run the browser tests
         run: node --test "tests/js/*.test.mjs"
 
+  container:
+    name: Container image builds and serves
+    runs-on: ubuntu-latest
+    # Docker is not installed on the machine this was written on, so the image
+    # could not be built there at all. Here it is built and talked to for real,
+    # which is the difference between a Dockerfile that exists and one that is
+    # known to work. The build itself catches the runtime library problems --
+    # opencv and scikit-learn fail at *import*, so a missing libglib or libgomp
+    # produces an image that builds clean and 500s on the first request.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t reveal-x:ci .
+
+      - name: Start it the way a platform would
+        run: |
+          docker run -d --name reveal-x-ci \
+            -p 5000:5000 \
+            -e PORT=5000 \
+            -e REVEAL_X_SECRET_KEY=ci-smoke-test-key \
+            reveal-x:ci
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:5000/api/auth/config 2>/dev/null; then
+              echo "up after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "container never answered; logs follow"
+          docker logs reveal-x-ci
+          exit 1
+
+      - name: Serves the application shell
+        run: |
+          curl -fsS http://127.0.0.1:5000/ | grep -q "Reveal-X" \
+            || { echo "page did not contain the app"; docker logs reveal-x-ci; exit 1; }
+          echo "OK: application shell served"
+
+      - name: Completes a Socket.IO handshake
+        run: |
+          curl -fsS "http://127.0.0.1:5000/socket.io/?EIO=4&transport=polling" | grep -q '"sid"' \
+            || { echo "no session id in handshake"; docker logs reveal-x-ci; exit 1; }
+          echo "OK: Socket.IO handshake completed"
+
+      - name: The ML stack imports inside the container
+        # The reason libglib and libgomp are in the Dockerfile. This asserts the
+        # detector actually loads rather than trusting that it would.
+        run: |
+          docker exec reveal-x-ci python -c "
+          import cv2, numpy, sklearn
+          from app.ai_security import TamperDetector
+          d = TamperDetector()
+          f = d.extract_features(numpy.zeros((96, 96), dtype=numpy.uint8))
+          assert len(f) == 13, f'expected 13 features, got {len(f)}'
+          print('OK: opencv', cv2.__version__, '/ sklearn', sklearn.__version__, '/ detector loaded')
+          "
+
+      - name: Does not run as root
+        run: |
+          whoami=$(docker exec reveal-x-ci whoami)
+          echo "container user: $whoami"
+          [ "$whoami" != "root" ] || { echo "container runs as root"; exit 1; }
+
+      - name: Container logs
+        if: always()
+        run: docker logs reveal-x-ci || true
+
+      - name: Stop
+        if: always()
+        run: docker rm -f reveal-x-ci || true
+
   production-server:
     name: Production server boots and serves
     runs-on: ubuntu-latest
