@@ -539,6 +539,25 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 
 ---
 
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [docs/SECURITY.md](docs/SECURITY.md) | Threat model: assets, adversaries, every control mapped to the code and test that holds it — and an explicit list of what is **not** defended |
+| [docs/API.md](docs/API.md) | All 9 HTTP routes and 32 Socket.IO events, with the fields each reads |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, Render, and running it from Windows behind a tunnel |
+| [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) | Google sign-in, start to finish, including the failures and what each means |
+| [docs/ADMIN.md](docs/ADMIN.md) | Roles, the approval gate, and the rank rules |
+| [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | WCAG contrast measurements, the audit tool, and the correction to an earlier claim |
+| [FINAL_DEMO_GUIDE.md](FINAL_DEMO_GUIDE.md) | Running the demo |
+
+Two of these are worth reading before a viva. **SECURITY.md** states plainly
+that text and voice are end-to-end encrypted while shared images are not — the
+server performs the visual cryptography split, so it sees the plaintext image.
+The guarantee for images is that nothing *persisted* can reconstruct them.
+**ACCESSIBILITY.md** records an audit that was confidently wrong and how it was
+corrected.
+
 ## Project Structure
 
 ```text
