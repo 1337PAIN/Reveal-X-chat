@@ -69,6 +69,80 @@ right there looking correct. `tests/test_deployment.py` now fails on a
 `pyproject.toml` that under-declares, so a future one has to be complete or
 carry no dependency list at all.
 
+## Running it from a Windows PC, exposed over a tunnel
+
+This is the path to use for a live demo off your own machine. It is not the
+same as the Linux deployment above, for two reasons worth knowing before you
+start.
+
+**Gunicorn cannot run on Windows.** It imports `fcntl`, which does not exist
+there. The `Procfile` and `Dockerfile` are for Linux hosts and CI.
+
+**Waitress works, but costs you WebSocket.** `waitress-serve` is a real
+production WSGI server and does run on Windows — the app serves, and Socket.IO
+falls back to HTTP long-polling, so the chat works. But `simple-websocket`
+cannot get the raw socket out of a waitress WSGI environment, so every client's
+upgrade attempt raises:
+
+```
+RuntimeError: Cannot obtain socket from WSGI environment.
+```
+
+That is logged per attempt and is noise, not breakage.
+
+So for a demo, `python run.py` is the better choice on Windows: WebSocket works,
+and the warning in the next section is about scale and robustness, not about a
+handful of demo users.
+
+### Do not port-forward. Use a tunnel.
+
+Opening a router port at your PC gives you a plain-HTTP URL on your home IP, and
+that breaks something specific: **Google sign-in requires `https` or
+`localhost`.** Over `http://<your-ip>:5000` the Firebase popup opens and closes
+with no result. Passwords and share tokens would also cross the network in the
+clear.
+
+A tunnel solves all of it, costs nothing, needs no router changes, and works
+behind CGNAT:
+
+```bash
+# Cloudflare, no account needed for a quick demo
+cloudflared tunnel --url http://localhost:5000
+
+# or
+ngrok http 5000
+```
+
+Both hand you an `https://...` URL with a real certificate.
+
+### Starting it
+
+```powershell
+$env:REVEAL_X_SECRET_KEY   = "<a long random string, kept between runs>"
+$env:REVEAL_X_COOKIE_SECURE = "true"   # the tunnel is HTTPS
+$env:REVEALX_TRUST_PROXY    = "true"   # see below
+$env:REVEALX_ADMIN_USER     = "admin"
+$env:REVEALX_ADMIN_PASSWORD = "<set this, then change it after first sign-in>"
+python run.py
+```
+
+`REVEALX_TRUST_PROXY` matters more here than anywhere else. A tunnel is a
+reverse proxy, so without it every request arrives from one address — and the
+login throttle would lock out every visitor the moment one of them fumbled a
+password.
+
+### Before you share the URL
+
+- [ ] Add the tunnel hostname to Firebase → Authentication → Settings →
+      **Authorized domains**, or Google sign-in fails with
+      `auth/unauthorized-domain`
+- [ ] `REVEAL_X_SECRET_KEY` set and unchanged between restarts
+- [ ] Admin password set, and changed after the first sign-in
+- [ ] Remember the tunnel URL changes each run on the free tiers — the Firebase
+      authorized domain has to be updated with it
+- [ ] Stop the tunnel when the demo is over. This is your own machine, and the
+      app has an upload path and a database on it
+
 ## Why not `python run.py`
 
 `run.py` starts Werkzeug's development server. It needs
