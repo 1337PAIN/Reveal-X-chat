@@ -10,6 +10,7 @@ CI goes further and actually builds the image and talks to it; these are the
 cheap checks that run everywhere, including on a machine with no Docker.
 """
 
+import pathlib
 import re
 
 import pytest
@@ -99,6 +100,39 @@ def test_the_image_installs_only_runtime_dependencies():
 def test_the_image_does_not_run_as_root():
     assert re.search(r'^USER\s+(?!root)\S+', read(DOCKERFILE), re.M), \
         'Dockerfile should drop to a non-root user'
+
+
+def test_no_partial_dependency_manifest_shadows_requirements():
+    """A pyproject.toml is fine; one that under-declares is not.
+
+    The repo briefly carried one listing a single dependency against the
+    fifteen in requirements.txt. Nothing in this project read it, but build
+    tools and PaaS buildpacks prefer pyproject.toml when it exists -- so the
+    app would have installed Flask alone and died on its first import, with
+    requirements.txt sitting right there looking correct.
+    """
+    pyproject = pathlib.Path('pyproject.toml')
+    if not pyproject.exists():
+        return
+
+    import tomllib
+    declared = tomllib.loads(pyproject.read_text(encoding='utf-8')) \
+        .get('project', {}).get('dependencies')
+    if declared is None:
+        return                      # tooling config only, not a dependency list
+
+    def name_of(spec):
+        return re.split(r'[\[<>=!~;]', spec, 1)[0].strip().lower()
+
+    required = {
+        name_of(line) for line in read('requirements.txt').splitlines()
+        if line.strip() and not line.lstrip().startswith('#')
+    }
+    missing = sorted(required - {name_of(d) for d in declared})
+    assert not missing, (
+        'pyproject.toml declares dependencies but omits '
+        f'{len(missing)} from requirements.txt: {missing}'
+    )
 
 
 def test_opencv_and_sklearn_system_libraries_are_installed():

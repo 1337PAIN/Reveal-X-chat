@@ -58,6 +58,17 @@ the chat would connect and then silently drop messages. This needs a long-lived
 process. The same rules out any serverless platform without a hosted Socket.IO
 service in front.
 
+The repo did carry a `vercel.json` and a `pyproject.toml` for a while. They were
+removed, and not only for the reason above: the `vercel.json` was invalid JSON
+(a stray character on the last line, which failed the build before anything else
+ran), and the `pyproject.toml` declared one dependency against the fifteen in
+`requirements.txt`. Nothing in this project read that file, but build tools and
+buildpacks prefer `pyproject.toml` when it exists, so it was a live trap --
+install Flask alone, die on the first import, with `requirements.txt` sitting
+right there looking correct. `tests/test_deployment.py` now fails on a
+`pyproject.toml` that under-declares, so a future one has to be complete or
+carry no dependency list at all.
+
 ## Why not `python run.py`
 
 `run.py` starts Werkzeug's development server. It needs
