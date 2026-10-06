@@ -886,7 +886,8 @@ def handle_admin_set_role(data):
     emit('admin_ok', {'message': 'Role updated.'}, to=request.sid)
     emit_users()
 
-
+# Create a pending account request and keep authentication disabled
+# until an administrator approves the new account.
 @socketio.on('register')
 def handle_register(data):
     """Submit an account *request*. It does not sign anyone in.
