@@ -18,7 +18,7 @@ from enhancement import enhance_image
 from metrics import psnr, ssim
 from tamper_detector import TamperDetector
 
-
+# Generate test shares, reconstruct the original image, and check for tampering.
 def main():
     rng = np.random.default_rng(123)
     original = np.tile(np.arange(160, dtype=np.uint8), (160, 1))
