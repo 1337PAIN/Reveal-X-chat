@@ -174,6 +174,7 @@ class E2EESession {
         if (!key) return null;
 
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        // Encrypt the message before sending it to the other user.
         const ciphertext = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes);
         return { ciphertext: bufferToBase64(ciphertext), iv: bufferToBase64(iv) };
     }
