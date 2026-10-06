@@ -37,7 +37,8 @@ def main():
     print("Reconstruction PSNR:", round(psnr(original, reconstructed), 4))
     print("Reconstruction SSIM:", round(ssim(original, reconstructed), 4))
     print("Enhanced shape:", enhanced.shape)
-
+    
+# Verify reconstruction accuracy and tamper detection results before confirming the test.
     assert reconstructed.shape == original.shape
     assert psnr(original, reconstructed) > 60
     assert clean_pred.probability_tampered < 0.5
