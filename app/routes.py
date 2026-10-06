@@ -41,7 +41,7 @@ from app.auth import (
 )
 from app.auth.firebase_auth import FirebaseAuthError, claims_to_identity, verify_id_token
 
-
+# Initialize the components used for secure image sharing and reconstruction.
 vc = VisualCryptography()
 reconstructor = VCReconstructor()
 tamper_detector = TamperDetector()
