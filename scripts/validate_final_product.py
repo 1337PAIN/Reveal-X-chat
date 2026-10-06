@@ -30,7 +30,8 @@ def main():
     tampered = tamper_share(share1, attack="block", strength=0.35, seed=7)
     tampered_pred = TamperDetector().predict(tampered)
     enhanced = enhance_image(reconstructed)
-
+    
+# Display tamper detection, reconstruction quality, and image enhancement results.
     print("Clean prediction:", clean_pred.label, round(clean_pred.probability_tampered, 4))
     print("Tampered prediction:", tampered_pred.label, round(tampered_pred.probability_tampered, 4))
     print("Reconstruction PSNR:", round(psnr(original, reconstructed), 4))
