@@ -502,7 +502,7 @@ def analyse_share(message_id):
         'processing_ms': round((time.perf_counter() - started) * 1000, 2),
     })
 
-
+# 🔒 Securely retrieve Share 1 using a token and enforce one-time access.
 @app.route('/share1/<message_id>')
 def get_share1(message_id):
     """Serve persisted Share 1 by unguessable token, consuming its one-time access."""
