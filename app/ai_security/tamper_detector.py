@@ -122,6 +122,7 @@ class TamperDetector:
 
     def predict(self, image: np.ndarray) -> Prediction:
         image = ensure_gray(image)
+        # Extract image features used to detect possible tampering.
         features = self.extract_features(image)
         probability_tampered = self._fallback_probability(features)
         model_name = self.model_name
