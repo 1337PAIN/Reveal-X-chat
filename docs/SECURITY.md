@@ -154,12 +154,19 @@ participant's private key allows decryption of every past message in that
 conversation that an attacker captured. A ratchet (Double Ratchet or similar)
 would fix this and is not implemented.
 
-**Unauthenticated compute.** `/api/lab/process` and `/api/lab/features` take an
-8 MB image and run VC generation, attack simulation and inference with no
-authentication and no rate limit — roughly 0.35 s and 0.73 s of CPU per request.
-Measured, this does *not* starve the chat (OpenCV and NumPy release the GIL),
-so it is an abuse-of-resources problem rather than an availability one. It
-should still have a limit.
+**Unauthenticated compute, now capped.** `/api/lab/process` and
+`/api/lab/features` still take an 8 MB image with no authentication, because
+the demonstration has to run without an account. They are no longer unlimited:
+both share one budget of 20 requests per address per minute
+(`_lab_rate_limited`, held by `test_rate_limit.py`), and a request over the
+budget gets a 429 rather than a core.
+
+What that is and is not: a ceiling on abuse, not an authentication control. The
+counter is in-process, so it resets on restart and does not coordinate across
+workers — the deployment runs a single worker because Socket.IO keeps sessions
+in process, so here that covers it. Behind a proxy it keys on whatever
+`_client_address()` resolves to, so a misconfigured proxy would put every
+visitor in one bucket. An attacker with many addresses is unaffected.
 
 **Passwords typed into `prompt()`.** Four flows — admin password reset, TOTP
 disable, passcode set and unlock — collect secrets through a browser dialog that

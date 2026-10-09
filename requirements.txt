@@ -1,18 +1,32 @@
-Flask==3.0.0
-# 5.3.6, not 5.3.5. python-socketio 5.10.0 gave each namespace connection its
-# own sid, and 5.3.5's test client still looked packets up by the engine.io
-# sid -- so every emit went out correctly and arrived nowhere. Installing the
-# pins below as written used to leave the whole socket test suite erroring
-# with `IndexError: list index out of range` on the first auth_success.
-flask-socketio==5.3.6
-python-socketio==5.10.0
+Flask==3.1.3
+# These three move together, and the order they are upgraded in matters.
+#
+# Flask 3.1 made RequestContext.session a read-only property. flask-socketio
+# assigns to it when it hands the HTTP session to a socket handler, so every
+# version below 5.7.0 raises
+#     AttributeError: property 'session' of 'RequestContext' object has no setter
+# the moment an authenticated socket event fires. Upgrading Flask alone turns
+# the whole socket suite red (47 failures, 101 errors) while the HTTP tests
+# stay green, which makes it look like an application bug rather than a pin.
+#
+# The earlier note on this block still applies underneath: python-socketio
+# 5.10 gave each namespace connection its own sid, and flask-socketio 5.3.5's
+# test client still looked packets up by the engine.io sid, so emits went out
+# correctly and arrived nowhere. Both constraints are satisfied by the pins
+# below; verified against the full suite, 344 server tests and 59 browser
+# tests, on 10 Oct 2026.
+flask-socketio==5.7.0
+python-socketio==5.16.2
 numpy>=1.26.0
 opencv-python-headless>=4.8.1.78
 Pillow>=10.1.0
-gunicorn==21.2.0
+# 21.2.0 carried two request-smuggling advisories (PYSEC-2026-1433/1434).
+gunicorn==23.0.0
 argon2-cffi==23.1.0
 psycopg2-binary>=2.9.9
-cryptography==42.0.5
+# 42.0.5 carried seven advisories; 50.0.0 is the first release clear of all of
+# them. Checked with `python -m pip_audit -r requirements.txt`.
+cryptography==50.0.0
 scikit-learn>=1.3.0
 joblib>=1.3.0
 

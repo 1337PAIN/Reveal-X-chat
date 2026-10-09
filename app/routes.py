@@ -108,6 +108,40 @@ def _login_keys(username, address):
     return ('account', (username or '').strip().lower()), ('address', address or 'unknown')
 
 
+#: The two laboratory endpoints are deliberately open: the demonstration has to
+#: work without an account. That is a reasonable trade for a coursework demo and
+#: an unreasonable one for an endpoint that decodes an 8 MB image and runs share
+#: generation, an attack simulation and inference on every call. Measured, one
+#: /api/lab/process is ~0.35 s of CPU and /api/lab/features ~0.73 s, so a single
+#: client can occupy a core indefinitely for free.
+#:
+#: This is a ceiling on abuse, not an authentication control. It is per address
+#: and in-process, so it does not survive a restart and does not coordinate
+#: across workers. The project runs one worker (Socket.IO keeps sessions in
+#: process), so in this deployment that is the whole of it.
+LAB_RATE = {}
+LAB_MAX_REQUESTS = 20            # per address, within the window
+LAB_WINDOW_SECONDS = 60
+
+
+def _lab_rate_limited(address):
+    """Seconds to wait before this address may call a lab endpoint, or 0."""
+    now = time.time()
+    hits = [t for t in LAB_RATE.get(address, []) if now - t < LAB_WINDOW_SECONDS]
+    LAB_RATE[address] = hits
+    if len(hits) >= LAB_MAX_REQUESTS:
+        return int(LAB_WINDOW_SECONDS - (now - hits[0])) + 1
+    hits.append(now)
+    # Same housekeeping as the login buckets: this dict is only appended to,
+    # so age out dead entries rather than letting it grow without bound.
+    if len(LAB_RATE) > 2048:
+        for key in list(LAB_RATE):
+            LAB_RATE[key] = [t for t in LAB_RATE[key] if now - t < LAB_WINDOW_SECONDS]
+            if not LAB_RATE[key]:
+                del LAB_RATE[key]
+    return 0
+
+
 def _login_blocked(username, address):
     """Is either bucket over its limit? Returns seconds to wait, or 0."""
     now = time.time()
@@ -331,6 +365,10 @@ def lab_features():
 
     Used by /lab/parity as the reference implementation to diff against.
     """
+    wait = _lab_rate_limited(_client_address())
+    if wait:
+        return jsonify({'ok': False,
+                        'error': f'Too many requests. Try again in {wait}s.'}), 429
     payload = request.get_json(silent=True) or {}
     try:
         image = data_url_to_image(payload.get('image', ''))
@@ -376,6 +414,10 @@ def _share_hmac(image):
 def process_ai_lab_image():
     """Generate VC shares, simulate tampering, run ML detection, reconstruct, enhance and score."""
     started = time.perf_counter()
+    wait = _lab_rate_limited(_client_address())
+    if wait:
+        return jsonify({'ok': False,
+                        'error': f'Too many requests. Try again in {wait}s.'}), 429
     try:
         payload = request.get_json(silent=True) or {}
         image_data = payload.get('image', '')

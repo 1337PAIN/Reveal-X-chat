@@ -47,9 +47,19 @@ server, so it is never logged or echoed back.
 ### The two unauthenticated lab endpoints
 
 `/api/lab/features` and `/api/lab/process` take an image and do real CPU work
-with **no authentication and no rate limit** — about 0.73 s and 0.35 s per
-request. Deliberate, so the lab can be demonstrated without an account, and
-recorded as a known limitation in [SECURITY.md](SECURITY.md).
+with **no authentication** — about 0.73 s and 0.35 s per request. That is
+deliberate, so the lab can be demonstrated without an account.
+
+They are rate limited together: **20 requests per address per minute**, one
+budget shared across both routes because they cost the same CPU. Over the
+budget the response is `429` with
+
+```json
+{ "ok": false, "error": "Too many requests. Try again in 43s." }
+```
+
+The limit is per address and in-process. What it does and does not cover is
+set out in [SECURITY.md](SECURITY.md).
 
 ---
 

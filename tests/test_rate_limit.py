@@ -278,3 +278,89 @@ def test_one_persons_failures_do_not_immediately_lock_the_address(store):
     other.emit('login', {'username': 'colleague', 'password': 'another-password-2'})
     assert events(other, 'auth_success')
     other.disconnect()
+
+
+# ----------------------------------------------------------------------
+# The laboratory endpoints
+#
+# Open on purpose, so the demonstration runs without an account. That makes
+# a ceiling on how much CPU one address can take the only thing standing
+# between the demo and a free denial of service.
+# ----------------------------------------------------------------------
+
+def _tiny_png_data_url():
+    import base64
+    import cv2
+    import numpy as np
+    image = np.full((32, 32), 200, np.uint8)
+    ok, buf = cv2.imencode('.png', image)
+    assert ok
+    return 'data:image/png;base64,' + base64.b64encode(buf.tobytes()).decode()
+
+
+@pytest.fixture(autouse=True)
+def _clear_lab_buckets():
+    from app.routes import LAB_RATE
+    LAB_RATE.clear()
+    yield
+    LAB_RATE.clear()
+
+
+@pytest.mark.parametrize('path', ['/api/lab/features', '/api/lab/process'])
+def test_lab_endpoints_serve_normal_use(client, path):
+    from app.routes import LAB_MAX_REQUESTS
+    body = {'image': _tiny_png_data_url()}
+    for _ in range(LAB_MAX_REQUESTS):
+        assert client.post(path, json=body).status_code == 200
+
+
+@pytest.mark.parametrize('path', ['/api/lab/features', '/api/lab/process'])
+def test_lab_endpoints_refuse_a_flood(client, path):
+    from app.routes import LAB_MAX_REQUESTS
+    body = {'image': _tiny_png_data_url()}
+    for _ in range(LAB_MAX_REQUESTS):
+        client.post(path, json=body)
+
+    response = client.post(path, json=body)
+    assert response.status_code == 429
+    assert response.get_json()['ok'] is False
+    assert 'Try again' in response.get_json()['error']
+
+
+def test_the_two_lab_endpoints_share_one_budget(client):
+    """Splitting the flood across both endpoints must not double the budget:
+    they cost the same CPU and the limit is on the address, not the route."""
+    from app.routes import LAB_MAX_REQUESTS
+    body = {'image': _tiny_png_data_url()}
+    for i in range(LAB_MAX_REQUESTS):
+        path = '/api/lab/features' if i % 2 == 0 else '/api/lab/process'
+        assert client.post(path, json=body).status_code == 200
+
+    assert client.post('/api/lab/process', json=body).status_code == 429
+    assert client.post('/api/lab/features', json=body).status_code == 429
+
+
+def test_the_window_expires(client, monkeypatch):
+    from app import routes
+    body = {'image': _tiny_png_data_url()}
+    for _ in range(routes.LAB_MAX_REQUESTS):
+        client.post('/api/lab/process', json=body)
+    assert client.post('/api/lab/process', json=body).status_code == 429
+
+    real_time = routes.time.time
+    monkeypatch.setattr(routes.time, 'time',
+                        lambda: real_time() + routes.LAB_WINDOW_SECONDS + 1)
+    assert client.post('/api/lab/process', json=body).status_code == 200
+
+
+def test_the_limit_is_per_address(client):
+    """One noisy address must not lock everyone else out of the demo."""
+    from app.routes import LAB_MAX_REQUESTS
+    body = {'image': _tiny_png_data_url()}
+    for _ in range(LAB_MAX_REQUESTS + 1):
+        client.post('/api/lab/process', json=body,
+                    environ_overrides={'REMOTE_ADDR': '10.0.0.1'})
+
+    other = client.post('/api/lab/process', json=body,
+                        environ_overrides={'REMOTE_ADDR': '10.0.0.2'})
+    assert other.status_code == 200
