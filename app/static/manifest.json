@@ -1,12 +1,17 @@
 {
+  "id": "/",
   "name": "Reveal-X Secure Chat",
   "short_name": "Reveal-X",
   "description": "Secure visual cryptography image sharing chat application.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#070b18",
   "theme_color": "#070b18",
+  "categories": ["security", "productivity", "social"],
   "icons": [
     {
       "src": "/static/icon-192.png",
@@ -25,6 +30,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open chat",
+      "short_name": "Chat",
+      "description": "Go straight to the secure conversations list.",
+      "url": "/",
+      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "AI Security Lab",
+      "short_name": "Lab",
+      "description": "Generate shares, simulate an attack and run tamper detection.",
+      "url": "/lab",
+      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

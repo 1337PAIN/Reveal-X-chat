@@ -126,7 +126,13 @@ body {
     font-family: 'Inter', sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
+    /* 100vh on iOS Safari is the height with the toolbars *hidden*, so the
+       layout is taller than what you can see and the composer sits under the
+       bottom bar -- with overflow:hidden there is no way to scroll to it.
+       100dvh tracks the visible area. The vh line stays as the fallback for
+       browsers older than iOS 15.4 / Chrome 108. */
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     position: relative;
 }
@@ -164,6 +170,12 @@ body::before {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
+    /* Installed on a notched iPhone there is no browser chrome to absorb the
+       home indicator, so the app has to leave room for it itself. */
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
 }
 
 /* Header */
@@ -1803,4 +1815,76 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
     #voiceBtn.recording { animation: none; }
+}
+
+/* ==========================================================================
+   PWA banners: install hint and update offer
+   ==========================================================================
+   Both sit above everything and clear the iPhone home indicator. They are
+   bottom-anchored because that is where a thumb is, and because the top of
+   the screen already carries the header.
+*/
+.pwa-banner {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--glass-3, rgba(11, 17, 38, 0.78));
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.pwa-banner.hidden {
+    display: none;
+}
+
+.pwa-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 220px;
+}
+
+.pwa-banner-text strong {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.pwa-banner-text span {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+.pwa-banner-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.pwa-banner-actions .btn {
+    /* The 44px minimum applies here too: these are the only controls on the
+       screen when the banner is up. */
+    min-height: 44px;
+    padding: 0 16px;
+    font-size: 0.88rem;
+}
+
+@media (min-width: 640px) {
+    .pwa-banner {
+        left: auto;
+        right: 20px;
+        max-width: 420px;
+    }
 }

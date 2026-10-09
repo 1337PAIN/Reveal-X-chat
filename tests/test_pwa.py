@@ -177,3 +177,89 @@ def test_the_cache_name_is_versioned(service_worker):
     name = re.search(r"const CACHE_NAME = '([^']+)'", service_worker)
     assert name, 'CACHE_NAME not found'
     assert re.match(r'^revealx-cache-v\d+', name.group(1))
+
+
+# ----------------------------------------------------------------------
+# Install and update handling
+#
+# These cover the two things a user can act on. Both fail silently when
+# broken: a missing manifest field costs the install prompt, and an update
+# that activates without asking reloads the page under whoever is typing.
+# ----------------------------------------------------------------------
+
+def test_manifest_declares_a_scope_and_id(manifest):
+    """Without a scope, navigations outside it drop back to the browser.
+
+    `id` keeps the installed app pointing at the same entry after a change to
+    start_url; without it the browser treats the new URL as a different app.
+    """
+    assert manifest['scope'] == '/'
+    assert manifest['id'] == '/'
+
+
+def test_shortcuts_point_at_routes_that_exist(client, manifest):
+    shortcuts = manifest.get('shortcuts', [])
+    assert shortcuts, 'no home-screen shortcuts declared'
+    for shortcut in shortcuts:
+        assert shortcut['name'] and shortcut['url']
+        assert client.get(shortcut['url']).status_code == 200, shortcut['url']
+
+
+def test_the_worker_does_not_activate_itself_on_install(service_worker):
+    """skipWaiting() inside install reloads the page under the user.
+
+    In a chat application that costs an unsent message, so activation is
+    gated behind the user accepting the update banner instead.
+    """
+    install_block = service_worker.split("addEventListener('install'")[1]
+    # The message handler follows the install handler and is allowed to call
+    # skipWaiting; cut the block before it so only install itself is checked.
+    install_block = re.split(r"addEventListener\('(?:message|activate)'", install_block)[0]
+    code = '\n'.join(
+        line for line in install_block.splitlines()
+        if not line.lstrip().startswith('//')
+    )
+    assert 'skipWaiting' not in code
+
+
+def test_the_worker_activates_early_only_when_asked(service_worker):
+    assert "addEventListener('message'" in service_worker
+    assert 'SKIP_WAITING' in service_worker
+    assert 'self.skipWaiting()' in service_worker
+
+
+def test_pwa_script_is_served_and_precached(client, service_worker):
+    assert '/static/js/pwa.js' in service_worker
+    response = client.get('/static/js/pwa.js')
+    assert response.status_code == 200
+    assert b'beforeinstallprompt' in response.data
+
+
+@pytest.mark.parametrize('element_id', [
+    'installAppBtn',        # Android/Chrome install entry point
+    'iosInstallHint',       # iOS has no install API, so it needs instructions
+    'updateBanner',
+    'updateAcceptBtn',
+    'updateDismissBtn',
+])
+def test_the_page_carries_the_controls_pwa_js_binds_to(client, element_id):
+    """pwa.js binds by id and no-ops when an element is absent, so a renamed
+    or deleted element removes the feature without any error."""
+    page = client.get('/').get_data(as_text=True)
+    assert f'id="{element_id}"' in page
+
+
+def test_ios_install_route_is_spelled_out(client):
+    """iOS never fires beforeinstallprompt. If the page does not say
+    'Add to Home Screen', iPhone users cannot discover that it installs."""
+    page = client.get('/').get_data(as_text=True)
+    assert 'Add to Home Screen' in page
+
+
+def test_layout_uses_dynamic_viewport_height():
+    """100vh on iOS Safari is the toolbar-hidden height, so the composer ends
+    up under the bottom bar with no way to scroll to it."""
+    with open('app/static/css/style.css', encoding='utf-8') as handle:
+        css = handle.read()
+    assert '100dvh' in css
+    assert 'env(safe-area-inset-bottom' in css

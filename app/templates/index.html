@@ -50,6 +50,8 @@
                     <i class="fas fa-wifi-slash"></i>
                     <span id="reconnectCount" class="reconnect-count" aria-live="polite"></span>
                 </div>
+                <button id="installAppBtn" class="icon-btn hidden" type="button"
+                        title="Install Reveal-X on this device">Install</button>
                 <button id="adminBtn" class="icon-btn hidden" type="button" title="Manage accounts">
                     Admin <span id="adminPendingBadge" class="admin-badge hidden">0</span>
                 </button>
@@ -522,6 +524,30 @@
         </div>
     </div>
 
+    <!-- A new service worker is installed and waiting. It is not activated
+         until the user says so, because activation reloads the page. -->
+    <div id="updateBanner" class="pwa-banner hidden" role="status" aria-live="polite">
+        <div class="pwa-banner-text">
+            <strong>Update ready</strong>
+            <span>A newer version of Reveal-X has downloaded. Reload to use it.</span>
+        </div>
+        <div class="pwa-banner-actions">
+            <button id="updateAcceptBtn" class="btn btn-primary" type="button">Reload</button>
+            <button id="updateDismissBtn" class="btn btn-secondary" type="button">Later</button>
+        </div>
+    </div>
+
+    <!-- iOS exposes no install API, so the manual route has to be spelled out. -->
+    <div id="iosInstallHint" class="pwa-banner hidden" role="dialog" aria-label="Install on iPhone or iPad">
+        <div class="pwa-banner-text">
+            <strong>Add Reveal-X to your Home Screen</strong>
+            <span>Tap the Share button in Safari, then choose &ldquo;Add to Home Screen&rdquo;.</span>
+        </div>
+        <div class="pwa-banner-actions">
+            <button id="iosInstallHintClose" class="btn btn-secondary" type="button">Got it</button>
+        </div>
+    </div>
+
     <!-- Hidden screen reader announcements -->
     <div id="srAnnouncements" class="sr-only" aria-live="assertive" aria-atomic="true" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;"></div>
 
@@ -536,5 +562,6 @@
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>
     <script src="{{ asset('js/chat.js') }}"></script>
     <script src="{{ asset('js/admin.js') }}"></script>
+    <script src="{{ asset('js/pwa.js') }}"></script>
 </body>
 </html>
