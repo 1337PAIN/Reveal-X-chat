@@ -1147,6 +1147,22 @@ async function fillVoiceContent(player, status, msg) {
     state.voiceObjectUrls.push(objectUrl);
     player.src = objectUrl;
     if (status) status.textContent = '';
+
+    // Recordings made before the sender's browser agreed on a common container
+    // can arrive in one this engine cannot decode -- an iPhone receiving
+    // WebM/Opus is the case that prompted this. The <audio> element fails
+    // silently there: it loads, shows controls and plays nothing. Say so, and
+    // hand over the file so the recording is not simply lost.
+    if (player.canPlayType(mime) === '' && status) {
+        status.textContent = 'This browser cannot play ' + mime + '. ';
+        status.classList.add('undecryptable');
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = 'voice-message' + (mime.includes('mp4') ? '.m4a' : '.webm');
+        link.textContent = 'Download instead';
+        link.className = 'voice-download-link';
+        status.appendChild(link);
+    }
 }
 
 /** Object URLs stay alive until revoked; drop them when the transcript clears. */
@@ -1793,19 +1809,87 @@ const MAX_VOICE_SECONDS = 60;
 let voiceRecorder = null;
 let voiceChunks = [];
 let voiceStopTimer = null;
+let voiceTicker = null;
+let voiceStartedAt = 0;
+let voiceCancelled = false;
 
 const voiceBtn = document.getElementById('voiceBtn');
+const voiceCancelBtn = document.getElementById('voiceCancelBtn');
+const voiceTimerEl = document.getElementById('voiceTimer');
 if (voiceBtn) voiceBtn.addEventListener('click', toggleVoiceRecording);
+if (voiceCancelBtn) voiceCancelBtn.addEventListener('click', cancelVoiceRecording);
+
+/**
+ * Container to record in.
+ *
+ * Left to itself, MediaRecorder picks per engine: Chrome gives WebM/Opus and
+ * Safari gives MP4/AAC. Each plays its own and may not play the other's, so a
+ * recording made on Android could arrive on an iPhone as a player that loads
+ * and produces nothing -- with no error anywhere to explain it.
+ *
+ * MP4/AAC is the one container both engines record *and* play, so it is tried
+ * first. The list is ordered by how widely the result can be played back, not
+ * by quality; the fallbacks only run on an engine that cannot do MP4.
+ */
+function pickRecorderMime() {
+    const candidates = [
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mp4',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+    ];
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+    return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+}
 
 function voiceRecordingActive() {
     return Boolean(voiceRecorder && voiceRecorder.state === 'recording');
 }
 
+function formatVoiceClock(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 function setVoiceButtonState(recording) {
-    if (!voiceBtn) return;
-    voiceBtn.classList.toggle('recording', recording);
-    voiceBtn.textContent = recording ? '⏹' : '🎤';
-    voiceBtn.setAttribute('aria-label', recording ? 'Stop recording' : 'Voice message');
+    if (voiceBtn) {
+        voiceBtn.classList.toggle('recording', recording);
+        voiceBtn.textContent = recording ? '⏹' : '🎤';
+        voiceBtn.setAttribute('aria-label', recording ? 'Stop and send recording' : 'Voice message');
+    }
+    if (voiceCancelBtn) voiceCancelBtn.classList.toggle('hidden', !recording);
+    if (voiceTimerEl) {
+        voiceTimerEl.classList.toggle('hidden', !recording);
+        if (!recording) voiceTimerEl.textContent = '';
+    }
+
+    clearInterval(voiceTicker);
+    voiceTicker = null;
+    if (!recording) return;
+
+    // A recording with no visible clock is one the user cannot judge against
+    // the 60-second cap until it cuts them off.
+    voiceStartedAt = Date.now();
+    const tick = () => {
+        const elapsed = (Date.now() - voiceStartedAt) / 1000;
+        const left = Math.max(0, MAX_VOICE_SECONDS - elapsed);
+        if (voiceTimerEl) {
+            voiceTimerEl.textContent = formatVoiceClock(elapsed);
+            voiceTimerEl.classList.toggle('ending', left <= 10);
+        }
+    };
+    tick();
+    voiceTicker = setInterval(tick, 250);
+}
+
+/** Stop recording and throw the audio away, rather than sending it. */
+function cancelVoiceRecording() {
+    if (!voiceRecordingActive()) return;
+    voiceCancelled = true;
+    voiceRecorder.stop();
+    announceToScreenReader('Recording discarded.');
 }
 
 async function toggleVoiceRecording() {
@@ -1833,7 +1917,18 @@ async function toggleVoiceRecording() {
 
     const recipientId = state.selectedRecipientId;
     voiceChunks = [];
-    voiceRecorder = new MediaRecorder(stream);
+    voiceCancelled = false;
+    const preferred = pickRecorderMime();
+    try {
+        voiceRecorder = preferred
+            ? new MediaRecorder(stream, { mimeType: preferred })
+            : new MediaRecorder(stream);
+    } catch (error) {
+        // isTypeSupported said yes and the constructor disagreed. Rather than
+        // lose the recording, fall back to whatever the engine prefers.
+        console.warn('Preferred recording type refused, using the default', error);
+        voiceRecorder = new MediaRecorder(stream);
+    }
 
     voiceRecorder.addEventListener('dataavailable', (event) => {
         if (event.data && event.data.size) voiceChunks.push(event.data);
@@ -1845,9 +1940,12 @@ async function toggleVoiceRecording() {
         setVoiceButtonState(false);
 
         const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || 'audio/webm' });
+        const discarded = voiceCancelled;
         voiceRecorder = null;
         voiceChunks = [];
+        voiceCancelled = false;
 
+        if (discarded) return;
         if (blob.size) await sendVoiceMessage(blob, recipientId);
     });
 

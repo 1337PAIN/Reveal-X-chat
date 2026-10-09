@@ -133,6 +133,9 @@
                     <button id="shareImageBtn" class="btn btn-image" disabled aria-label="Share image">📷</button>
                     <input type="file" id="imageInput" accept="image/*" hidden>
                     <button id="voiceBtn" class="btn btn-image" disabled aria-label="Voice message">🎤</button>
+                    <span id="voiceTimer" class="voice-timer hidden" aria-live="polite" role="timer"></span>
+                    <button id="voiceCancelBtn" class="btn btn-image voice-cancel hidden" type="button"
+                            aria-label="Discard recording" title="Discard recording">✕</button>
                     <input
                         type="text"
                         id="messageInput"

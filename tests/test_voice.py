@@ -273,3 +273,74 @@ def test_invalid_public_key_is_rejected(pair):
 
     assert events(alice_client, 'public_key_registered') == []
     assert events(alice_client, 'auth_error')[0]['args'][0]['error'] == 'Invalid public key'
+
+
+# ----------------------------------------------------------------------
+# Cross-platform playback
+#
+# MediaRecorder picks a container per engine when it is not told which to
+# use: Chrome gives WebM/Opus, Safari gives MP4/AAC. Each engine plays its
+# own and may refuse the other's, and an <audio> element that cannot decode
+# its source does not raise -- it loads, shows controls and plays silence.
+# A voice message from Android arriving mute on an iPhone has no error
+# anywhere to explain it, so these assertions stand in for the two browsers
+# this suite cannot run.
+# ----------------------------------------------------------------------
+
+CHAT_JS = 'app/static/js/chat.js'
+
+
+@pytest.fixture
+def chat_js():
+    with open(CHAT_JS, encoding='utf-8') as handle:
+        return handle.read()
+
+
+@pytest.fixture
+def client():
+    flask_app.config['TESTING'] = True
+    with flask_app.test_client() as test_client:
+        yield test_client
+
+
+def test_mp4_is_an_accepted_upload_type():
+    """The container both engines can record and play has to survive the
+    server's allowlist, or negotiating it client-side achieves nothing."""
+    from app.routes import ALLOWED_AUDIO_MIME_TYPES
+    assert 'audio/mp4' in ALLOWED_AUDIO_MIME_TYPES
+
+
+def test_the_recorder_negotiates_a_container(chat_js):
+    assert 'pickRecorderMime' in chat_js
+    assert 'MediaRecorder.isTypeSupported' in chat_js
+
+
+def test_mp4_is_preferred_over_webm(chat_js):
+    """Order is the whole point: MP4/AAC is the only container both engines
+    record and play, so it has to be tried before WebM."""
+    block = chat_js.split('function pickRecorderMime')[1].split('}')[0]
+    mp4 = block.index('audio/mp4')
+    webm = block.index('audio/webm')
+    assert mp4 < webm, 'WebM would be chosen first on Chrome, which iOS may not play'
+
+
+def test_playback_checks_the_browser_can_decode(chat_js):
+    """canPlayType returning '' is the only signal available before the
+    element silently plays nothing."""
+    assert 'canPlayType(mime)' in chat_js
+    assert 'Download instead' in chat_js
+
+
+def test_recording_can_be_discarded(chat_js, client):
+    """Without this the only way to stop recording also sends it."""
+    assert 'function cancelVoiceRecording' in chat_js
+    page = client.get('/').get_data(as_text=True)
+    assert 'id="voiceCancelBtn"' in page
+
+
+def test_the_recording_clock_is_shown(chat_js, client):
+    """The recorder stops itself at MAX_VOICE_SECONDS; a cap the user cannot
+    see is a cap that cuts them off mid-sentence."""
+    assert 'formatVoiceClock' in chat_js
+    page = client.get('/').get_data(as_text=True)
+    assert 'id="voiceTimer"' in page

@@ -1888,3 +1888,39 @@ body::before {
         max-width: 420px;
     }
 }
+
+/* ==========================================================================
+   Voice recording: elapsed clock and discard control
+   ==========================================================================
+   Both only exist while recording. The clock matters because the recorder
+   stops itself at 60 seconds, and a cap the user cannot see is a cap that
+   cuts them off mid-sentence.
+*/
+.voice-timer {
+    display: inline-flex;
+    align-items: center;
+    min-width: 44px;
+    padding: 0 8px;
+    font-variant-numeric: tabular-nums;   /* stops the width jittering per digit */
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.voice-timer.ending {
+    color: var(--danger, #e05260);
+}
+
+.voice-timer.hidden,
+.voice-cancel.hidden {
+    display: none;
+}
+
+.voice-cancel {
+    color: var(--danger, #e05260);
+}
+
+.voice-download-link {
+    color: var(--accent-primary, #6c7dff);
+    text-decoration: underline;
+}
