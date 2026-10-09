@@ -16,4 +16,5 @@ class VCReconstructor:
         """
         if share1.shape != share2.shape:
             raise ValueError('Shares must have the same dimensions')
+        # Combine both shares using XOR to reconstruct the original image.           
         return cv2.bitwise_xor(share1, share2)

@@ -41,7 +41,7 @@ from app.auth import (
 )
 from app.auth.firebase_auth import FirebaseAuthError, claims_to_identity, verify_id_token
 
-
+# Initialize the components used for secure image sharing and reconstruction.
 vc = VisualCryptography()
 reconstructor = VCReconstructor()
 tamper_detector = TamperDetector()
@@ -502,7 +502,7 @@ def analyse_share(message_id):
         'processing_ms': round((time.perf_counter() - started) * 1000, 2),
     })
 
-
+# 🔒 Securely retrieve Share 1 using a token and enforce one-time access.
 @app.route('/share1/<message_id>')
 def get_share1(message_id):
     """Serve persisted Share 1 by unguessable token, consuming its one-time access."""
@@ -886,7 +886,8 @@ def handle_admin_set_role(data):
     emit('admin_ok', {'message': 'Role updated.'}, to=request.sid)
     emit_users()
 
-
+# Create a pending account request and keep authentication disabled
+# until an administrator approves the new account.
 @socketio.on('register')
 def handle_register(data):
     """Submit an account *request*. It does not sign anyone in.

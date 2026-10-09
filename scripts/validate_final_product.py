@@ -18,7 +18,7 @@ from enhancement import enhance_image
 from metrics import psnr, ssim
 from tamper_detector import TamperDetector
 
-
+# Generate test shares, reconstruct the original image, and check for tampering.
 def main():
     rng = np.random.default_rng(123)
     original = np.tile(np.arange(160, dtype=np.uint8), (160, 1))
@@ -30,13 +30,15 @@ def main():
     tampered = tamper_share(share1, attack="block", strength=0.35, seed=7)
     tampered_pred = TamperDetector().predict(tampered)
     enhanced = enhance_image(reconstructed)
-
+    
+# Display tamper detection, reconstruction quality, and image enhancement results.
     print("Clean prediction:", clean_pred.label, round(clean_pred.probability_tampered, 4))
     print("Tampered prediction:", tampered_pred.label, round(tampered_pred.probability_tampered, 4))
     print("Reconstruction PSNR:", round(psnr(original, reconstructed), 4))
     print("Reconstruction SSIM:", round(ssim(original, reconstructed), 4))
     print("Enhanced shape:", enhanced.shape)
-
+    
+# Verify reconstruction accuracy and tamper detection results before confirming the test.
     assert reconstructed.shape == original.shape
     assert psnr(original, reconstructed) > 60
     assert clean_pred.probability_tampered < 0.5
