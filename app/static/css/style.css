@@ -1450,8 +1450,11 @@ body::before {
         min-width: 0;
     }
 
+    /* Wrapping here is conditional, so the row it used to cost everyone is
+       now only paid by the account that actually carries five controls. See
+       the top-bar section at the end of this file. */
     .header-info {
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         gap: 8px;
     }
 
@@ -1537,7 +1540,7 @@ body::before {
         max-width: 100% !important;
         width: 100% !important;
         border-radius: 24px 24px 0 0 !important;
-        padding: 24px 16px 36px 16px !important;
+        padding: 24px 16px calc(36px + env(safe-area-inset-bottom, 0px)) 16px !important;
         animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         transform: translateY(100%);
     }
@@ -1923,4 +1926,112 @@ body::before {
 .voice-download-link {
     color: var(--accent-primary, #6c7dff);
     text-decoration: underline;
+}
+
+/* ==========================================================================
+   Phone and iOS corrections
+   ==========================================================================
+   Measured on 320x720, 390x844 and 430x932 viewports, in the state a demo
+   actually runs in: signed in as an administrator, with the install prompt
+   available. That is the only state in which the top bar carries five
+   controls, and it is the one that was broken.
+*/
+
+/* --- Controls sharing a row have to share a height ------------------------
+   The composer's text field came out 42px against 44px buttons: border-box,
+   12px of padding and a 14px line box add to 42, and nothing asked for more.
+   Centred in the row, that left a 1px step above and below the field, read
+   against the button pills either side of it. */
+.message-input {
+    /* glass.css sets this too. Stating it here means the composer does not
+       depend on that file having loaded. */
+    align-items: center;
+}
+
+.message-input input {
+    min-height: 44px;
+}
+
+/* --- iOS magnifies the page when a field under 16px takes focus -----------
+   Safari zooms the document rather than refusing the focus, and does not zoom
+   back out afterwards. Everything from that point on is off-centre and Send
+   is past the right edge -- the layout is not wrong, the page is scaled.
+   16px removes the trigger, on the touch widths only, so the desktop keeps
+   its 14px. */
+@media (max-width: 899px) {
+    .message-input input,
+    .message-search,
+    .user-search,
+    .modal-content input,
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        font-size: 16px;
+    }
+}
+
+/* --- The top bar: five controls and a wordmark do not fit a phone ---------
+   Signed in as an administrator with the install prompt showing, the bar
+   carries the offline dot, Install, Admin, AI Lab and Logout: 282px of
+   controls on a 320px screen. header-info never gave way, so the logo was
+   crushed to 12px instead -- and since the wordmark does not shrink, it
+   painted straight across the buttons. "AI Lab" meanwhile wrapped onto two
+   lines, which made that one button 48px tall against its 44px neighbours.
+
+   The shrink factors set the order in which space is surrendered: the
+   wordmark truncates first, and only once the logo is down to its hamburger
+   and mark does the button row wrap. 0.001 is deliberate, not a typo -- any
+   non-zero factor keeps wrapping available as a last resort while making the
+   buttons effectively the last thing to yield. Measured at 390px, the bar
+   stays one 44px row at two, three and four controls and wraps only at five;
+   at 320px it holds one row to four. */
+@media (max-width: 899px) {
+    .logo {
+        flex-shrink: 999;
+    }
+
+    .sidebar-toggle,
+    .logo-image {
+        flex-shrink: 0;
+    }
+
+    .logo h1 {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .header-info {
+        flex-shrink: 0.001;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .header-info > * {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+}
+
+/* --- Recording needs room a phone does not have --------------------------
+   Recording adds a clock and a discard button to the composer. At 390px that
+   left the text field 40px wide; at 320px, 34px. Nothing was misaligned in
+   the CSS sense -- flexbox had run out of width and took it from the only
+   item that could give.
+
+   While recording there is nothing to type and nothing to send: the mic is
+   Stop, and stopping sends. So on phone widths the field and Send step aside
+   and the clock takes the space they leave. The class is toggled by
+   setVoiceButtonState in chat.js. */
+@media (max-width: 560px) {
+    .message-input.is-recording #messageInput,
+    .message-input.is-recording #sendBtn {
+        display: none;
+    }
+
+    .message-input.is-recording .voice-timer {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
 }

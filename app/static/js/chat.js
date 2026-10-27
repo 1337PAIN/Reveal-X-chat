@@ -1858,6 +1858,11 @@ function setVoiceButtonState(recording) {
         voiceBtn.classList.toggle('recording', recording);
         voiceBtn.textContent = recording ? '⏹' : '🎤';
         voiceBtn.setAttribute('aria-label', recording ? 'Stop and send recording' : 'Voice message');
+        // The composer carries the state so CSS can lay the row out for it: on
+        // a phone the clock and the discard button do not fit beside a text
+        // field, and the field is the one thing that is no use while recording.
+        const composer = voiceBtn.closest('.message-input');
+        if (composer) composer.classList.toggle('is-recording', recording);
     }
     if (voiceCancelBtn) voiceCancelBtn.classList.toggle('hidden', !recording);
     if (voiceTimerEl) {
