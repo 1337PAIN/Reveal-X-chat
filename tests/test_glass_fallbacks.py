@@ -13,15 +13,21 @@ who explicitly set a system preference to avoid exactly that. Nothing throws,
 and the person who needs it is the least likely to be the one demonstrating the
 project.
 
-So this is a rule test, not an appearance test. It does not care what the glass
-looks like. It asserts that for every selector in the app that turns blur ON,
-some reduced-transparency block turns it back OFF -- and it discovers both
-sets by parsing, so adding a new blurred panel is caught without anybody
-remembering to list it here.
+Motion is the third condition, and it behaves the same way:
 
-Found by this rule when it was first written: `.pwa-banner` answered neither
-condition, and `.lock-screen`/`.lock-card` answered only the first -- on the
-passcode screen, which is the one screen a user cannot navigate away from.
+  prefers-reduced-motion: reduce       the user asked us not to animate
+
+So these are rule tests, not appearance tests. They do not care what the glass
+looks like. They assert that for every selector in the app that turns blur ON,
+some reduced-transparency block turns it back OFF, and that every looping
+animation has a reduced-motion answer -- discovering both sets by parsing, so
+a new blurred panel or a new loop is caught without anybody remembering to
+list it here.
+
+Found by these rules when they were first written: `.pwa-banner` answered
+neither transparency condition, `.lock-screen`/`.lock-card` answered only the
+first -- on the passcode screen, which is the one screen a user cannot
+navigate away from -- and `.spinner` rotated forever with no motion answer.
 """
 
 import re
@@ -179,3 +185,121 @@ def test_the_passcode_screen_can_be_read_without_blur():
             f'the {theme} lock card drops its blur but keeps a translucent '
             f'background, so the aurora still reads through the passcode field'
         )
+
+
+# --------------------------------------------------------------------------
+# Motion
+#
+# Coverage is per page, not per file: the aurora's animation is declared in
+# style.css and switched off in glass.css, so a file-at-a-time check reports
+# a gap that does not exist. These are the stylesheets each page actually
+# loads, in load order.
+# --------------------------------------------------------------------------
+
+BUNDLES = {
+    'chat': ['app/static/css/style.css',
+             'app/static/css/glass.css',
+             'app/static/css/settings.css'],
+    'lab': ['app/static/css/rx_lab.css'],
+}
+
+REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)'
+
+
+def without(css, prelude):
+    """`css` with every block under `prelude` cut out.
+
+    Needed because a reduced-motion block may declare a *replacement*
+    animation, and a scan that cannot tell inside from outside reads that
+    replacement as a fresh offender.
+    """
+    target = prelude.replace(' ', '')
+    kept, index = [], 0
+    while index < len(css):
+        brace = css.find('{', index)
+        if brace == -1:
+            kept.append(css[index:])
+            break
+        selector = css[index:brace].rsplit('}', 1)[-1].strip()
+        if selector.replace(' ', '') != target:
+            kept.append(css[index:brace + 1])
+            index = brace + 1
+            continue
+        depth, end = 1, brace + 1
+        while depth and end < len(css):
+            if css[end] == '{':
+                depth += 1
+            elif css[end] == '}':
+                depth -= 1
+            end += 1
+        kept.append(css[index:brace - len(selector)])
+        index = end
+    return ''.join(kept)
+
+
+def looping(css):
+    """Selectors running an animation that never ends."""
+    found = {}
+    for selector, body in rules(css):
+        if selector.startswith('@'):
+            continue
+        match = re.search(r'(?<!-)animation\s*:\s*([^;]+)', body)
+        if match and 'infinite' in match.group(1):
+            for name in selectors_in(selector):
+                found[name] = match.group(1).strip()
+    return found
+
+
+def motion_answers(css):
+    """Selectors a reduced-motion block gives an animation answer for --
+    either switching it off or swapping it for something non-vestibular."""
+    answered = set()
+    for block in media_blocks(css, REDUCED_MOTION):
+        for selector, body in rules(block):
+            if re.search(r'(?<!-)animation\s*:', body):
+                answered.update(selectors_in(selector))
+    return answered
+
+
+@pytest.mark.parametrize('page', sorted(BUNDLES))
+def test_every_looping_animation_answers_reduced_motion(page):
+    bundle = '\n'.join(read(path) for path in BUNDLES[page])
+    loops = looping(without(bundle, REDUCED_MOTION))
+    missing = sorted(set(loops) - motion_answers(bundle))
+
+    assert not missing, (
+        f'{page}: animation that never stops and ignores '
+        f'prefers-reduced-motion: ' +
+        ', '.join(f'{name} ({loops[name]})' for name in missing)
+    )
+
+
+def test_the_spinner_still_says_it_is_working():
+    """Not every loop should simply be switched off. This one runs on the
+    Reconstruct button -- the slowest operation in the app -- and is the only
+    sign the work started, so a stopped spinner reads as a hung one. It keeps
+    an animation; what it must lose is the rotation."""
+    css = read('app/static/css/style.css')
+    block = '\n'.join(media_blocks(css, REDUCED_MOTION))
+
+    spinner = [body for selector, body in rules(block)
+               if '.spinner' in list(selectors_in(selector))]
+    assert spinner, '.spinner has no reduced-motion rule'
+
+    declared = re.search(r'(?<!-)animation\s*:\s*([^;]+)', spinner[0])
+    assert declared, '.spinner declares no reduced-motion animation'
+    assert 'none' not in declared.group(1), (
+        'the spinner was switched off rather than replaced, which leaves the '
+        'Reconstruct button with no sign that anything is happening'
+    )
+
+    # Whatever replaced it must not rotate, or the substitution bought nothing.
+    replacement = declared.group(1).split()[0]
+    frames = re.search(
+        r'@keyframes\s+' + re.escape(replacement) + r'\s*\{(.*?)\n\}',
+        css, re.S)
+    assert frames, f'@keyframes {replacement} is not defined'
+    assert not re.search(r'transform\s*:\s*rotate', frames.group(1)), (
+        f'{replacement} rotates, so reduced motion still gets a spinning '
+        f'element -- the thing the preference exists to avoid'
+    )

@@ -1818,6 +1818,24 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
     #voiceBtn.recording { animation: none; }
+
+    /* The spinner cannot simply stop. It runs on the Reconstruct button,
+       which is the slowest thing the app does, and it is the only signal
+       that the work has started -- a frozen spinner reads as a hung one.
+
+       So the rotation is replaced rather than removed. A cross-fade is the
+       accepted substitute here: opacity does not trigger the vestibular
+       response that spinning does, while still showing the button is busy.
+       The ring also loses its bright top segment, because a stationary
+       highlight on a circle looks like a spinner that has jammed. */
+    .spinner {
+        animation: spinner-pulse 1.4s ease-in-out infinite;
+        border-color: rgba(255, 255, 255, 0.85);
+    }
+}
+
+@keyframes spinner-pulse {
+    50% { opacity: 0.3; }
 }
 
 /* ==========================================================================
