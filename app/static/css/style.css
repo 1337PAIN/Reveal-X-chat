@@ -1843,8 +1843,9 @@ body::before {
     background: var(--glass-3, rgba(11, 17, 38, 0.78));
     border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    /* The blur lives in glass.css with every other backdrop-filter, so the
+       one place that disables them covers this banner too. It was declared
+       here and was the only blurred surface in the app with no fallback. */
 }
 
 .pwa-banner.hidden {

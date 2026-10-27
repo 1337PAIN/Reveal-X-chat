@@ -78,6 +78,18 @@
     border-top: 1px solid var(--glass-border);
 }
 
+/* Bottom-anchored install prompt. style.css owns its position, padding and
+   tint; the glass is this file's job. */
+.pwa-banner {
+    /* --blur-lg is 14px, which is what style.css hardcoded here, so the move
+       is token-driven and renders identically. The inset highlight is the one
+       deliberate change: every other glass surface in this file catches light
+       on its top edge and the banner did not. */
+    -webkit-backdrop-filter: blur(var(--blur-lg));
+    backdrop-filter: blur(var(--blur-lg));
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--glass-highlight);
+}
+
 .sidebar-overlay {
     background: rgba(5, 8, 20, 0.45);
     -webkit-backdrop-filter: blur(var(--blur-sm));
@@ -629,7 +641,7 @@ body[data-theme="light"] .one-time-notice {
 
     .header, .sidebar, .chat-section, .chat-header, .reconstruction-panel,
     .panel-header, .message-input, .modal-content, .settings-content,
-    .welcome-message {
+    .welcome-message, .pwa-banner {
         background: #131a2e;
     }
 
@@ -649,7 +661,8 @@ body[data-theme="light"] .one-time-notice {
     body[data-theme="light"] .message-input,
     body[data-theme="light"] .modal-content,
     body[data-theme="light"] .settings-content,
-    body[data-theme="light"] .welcome-message {
+    body[data-theme="light"] .welcome-message,
+    body[data-theme="light"] .pwa-banner {
         background: #ffffff;
     }
 
@@ -674,13 +687,13 @@ body[data-theme="light"] .one-time-notice {
     .header, .sidebar, .chat-section, .reconstruction-panel, .message,
     .modal, .modal-content, .settings-content, .welcome-message,
     .tamper-panel, .offline-banner, .offline-indicator, .sidebar-overlay,
-    .image-modal {
+    .image-modal, .pwa-banner {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
     }
 
     .header, .sidebar, .chat-section, .reconstruction-panel,
-    .modal-content, .settings-content {
+    .modal-content, .settings-content, .pwa-banner {
         background: #131a2e;
     }
 
@@ -689,7 +702,8 @@ body[data-theme="light"] .one-time-notice {
     body[data-theme="light"] .chat-section,
     body[data-theme="light"] .reconstruction-panel,
     body[data-theme="light"] .modal-content,
-    body[data-theme="light"] .settings-content {
+    body[data-theme="light"] .settings-content,
+    body[data-theme="light"] .pwa-banner {
         background: #ffffff;
     }
 

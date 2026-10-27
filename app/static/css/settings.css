@@ -173,6 +173,28 @@ body[data-theme="light"] .lock-screen {
     body[data-theme="light"] .lock-card { background: #ffffff; }
 }
 
+/* The block above answers "the browser cannot blur". This one answers "the
+   user asked us not to", which is a different question and was unanswered:
+   the lock screen was the only blurred surface that ignored the preference,
+   and it is the one screen nobody can skip past. Same values, so the two
+   fallbacks look identical. */
+@media (prefers-reduced-transparency: reduce) {
+    .lock-screen {
+        background: rgba(5, 8, 20, .94);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .lock-card {
+        background: #131a2e;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    body[data-theme="light"] .lock-screen { background: rgba(226, 232, 245, .94); }
+    body[data-theme="light"] .lock-card { background: #ffffff; }
+}
+
 /* --- Reconstruction panel share boxes ------------------------------------- */
 
 .share-box-actions {
