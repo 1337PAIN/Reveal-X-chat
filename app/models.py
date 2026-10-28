@@ -900,6 +900,21 @@ class ChatRoom:
         with self._connect() as db:
             db.execute("DELETE FROM users WHERE id = ?", (user_id,))
 
+    def has_password(self, user_id):
+        """Whether this account can be re-authenticated with a password.
+
+        Firebase accounts are created with an empty password_hash -- they
+        authenticate against Google and never hold a local secret. Asking one
+        of them for a password is asking for something that does not exist, so
+        anything gating an action on a password has to check this first and
+        fall back to another proof.
+        """
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT password_hash FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+        return bool(row and row['password_hash'])
+
     # ------------------------------------------------------------------
     # Administration
     #

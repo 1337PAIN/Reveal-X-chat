@@ -1618,9 +1618,50 @@ def handle_delete_message(data):
     emit_to_conversation('message_deleted', payload, *notify_ids, exclude=request.sid)
 
 
+def _confirm_identity(user, data):
+    """Prove the person asking is the account holder, not a borrowed session.
+
+    `totp_disable` already works this way -- it demands a current code so that
+    someone with a borrowed session cannot quietly remove the second factor.
+    Deleting the account is strictly more destructive than disabling 2FA and
+    asked for nothing at all, which made an unlocked tab enough to destroy
+    someone's account and every message in it.
+
+    What counts as proof depends on how the account signs in, because not
+    every account has a password: Firebase rows are created with an empty
+    hash. So the password is required where one exists, a current code where
+    two-factor is on, and an account that has neither -- a Google sign-in
+    without 2FA -- has to type its own username instead. That last one is
+    weaker than a secret, and it is meant to be: it stops a careless click,
+    not an attacker. For those accounts the real defence is Google's.
+    """
+    user_id = user['id']
+
+    secret = chat_room.get_totp_secret(user_id)
+    if secret and not verify_totp_code(secret, data.get('totp'), user_id):
+        return False, 'Enter a current six-digit code to delete this account.'
+
+    if chat_room.has_password(user_id):
+        account, error = chat_room.authenticate(user['username'], data.get('password'))
+        if error or not account or account['id'] != user_id:
+            return False, 'That password is not correct.'
+        return True, None
+
+    if (data.get('confirm_username') or '').strip() != user['username']:
+        return False, f"Type the username {user['username']} exactly to confirm."
+    return True, None
+
+
 @socketio.on('delete_account')
 def handle_delete_account(data):
-    """Delete user account and all their messages."""
+    """Delete the signed-in account, its messages and its stored shares.
+
+    Irreversible, so it re-authenticates first and refuses to leave the
+    server unadministered. Mirrors admin_delete_account from here on: the
+    same purge, the same audit entry, and the same kicking of every other
+    session the account holds.
+    """
+    data = data or {}
     current_user = chat_room.get_session_user(request.sid)
     if not current_user:
         emit('auth_error', {'error': 'Not logged in'})
@@ -1628,9 +1669,32 @@ def handle_delete_account(data):
 
     user_id = current_user['id']
 
-    chat_room.delete_user_messages(user_id)
-    chat_room.delete_user(user_id)
-    chat_room.remove_user(request.sid)
+    ok, error = _confirm_identity(current_user, data)
+    if not ok:
+        emit('settings_error', {'field': 'delete_account', 'error': error}, to=request.sid)
+        return
+
+    # count_admins(exclude_user_id=...) has existed since the admin panel was
+    # built and was never called anywhere. The rank rules stop an admin being
+    # removed by someone else, but nothing stopped the last one removing
+    # themselves -- which leaves no one to approve registrations or reinstate
+    # anybody, and no way back in short of restarting the server with
+    # REVEALX_ADMIN_USER set.
+    if (chat_room.is_admin(user_id)
+            and chat_room.count_admins(exclude_user_id=user_id) == 0):
+        emit('settings_error', {
+            'field': 'delete_account',
+            'error': ('You are the only administrator left. Promote someone '
+                      'else before deleting this account.'),
+        }, to=request.sid)
+        return
+
+    _audit(current_user, 'delete_account_self', current_user)
+    # Every session, not just this tab: the account is about to stop existing
+    # and any other device holding it would otherwise keep chatting as a user
+    # the database no longer has.
+    _disconnect_user_sessions(user_id, 'This account was deleted.')
+    chat_room.purge_user(user_id)
 
     emit('logout_success', {}, to=request.sid)
     emit_users()

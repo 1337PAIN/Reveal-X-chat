@@ -167,6 +167,16 @@ body[data-theme="light"] .lock-screen {
     margin-top: 6px;
 }
 
+/* Every .modal shares z-index 1000, which is fine while only one is open.
+   This one opens *over* the settings panel, so without a rank of its own it
+   would sit above it only because it happens to come later in index.html --
+   and moving the markup would silently hide the confirmation behind the
+   panel that launched it. Below the passcode lock screen at 5000, which must
+   stay above everything. */
+#deleteAccountModal {
+    z-index: 4200;
+}
+
 @supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
     .lock-screen { background: rgba(5, 8, 20, .94); }
     .lock-card { background: #131a2e; }

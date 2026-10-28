@@ -147,6 +147,23 @@ depends on who asks — a sender deletes for everyone and Share 1 leaves the dis
 a recipient hides only their own copy, and the sender is not told, because that
 would leak that it was read.
 
+### Leaving
+
+| Event | In | Out |
+| --- | --- | --- |
+| `delete_account` | `password` *or* `confirm_username`, plus `totp` when enabled | `logout_success`, `settings_error` |
+
+Irreversible, so it **re-authenticates**: the password where the account has
+one, a current code where two-factor is on, and — for a Firebase account,
+which has no local password — the account's own username typed back. It also
+refuses when the caller is the last active administrator, because an
+unadministered server cannot approve a registration or reinstate anyone
+without being restarted with `REVEALX_ADMIN_USER` set.
+
+Like `admin_delete_account` it purges messages and stored shares, writes an
+audit line, and signs out every session the account holds — not just the one
+that asked.
+
 ### Administration
 
 | Event | In | Rank required |

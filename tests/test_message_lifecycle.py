@@ -240,7 +240,7 @@ def test_deleting_an_account_removes_it_and_its_messages(trio, store):
     sent = send_text(a, bob['id'], 'from alice')
     received = send_text(b, alice['id'], 'to alice')
 
-    a.emit('delete_account', {})
+    a.emit('delete_account', {'password': 'correct-horse-1'})
 
     assert events(a, 'logout_success')
     assert store.authenticate('alice', 'correct-horse-1')[0] is None, 'account gone'
@@ -253,11 +253,109 @@ def test_deleting_an_account_leaves_other_conversations_alone(trio, store):
     (a, _alice), (b, bob), (m, mallory) = trio
     between_others = send_text(b, mallory['id'], 'unrelated')
 
-    a.emit('delete_account', {})
+    a.emit('delete_account', {'password': 'correct-horse-1'})
 
+    assert events(a, 'logout_success'), 'the deletion actually happened'
     assert store.get_message_for_user(between_others['id'], bob['id']) is not None
     assert store.get_message_for_user(between_others['id'], mallory['id']) is not None
     assert store.authenticate('bob', 'correct-horse-2')[0] is not None
+
+
+# Deletion is irreversible and used to ask for nothing, so an unlocked tab was
+# enough to destroy an account and every message in it. The project already
+# held `totp_disable` to this standard -- a current code, so a borrowed session
+# cannot quietly remove the second factor -- while deletion, which is strictly
+# more destructive, was held to none.
+
+@pytest.mark.parametrize('payload, why', [
+    ({}, 'no password at all'),
+    ({'password': ''}, 'an empty password'),
+    ({'password': 'correct-horse-2'}, "another user's password"),
+    ({'password': 'Correct-Horse-1'}, 'the right password in the wrong case'),
+])
+def test_deleting_an_account_refuses_without_the_password(trio, store, payload, why):
+    (a, _alice), (b, bob), _ = trio
+    kept = send_text(a, bob['id'], 'still here')
+
+    a.emit('delete_account', payload)
+
+    assert events(a, 'settings_error'), 'refused: ' + why
+    assert not events(a, 'logout_success')
+    assert store.authenticate('alice', 'correct-horse-1')[0] is not None, (
+        'the account survived ' + why
+    )
+    assert store.get_message_for_user(kept['id'], bob['id']) is not None
+
+
+def test_a_failed_deletion_does_not_mention_being_an_administrator(store):
+    """The refusal has to be about the password. Saying "you are the only
+    administrator" to someone who could not produce the password tells an
+    attacker holding a borrowed session exactly whose account they have."""
+    sock = socketio.test_client(flask_app)
+    store.create_user('soleadmin', 'correct-horse-8', role='admin')
+    sock.emit('login', {'username': 'soleadmin', 'password': 'correct-horse-8'})
+    events(sock, 'auth_success')
+
+    sock.emit('delete_account', {'password': 'not-the-password'})
+
+    error = events(sock, 'settings_error')[-1]['args'][0]['error'].lower()
+    assert 'password' in error
+    assert 'admin' not in error, 'the refusal leaked why this account matters'
+    sock.disconnect()
+
+
+def test_the_last_administrator_cannot_delete_themselves(store):
+    """Nothing stopped this before. The rank rules keep one admin from removing
+    another, but the last one could remove themselves and leave nobody able to
+    approve a registration or reinstate anyone -- recoverable only by
+    restarting the server with REVEALX_ADMIN_USER set."""
+    sock = socketio.test_client(flask_app)
+    store.create_user('onlyadmin', 'correct-horse-9', role='admin')
+    sock.emit('login', {'username': 'onlyadmin', 'password': 'correct-horse-9'})
+    events(sock, 'auth_success')
+
+    sock.emit('delete_account', {'password': 'correct-horse-9'})
+
+    assert events(sock, 'settings_error'), 'refused'
+    assert not events(sock, 'logout_success')
+    assert store.authenticate('onlyadmin', 'correct-horse-9')[0] is not None
+    assert store.count_admins() == 1, 'the server still has someone in charge'
+    sock.disconnect()
+
+
+def test_an_administrator_who_is_not_the_last_one_may_leave(store):
+    """The guard is about the server keeping an administrator, not about
+    administrators being undeletable."""
+    sock = socketio.test_client(flask_app)
+    store.create_user('leaving', 'correct-horse-10', role='admin')
+    store.create_user('staying', 'correct-horse-11', role='admin')
+    sock.emit('login', {'username': 'leaving', 'password': 'correct-horse-10'})
+    events(sock, 'auth_success')
+
+    sock.emit('delete_account', {'password': 'correct-horse-10'})
+
+    assert events(sock, 'logout_success'), 'allowed'
+    assert store.authenticate('leaving', 'correct-horse-10')[0] is None
+    assert store.count_admins() == 1
+    sock.disconnect()
+
+
+def test_deleting_an_account_signs_out_its_other_devices(store):
+    """The account is about to stop existing. A second tab holding it would
+    otherwise keep chatting as a user the database no longer has -- the same
+    reason admin deletion kicks every session."""
+    first = socketio.test_client(flask_app)
+    second = socketio.test_client(flask_app)
+    store.create_user('twodevice', 'correct-horse-12')
+    for sock in (first, second):
+        sock.emit('login', {'username': 'twodevice', 'password': 'correct-horse-12'})
+        events(sock, 'auth_success')
+
+    first.emit('delete_account', {'password': 'correct-horse-12'})
+
+    assert events(second, 'force_signed_out'), 'the other device was told'
+    for sock in (first, second):
+        sock.disconnect()
 
 
 def test_delete_account_requires_a_session(store):

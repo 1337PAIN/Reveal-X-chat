@@ -2421,6 +2421,10 @@ socket.on('settings_saved', (data) => {
 });
 
 socket.on('settings_error', (data) => {
+    if (data && data.field === 'delete_account') {
+        if (deleteAccountError) deleteAccountError.textContent = data.error;
+        return;
+    }
     const message = data.error || 'Could not save settings';
 
     // A two-factor error raised while the setup dialog is open belongs in that
@@ -2723,23 +2727,119 @@ if (exportDataBtn) {
     });
 }
 
-// Clear Cache local data
+// Clear cached data.
+//
+// This used to call sessionStorage.clear() and report success. Nothing in the
+// app ever writes to sessionStorage, so the button emptied something that was
+// always empty and said it had worked -- the worst kind of privacy control,
+// one the user trusts and that does nothing.
+//
+// What it must NOT clear is the IndexedDB keypair. The private half is
+// generated non-extractable and never leaves the browser, so destroying it
+// does not "clear a cache": it permanently ends this device's ability to read
+// any message already sent to it. That is a different action, and it needs to
+// be asked for explicitly rather than hidden behind the word cache.
 const clearCacheBtn = document.getElementById('clearCacheBtn');
 if (clearCacheBtn) {
-    clearCacheBtn.addEventListener('click', () => {
+    clearCacheBtn.addEventListener('click', async () => {
+        const cleared = [];
+
         sessionStorage.clear();
-        alert('Client visual decryption cache cleared successfully.');
+
+        if (state.chatHistoryCache && state.chatHistoryCache.length) {
+            cleared.push('the loaded conversation');
+            state.chatHistoryCache = [];
+        }
+
+        if (window.caches) {
+            try {
+                const names = await caches.keys();
+                await Promise.all(names.map(name => caches.delete(name)));
+                if (names.length) {
+                    cleared.push(names.length + ' offline asset cache'
+                                 + (names.length === 1 ? '' : 's'));
+                }
+            } catch (err) {
+                console.warn('Could not clear the asset caches:', err);
+            }
+        }
+
+        alert(cleared.length
+            ? 'Cleared ' + cleared.join(' and ') + '.\n\n'
+              + 'Your encryption key was kept -- deleting it would make every '
+              + 'message already sent to this device unreadable.'
+            : 'Nothing was cached on this device.');
+        announceToScreenReader('Cached data cleared.');
     });
 }
 
-// Account Deletion reason prompt
+// Account deletion.
+//
+// This used to be prompt() for a reason the server never read, then confirm().
+// Neither proved who was asking, so an unlocked tab could destroy the account.
+// The server now re-authenticates; this collects the proof it wants, in a
+// masked field rather than a prompt() box that shows what is typed.
+const deleteAccountModal = document.getElementById('deleteAccountModal');
+const deleteAccountPassword = document.getElementById('deleteAccountPassword');
+const deleteAccountUsername = document.getElementById('deleteAccountUsername');
+const deleteAccountTotp = document.getElementById('deleteAccountTotp');
+const deleteAccountError = document.getElementById('deleteAccountError');
+
+function usesLocalPassword() {
+    // Password sign-ins do not carry auth_provider at all; a Firebase one
+    // reports 'firebase' and has no local password to confirm against.
+    const provider = state.currentUser && state.currentUser.auth_provider;
+    return !provider || provider === 'password';
+}
+
+function openDeleteAccount() {
+    if (!state.currentUser || !deleteAccountModal) return;
+    const local = usesLocalPassword();
+
+    document.getElementById('deleteAccountPasswordGroup').classList.toggle('hidden', !local);
+    document.getElementById('deleteAccountUsernameGroup').classList.toggle('hidden', local);
+    document.getElementById('deleteAccountTotpGroup')
+        .classList.toggle('hidden', !state.currentUser.totp_enabled);
+
+    [deleteAccountPassword, deleteAccountUsername, deleteAccountTotp]
+        .forEach(field => { if (field) field.value = ''; });
+    deleteAccountError.textContent = '';
+
+    deleteAccountModal.classList.remove('hidden');
+    (local ? deleteAccountPassword : deleteAccountUsername).focus();
+}
+
+function closeDeleteAccount() {
+    if (!deleteAccountModal) return;
+    deleteAccountModal.classList.add('hidden');
+    // Do not leave a typed password sitting in the DOM behind a hidden modal.
+    [deleteAccountPassword, deleteAccountUsername, deleteAccountTotp]
+        .forEach(field => { if (field) field.value = ''; });
+}
+
 if (deleteAccountBtn) {
-    deleteAccountBtn.addEventListener('click', () => {
-        const reason = prompt('Please let us know the reason for your account deletion (optional):');
-        const confirmed = confirm('Are you absolutely sure? This will delete your account and all private messages forever.');
-        if (confirmed) {
-            socket.emit('delete_account', { reason: reason || 'none' });
+    deleteAccountBtn.addEventListener('click', openDeleteAccount);
+}
+
+const deleteAccountCancelBtn = document.getElementById('deleteAccountCancelBtn');
+if (deleteAccountCancelBtn) {
+    deleteAccountCancelBtn.addEventListener('click', closeDeleteAccount);
+}
+
+const deleteAccountConfirmBtn = document.getElementById('deleteAccountConfirmBtn');
+if (deleteAccountConfirmBtn) {
+    deleteAccountConfirmBtn.addEventListener('click', () => {
+        const payload = {};
+        if (usesLocalPassword()) {
+            payload.password = deleteAccountPassword.value;
+        } else {
+            payload.confirm_username = deleteAccountUsername.value.trim();
         }
+        if (state.currentUser.totp_enabled) {
+            payload.totp = deleteAccountTotp.value.trim();
+        }
+        deleteAccountError.textContent = '';
+        socket.emit('delete_account', payload);
     });
 }
 
