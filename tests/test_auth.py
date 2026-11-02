@@ -477,3 +477,217 @@ def test_rejection_reason_is_logged_but_not_sent_to_the_client(monkeypatch, caps
     assert 'used too early' not in str(excinfo.value)
     assert str(excinfo.value) == 'Sign-in token was rejected'
     assert 'used too early' in capsys.readouterr().out
+
+
+# ----------------------------------------------------------------------
+# Rate limiting the controls that cost the server something
+#
+# Two of these guard work an anonymous client can make the server do, and one
+# guards the second factor itself. All three were missing.
+# ----------------------------------------------------------------------
+
+def test_the_totp_attempt_limit_survives_reconnecting(store):
+    """The hole this closes.
+
+    MAX_TOTP_ATTEMPTS was counted against PENDING_TOTP[request.sid], so a
+    disconnect bought five fresh guesses -- for ever, because a wrong code was
+    recorded nowhere and a correct password cleared the buckets before the
+    code was even asked for. Six digits with a one-step tolerance is roughly
+    333,000 expected guesses, which at that rate is a couple of hours: the
+    second factor was no obstacle to anyone who already had the password.
+    """
+    from app.routes import FAILED_LOGINS, LOGIN_MAX_ATTEMPTS
+
+    setup = socketio.test_client(flask_app)
+    user = signed_in(store, setup)
+    secret = generate_totp_secret()
+    store.set_totp_secret(user['id'], secret)
+    setup.disconnect()
+    FAILED_LOGINS.clear()
+
+    # Guess, drop the socket, come back with a new one. Each pass is a fresh
+    # request.sid, which is exactly what used to reset the counter.
+    locked_out = False
+    for _ in range(LOGIN_MAX_ATTEMPTS + 2):
+        sock = socketio.test_client(flask_app)
+        sock.emit('login', {'username': 'alice', 'password': 'correct-horse-1'})
+        if events(sock, 'auth_error'):
+            locked_out = True
+            sock.disconnect()
+            break
+        sock.emit('verify_totp', {'code': '000000'})
+        if events(sock, 'auth_error'):
+            locked_out = True
+            sock.disconnect()
+            break
+        sock.disconnect()
+
+    assert locked_out, (
+        'reconnecting still buys unlimited TOTP guesses, so the second factor '
+        'can be brute-forced by anyone holding the password'
+    )
+    FAILED_LOGINS.clear()
+
+
+def test_a_correct_password_does_not_clear_the_throttle_before_the_second_factor(store):
+    """_clear_failed_logins used to run as soon as the password verified, which
+    wiped the record of every wrong code that came before it."""
+    from app.routes import FAILED_LOGINS
+
+    setup = socketio.test_client(flask_app)
+    user = signed_in(store, setup)
+    secret = generate_totp_secret()
+    store.set_totp_secret(user['id'], secret)
+    setup.disconnect()
+    FAILED_LOGINS.clear()
+
+    sock = socketio.test_client(flask_app)
+    sock.emit('login', {'username': 'alice', 'password': 'correct-horse-1'})
+    assert events(sock, 'totp_required')
+    sock.emit('verify_totp', {'code': '000000'})
+
+    recorded = sum(len(v) for k, v in FAILED_LOGINS.items() if k[0] == 'account')
+    assert recorded >= 1, 'the wrong code was not recorded against the account'
+
+    # And the record survives a second password success.
+    sock.disconnect()
+    again = socketio.test_client(flask_app)
+    again.emit('login', {'username': 'alice', 'password': 'correct-horse-1'})
+    still = sum(len(v) for k, v in FAILED_LOGINS.items() if k[0] == 'account')
+    assert still >= recorded, 'a correct password wiped the failed-code record'
+    again.disconnect()
+    FAILED_LOGINS.clear()
+
+
+def test_a_correct_code_still_signs_in_and_clears_the_record(store):
+    """The limit must not get in the way of the legitimate user."""
+    from app.routes import FAILED_LOGINS
+
+    setup = socketio.test_client(flask_app)
+    user = signed_in(store, setup)
+    secret = generate_totp_secret()
+    store.set_totp_secret(user['id'], secret)
+    setup.disconnect()
+    FAILED_LOGINS.clear()
+
+    sock = socketio.test_client(flask_app)
+    sock.emit('login', {'username': 'alice', 'password': 'correct-horse-1'})
+    sock.emit('verify_totp', {'code': '000000'})          # one slip
+    sock.emit('verify_totp', {'code': code_for(secret)})  # then the real one
+
+    assert events(sock, 'auth_success'), 'a legitimate user was locked out'
+    assert sum(len(v) for v in FAILED_LOGINS.values()) == 0, (
+        'a completed sign-in should clear the record'
+    )
+    sock.disconnect()
+    FAILED_LOGINS.clear()
+
+
+def test_registration_is_rate_limited(store):
+    """register is unauthenticated and the first thing it does is an Argon2id
+    hash -- 64 MiB and ~100 ms by design. The project runs one worker, so a few
+    anonymous requests a second occupy it completely."""
+    from app.routes import REGISTER_RATE, REGISTER_MAX_REQUESTS
+
+    REGISTER_RATE.clear()
+    sock = socketio.test_client(flask_app)
+
+    accepted = 0
+    for i in range(REGISTER_MAX_REQUESTS + 3):
+        sock.emit('register', {'username': f'flood{i}', 'password': 'correct-horse-9'})
+        if events(sock, 'registration_submitted'):
+            accepted += 1
+        sock.get_received()
+        _received.pop(sock, None)
+
+    assert accepted <= REGISTER_MAX_REQUESTS, (
+        f'{accepted} account requests accepted from one address; the Argon2id '
+        f'hash behind each one is unauthenticated work'
+    )
+    sock.disconnect()
+    REGISTER_RATE.clear()
+
+
+def test_the_registration_limit_runs_before_the_password_hash(store):
+    """A limiter placed after create_user would still do the expensive work it
+    exists to prevent. Checked by the row not existing: create_user is what
+    writes it, and the hash happens inside."""
+    from app.routes import REGISTER_RATE, REGISTER_MAX_REQUESTS
+
+    REGISTER_RATE.clear()
+    sock = socketio.test_client(flask_app)
+    for i in range(REGISTER_MAX_REQUESTS):
+        sock.emit('register', {'username': f'early{i}', 'password': 'correct-horse-9'})
+    sock.get_received()
+
+    sock.emit('register', {'username': 'past_the_limit', 'password': 'correct-horse-9'})
+
+    names = {a['username'] for a in store.list_accounts()}
+    assert 'past_the_limit' not in names, (
+        'the refused request still created the account, so create_user -- and '
+        'the Argon2id hash inside it -- ran before the limit was checked'
+    )
+    sock.disconnect()
+    REGISTER_RATE.clear()
+
+
+def test_the_share_hmac_key_is_not_the_session_key():
+    """One secret doing two unrelated jobs meant leaking either forfeited both:
+    forge a session *and* re-tag a modified share so it verifies clean."""
+    session_key = flask_app.config['SECRET_KEY']
+    share_key = flask_app.config['SHARE_HMAC_KEY']
+
+    assert share_key, 'no share HMAC key is configured'
+    assert share_key != session_key, (
+        'the share integrity tags are still keyed with the session signing key'
+    )
+    assert session_key not in share_key
+
+
+def test_guesses_are_capped_even_across_sockets_opened_in_advance(store):
+    """The sequential case is caught by the login gate, because by the time the
+    attacker reconnects the bucket is already full. This is the case that gate
+    cannot see: open every socket and pass the password on all of them *first*,
+    while the record is still clean, and each one then holds a pending sign-in
+    worth five guesses. Without a throttle check at the point the code is
+    verified, that is sockets x 5 guesses for a single full bucket.
+    """
+    from app.routes import FAILED_LOGINS, LOGIN_MAX_ATTEMPTS, MAX_TOTP_ATTEMPTS
+
+    setup = socketio.test_client(flask_app)
+    user = signed_in(store, setup)
+    secret = generate_totp_secret()
+    store.set_totp_secret(user['id'], secret)
+    setup.disconnect()
+    FAILED_LOGINS.clear()
+
+    waiting = []
+    for _ in range(6):
+        sock = socketio.test_client(flask_app)
+        sock.emit('login', {'username': 'alice', 'password': 'correct-horse-1'})
+        if events(sock, 'totp_required'):
+            waiting.append(sock)
+        else:
+            sock.disconnect()
+    assert len(waiting) >= 3, 'could not stage the parallel sign-ins'
+
+    guesses_taken = 0
+    for sock in waiting:
+        for _ in range(MAX_TOTP_ATTEMPTS):
+            before = len(events(sock, 'totp_error'))
+            sock.emit('verify_totp', {'code': '000000'})
+            if events(sock, 'auth_error'):
+                break
+            if len(events(sock, 'totp_error')) > before:
+                guesses_taken += 1
+
+    ceiling = LOGIN_MAX_ATTEMPTS + MAX_TOTP_ATTEMPTS
+    assert guesses_taken <= ceiling, (
+        f'{guesses_taken} code guesses accepted against one account for a '
+        f'single filled bucket; staging sockets in advance still multiplies '
+        f'the attempt limit'
+    )
+
+    for sock in waiting:
+        sock.disconnect()
+    FAILED_LOGINS.clear()

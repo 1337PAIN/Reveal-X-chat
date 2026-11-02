@@ -198,7 +198,7 @@ def test_the_hmac_covers_the_bytes_actually_written_to_disk(pair, store):
     on_disk = share_from_disk(store, delivered, bob['id'])
     recorded = stored_extra(store, delivered, bob['id'])
 
-    expected = hmac_image(on_disk, flask_app.config['SECRET_KEY'])
+    expected = hmac_image(on_disk, flask_app.config['SHARE_HMAC_KEY'])
     assert hmac_mod.compare_digest(recorded['share1_hmac'], expected)
     assert recorded['share1_sha256'] == sha256_image(on_disk)
 

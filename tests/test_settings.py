@@ -267,7 +267,7 @@ def test_attack_simulation_handler_is_gone(pair, store):
     store.add_message(
         alice['id'], bob['id'], 'share', 'Shared an encrypted image',
         {'share1_filename': filename, 'share1_token': 'tok',
-         'share1_hmac': hmac_image(stored, flask_app.config['SECRET_KEY'])},
+         'share1_hmac': hmac_image(stored, flask_app.config['SHARE_HMAC_KEY'])},
     )
 
     bob_client.emit('simulate_share_attack', {'message_id': 'anything', 'attack': 'block'})

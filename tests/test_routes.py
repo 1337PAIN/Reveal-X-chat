@@ -40,7 +40,7 @@ def store_share(store, sender, recipient, sample_image, token='tok-xyz'):
         {
             'share1_filename': filename,
             'share1_token': token,
-            'share1_hmac': hmac_image(stored, flask_app.config['SECRET_KEY']),
+            'share1_hmac': hmac_image(stored, flask_app.config['SHARE_HMAC_KEY']),
             'share1_sha256': 'recorded-at-send-time',
         },
     )
@@ -214,7 +214,7 @@ def test_downloaded_share_reconstructs_the_original(client, store, users, sample
     message = store.add_message(
         alice['id'], bob['id'], 'share', 'Shared an encrypted image',
         {'share1_filename': filename, 'share1_token': 'tok-e2e',
-         'share1_hmac': hmac_image(stored, flask_app.config['SECRET_KEY'])},
+         'share1_hmac': hmac_image(stored, flask_app.config['SHARE_HMAC_KEY'])},
     )
 
     response = client.get(f'/share1/{message["id"]}?token=tok-e2e')

@@ -142,6 +142,34 @@ def _lab_rate_limited(address):
     return 0
 
 
+#: Registration is unauthenticated and the first thing it does is hash a
+#: password with Argon2id -- 64 MiB and ~100 ms by design, which is correct for
+#: storing a password and dangerous as something any anonymous client can
+#: trigger in a loop. The project runs one worker, so a few requests a second
+#: is enough to occupy it completely. This caps the rate; it is not an
+#: authentication control.
+REGISTER_RATE = {}
+REGISTER_MAX_REQUESTS = 5        # per address, within the window
+REGISTER_WINDOW_SECONDS = 600
+
+
+def _register_rate_limited(address):
+    """Seconds to wait before this address may request another account, or 0."""
+    now = time.time()
+    hits = [t for t in REGISTER_RATE.get(address, []) if now - t < REGISTER_WINDOW_SECONDS]
+    REGISTER_RATE[address] = hits
+    if len(hits) >= REGISTER_MAX_REQUESTS:
+        return int(REGISTER_WINDOW_SECONDS - (now - hits[0])) + 1
+    hits.append(now)
+    if len(REGISTER_RATE) > 2048:
+        for key in list(REGISTER_RATE):
+            REGISTER_RATE[key] = [t for t in REGISTER_RATE[key]
+                                  if now - t < REGISTER_WINDOW_SECONDS]
+            if not REGISTER_RATE[key]:
+                del REGISTER_RATE[key]
+    return 0
+
+
 def _login_blocked(username, address):
     """Is either bucket over its limit? Returns seconds to wait, or 0."""
     now = time.time()
@@ -407,7 +435,7 @@ def asset(filename):
 
 
 def _share_hmac(image):
-    return hmac_image(image, app.config['SECRET_KEY'])
+    return hmac_image(image, app.config['SHARE_HMAC_KEY'])
 
 
 @app.route('/api/lab/process', methods=['POST'])
@@ -638,7 +666,14 @@ def handle_disconnect():
 
 
 def _establish_session(user):
-    """Attach a fully authenticated user to this socket."""
+    """Attach a fully authenticated user to this socket.
+
+    The failed-login buckets are cleared *here* rather than when the password
+    verified. Clearing them earlier meant a correct password wiped the record
+    before the second factor had been shown, which is half of why the TOTP
+    attempt limit could be reset at will.
+    """
+    _clear_failed_logins(user.get('username'), _client_address())
     # Refresh from the database so role and account_state are current even if
     # the caller passed an older copy.
     fresh = chat_room.get_auth_user(user['id']) or user
@@ -669,6 +704,10 @@ def _complete_sign_in(user):
     if chat_room.get_totp_secret(user['id']):
         PENDING_TOTP[request.sid] = {
             'user_id': user['id'],
+            # Carried so a wrong code can be recorded against the account and
+            # the address, not only against this socket.
+            'username': user['username'],
+            'address': _client_address(),
             'started': time.time(),
             'attempts': 0,
         }
@@ -940,6 +979,15 @@ def handle_register(data):
     """
     try:
         data = data or {}
+
+        # Before create_user, because create_user is the expensive part.
+        wait = _register_rate_limited(_client_address())
+        if wait:
+            emit('auth_error', {
+                'error': f'Too many account requests. Try again in {max(wait // 60, 1)} minute(s).',
+            }, to=request.sid)
+            return
+
         user, error = chat_room.create_user(
             data.get('username'), data.get('password'), account_state='pending'
         )
@@ -996,7 +1044,8 @@ def handle_login(data):
             emit('auth_error', {'error': error}, to=request.sid)
             return
 
-        _clear_failed_logins(username, address)
+        # Not cleared here: the sign-in is not finished if a second factor is
+        # still outstanding. _establish_session clears it once it really is.
         _complete_sign_in(user)
     except Exception as exc:
         print(f"Login failed: {exc}")
@@ -1043,6 +1092,25 @@ def handle_verify_totp(data):
         emit('auth_error', {'error': 'Sign-in timed out. Please start again.'}, to=request.sid)
         return
 
+    # MAX_TOTP_ATTEMPTS alone counted against this socket, and PENDING_TOTP is
+    # keyed on request.sid -- so disconnecting and signing in again bought five
+    # fresh guesses, for ever. Six digits with a one-step tolerance is about
+    # 333,000 expected guesses, which is a couple of hours at that rate: the
+    # second factor was no obstacle to anyone who already had the password.
+    #
+    # A wrong code is now a failed authentication attempt like any other, so it
+    # lands in the same account and address buckets a wrong password does, and
+    # those outlive the socket.
+    username, address = pending.get('username'), pending.get('address')
+
+    wait = _login_blocked(username, address)
+    if wait:
+        PENDING_TOTP.pop(request.sid, None)
+        emit('auth_error', {
+            'error': f'Too many failed attempts. Try again in {max(wait // 60, 1)} minute(s).',
+        }, to=request.sid)
+        return
+
     pending['attempts'] += 1
     if pending['attempts'] > MAX_TOTP_ATTEMPTS:
         PENDING_TOTP.pop(request.sid, None)
@@ -1051,6 +1119,7 @@ def handle_verify_totp(data):
 
     secret = chat_room.get_totp_secret(pending['user_id'])
     if not verify_totp_code(secret, data.get('code'), pending['user_id']):
+        _record_failed_login(username, address)
         remaining = MAX_TOTP_ATTEMPTS - pending['attempts']
         emit('totp_error', {
             'error': 'Incorrect code',

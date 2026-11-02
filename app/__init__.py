@@ -5,6 +5,7 @@ Reveal-X Application Initialization
 from flask import Flask
 from flask_socketio import SocketIO
 import os
+import hashlib
 import secrets
 
 # Initialize Flask app
@@ -21,6 +22,20 @@ if not _secret_key:
     print('REVEAL_X_SECRET_KEY is not set: using a random key for this run. '
           'Sessions will not survive a restart. See docs/DEPLOYMENT.md.')
 app.config['SECRET_KEY'] = _secret_key
+
+# The share-integrity tags used to be keyed with SECRET_KEY itself, so one
+# secret did two unrelated jobs: signing session cookies and proving a stored
+# share had not been rewritten. Leaking either forfeited both -- forge a
+# session *and* re-tag a modified share so the integrity check reports clean.
+#
+# A dedicated variable is preferred. Where none is set the key is derived from
+# SECRET_KEY through a one-way function with its own domain string, so an
+# existing deployment keeps working and the derived key cannot be run
+# backwards into the session key.
+app.config['SHARE_HMAC_KEY'] = (
+    os.environ.get('REVEALX_SHARE_HMAC_KEY')
+    or hashlib.sha256(b'revealx/share-hmac/v1|' + _secret_key.encode('utf-8')).hexdigest()
+)
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
 # Jinja caches compiled templates and, outside debug mode, never re-checks the
 # file. Editing a template then reloading would keep serving the old page --
