@@ -390,7 +390,9 @@ Everything in the Settings panel does something. Profile fields are stored on th
 | Send read receipts | When off, the app never reports messages as read - including on opening a chat - so the sender keeps seeing "Sent" |
 | Show typing indicators | When off, no typing event is emitted at all |
 | Passcode lock | See below |
-| Export chat history / Clear cache / Delete account | Unchanged, and working |
+| Export chat history | Unchanged, and working |
+| Clear cache | Clears the loaded conversation and the asset caches, and names what it cleared. The E2EE key in IndexedDB is deliberately kept: deleting it would end this device's ability to read messages already sent to it. It previously called `sessionStorage.clear()`, which nothing in the app ever writes to, and reported success |
+| Delete account | Re-authenticates first - password where one exists, a current TOTP code where two-factor is on, or the username typed back for Firebase accounts, which carry an empty password hash. The last administrator cannot delete themselves, the deletion is audited, and every other signed-in device is kicked |
 
 **Passcode lock** is a device-local screen lock. The passcode is stored only as a PBKDF2-SHA256 hash (210,000 iterations, random salt) in localStorage and is never transmitted. The app locks on load and after the tab has been hidden for a minute.
 
@@ -419,7 +421,7 @@ Both light and dark themes are supported (🌙 in the sidebar). Light mode is no
 - `prefers-reduced-motion: reduce` → the aurora stops drifting.
 - Below 560px → blur radii roughly halve and the aurora animation stops, since blur is the most GPU-expensive part of the design.
 
-Two layout fixes came with the restyle: the sidebar now docks beside the chat above 1100px instead of staying an off-canvas drawer at every width (delete the `@media (min-width: 1100px)` block in `glass.css` to restore the drawer), and the composer's icon buttons are square 44px touch targets, which stops the Send button being pushed off-screen on a 375px display.
+Two layout fixes came with the restyle: the sidebar now docks beside the chat above 900px instead of staying an off-canvas drawer at every width (delete the `@media (min-width: 900px)` block in `glass.css` to restore the drawer; 900 rather than 1100 so an iPad in landscape, at 1024px, does not fall in the gap), and the composer's icon buttons are square 44px touch targets, which stops the Send button being pushed off-screen on a 375px display.
 
 ---
 
@@ -476,7 +478,7 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 286 server tests
+pytest                          # 397 server tests
 node --test "tests/js/*.test.mjs"   # 59 browser tests
 ```
 
@@ -486,7 +488,7 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**286 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+**397 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
 
 **59 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.

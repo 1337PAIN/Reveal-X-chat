@@ -75,6 +75,8 @@ limitation rather than glossed over.
 | Login throttling: 8 per account, 50 per address, 15-minute window | `routes.py`, `_login_blocked` | `test_rate_limit.py` |
 | Only *wrong passwords* count toward the throttle | `routes.py`, `handle_login` | `test_rate_limit.py` |
 | TOTP second factor (RFC 6238) | `auth/totp.py` | `test_auth.py` |
+| Wrong TOTP codes counted against the **account and address**, not the socket | `routes.py`, `handle_verify_totp` | `test_auth.py` |
+| Account requests capped at 5 per address per 10 minutes, checked **before** the hash | `routes.py`, `_register_rate_limited` | `test_auth.py` |
 | Firebase ID tokens verified by the Admin SDK | `auth/firebase_auth.py` | `test_auth.py` |
 | Firebase accounts keyed on **UID only, never email** | `claims_to_identity` | `test_firebase_account_never_matched_on_email_alone` |
 | Clock-drift tolerance on token timestamps | `_clock_skew_seconds` | `test_auth.py` |
@@ -88,6 +90,21 @@ retrying while they waited got locked out the moment an admin approved them.
 **Firebase identity is the UID, never the email.** Matching on email would let
 anyone who signs up with an unverified address matching an existing account take
 it over.
+
+**The second factor is throttled durably.** The five-attempt limit was once
+counted against `request.sid`, so disconnecting bought five fresh guesses for
+ever, and a correct password cleared the buckets before the code was even
+asked for. Six digits with a one-step drift tolerance leaves roughly three
+valid codes at any instant - about 333,000 expected guesses, which at that
+rate is a couple of hours for anyone already holding the password. Wrong
+codes are now recorded against the account and the address, the throttle is
+consulted before each guess, and the password path no longer clears it.
+
+**Registration is rate limited because it is expensive.** `register` is
+unauthenticated and the first thing it did was an Argon2id hash - 64 MiB and a
+measured 55 ms. On a single worker that is a denial of service in a handful of
+requests a second. The cap is evaluated before `create_user`, not after, which
+is the entire point of having it.
 
 ### Authorisation
 
@@ -103,6 +120,11 @@ it over.
 
 - **HMAC-SHA256** over the bytes **as written to disk**, not the array in
   memory — so the tag covers what a later read actually returns.
+- **Keyed separately from the session.** The tag uses
+  `REVEALX_SHARE_HMAC_KEY`, or a one-way `sha256("revealx/share-hmac/v1|" +
+  SECRET_KEY)` when that is unset. It was previously keyed with the session
+  signing key, so leaking one secret granted both the ability to forge a
+  session and to re-tag an altered share so it verified clean (CWE-323).
 - Compared with `hmac.compare_digest`, not `==`.
 - **One-time access.** Share 1 is served only against an unguessable
   `secrets.token_urlsafe(32)` capability, and fetching it burns the access

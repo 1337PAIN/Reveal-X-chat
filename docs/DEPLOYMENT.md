@@ -136,7 +136,9 @@ password.
 - [ ] Add the tunnel hostname to Firebase → Authentication → Settings →
       **Authorized domains**, or Google sign-in fails with
       `auth/unauthorized-domain`
-- [ ] `REVEAL_X_SECRET_KEY` set and unchanged between restarts
+- [ ] `REVEAL_X_SECRET_KEY` set and unchanged between restarts — otherwise
+      shares tagged before a restart verify as tampered, which looks exactly
+      like a real detection on the headline feature
 - [ ] Admin password set, and changed after the first sign-in
 - [ ] Remember the tunnel URL changes each run on the free tiers — the Firebase
       authorized domain has to be updated with it
@@ -190,7 +192,8 @@ CI asserts on, because the chat has to work even where an upgrade is blocked.
 | Variable | Purpose |
 | --- | --- |
 | `PORT` | Listen port (default 5000) |
-| `REVEAL_X_SECRET_KEY` | Flask session signing key. **Set this.** Without it a fresh random key is generated per start, so sessions do not survive a restart |
+| `REVEAL_X_SECRET_KEY` | Flask session signing key, and the fallback the share-integrity key is derived from. **Set this.** Without it a fresh random key is generated per start, so sessions do not survive a restart — and neither do share HMAC tags, which makes every share stored before the restart report as *tampered* |
+| `REVEALX_SHARE_HMAC_KEY` | Key for the per-share integrity tag. Optional: derived one-way from `REVEAL_X_SECRET_KEY` when unset. Set it explicitly in production so the two secrets can be rotated independently |
 | `REVEAL_X_COOKIE_SECURE` | `true` to mark session cookies Secure. Set it whenever you serve over HTTPS |
 | `REVEAL_X_ALLOWED_ORIGINS` | Comma-separated Socket.IO origins. Unset means same-origin only, which is what you want unless the front end is served from elsewhere |
 | `REVEALX_TRUST_PROXY` | `true` only when behind a reverse proxy you control, so `X-Forwarded-For` is believed for login throttling |
