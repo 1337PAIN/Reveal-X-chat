@@ -75,6 +75,7 @@ limitation rather than glossed over.
 | Login throttling: 8 per account, 50 per address, 15-minute window | `routes.py`, `_login_blocked` | `test_rate_limit.py` |
 | Only *wrong passwords* count toward the throttle | `routes.py`, `handle_login` | `test_rate_limit.py` |
 | TOTP second factor (RFC 6238) | `auth/totp.py` | `test_auth.py` |
+| Secrets collected in a masked in-app dialog, never `window.prompt()` | `chat.js`, `askSecret` | `test_secret_prompts.py`, `tests/js/secret-prompt.test.mjs` |
 | Wrong TOTP codes counted against the **account and address**, not the socket | `routes.py`, `handle_verify_totp` | `test_auth.py` |
 | Account requests capped at 5 per address per 10 minutes, checked **before** the hash | `routes.py`, `_register_rate_limited` | `test_auth.py` |
 | Firebase ID tokens verified by the Admin SDK | `auth/firebase_auth.py` | `test_auth.py` |
@@ -189,10 +190,6 @@ workers — the deployment runs a single worker because Socket.IO keeps sessions
 in process, so here that covers it. Behind a proxy it keys on whatever
 `_client_address()` resolves to, so a misconfigured proxy would put every
 visitor in one bucket. An attacker with many addresses is unaffected.
-
-**Passwords typed into `prompt()`.** Four flows — admin password reset, TOTP
-disable, passcode set and unlock — collect secrets through a browser dialog that
-shows the typed value in cleartext and cannot mask it. Known; not yet fixed.
 
 **Database at rest.** SQLite is a file with no encryption at rest. Anyone with
 filesystem access reads the hashes, the TOTP secrets and the message ciphertext.

@@ -515,6 +515,32 @@
         </div>
     </div>
 
+    <div id="secretPromptModal" class="modal hidden" role="dialog" aria-modal="true"
+         aria-labelledby="secretPromptTitle">
+        <div class="modal-content">
+            <h2 id="secretPromptTitle">Confirm</h2>
+            <p id="secretPromptBody"></p>
+
+            <div class="form-group">
+                <label for="secretPromptInput" id="secretPromptLabel">Password</label>
+                <input type="password" id="secretPromptInput" autocomplete="off"
+                       autocapitalize="none" spellcheck="false">
+            </div>
+
+            <div class="form-group hidden" id="secretPromptConfirmGroup">
+                <label for="secretPromptConfirm" id="secretPromptConfirmLabel">Confirm</label>
+                <input type="password" id="secretPromptConfirm" autocomplete="off"
+                       autocapitalize="none" spellcheck="false">
+            </div>
+
+            <div id="secretPromptError" class="auth-error" aria-live="polite"></div>
+            <div class="modal-actions">
+                <button id="secretPromptCancelBtn" class="btn btn-secondary" type="button">Cancel</button>
+                <button id="secretPromptOkBtn" class="btn btn-primary" type="button">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <div id="totpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="totpTitle">
         <div class="modal-content">
             <h2 id="totpTitle">Two-factor authentication</h2>

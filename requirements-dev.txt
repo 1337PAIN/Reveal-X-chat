@@ -1,8 +1,13 @@
 # Development/test dependencies. Install alongside requirements.txt:
 #   pip install -r requirements.txt -r requirements-dev.txt
 #   pytest
-pytest>=8.0.0
-pytest-cov>=5.0.0   # pytest --cov=app --cov-report=term-missing
+#
+# Pinned exactly for the same reason as requirements.txt: these decide
+# whether the ONNX parity test actually runs, so "it passed" has to mean a
+# known toolchain. requirements.lock covers the runtime tree only, since that
+# is what gets deployed; this file is the dev half.
+pytest==9.2.0
+pytest-cov==7.1.0   # pytest --cov=app --cov-report=term-missing
 
 # ONNX export toolchain (milestone M2).
 #
@@ -13,6 +18,12 @@ pytest-cov>=5.0.0   # pytest --cov=app --cov-report=term-missing
 # and to run tests/test_onnx_export.py, which skips itself when onnxruntime is
 # absent. The browser gets its runtime from app/static/vendor/onnxruntime/,
 # which is vendored in the repo -- no npm, no CDN, works offline.
-skl2onnx>=1.16.0
-onnx>=1.15.0
-onnxruntime>=1.17.0
+#
+# Note the version gap: this onnxruntime validates the export server-side,
+# while the browser runs the vendored onnxruntime-web 1.19.2. The export's
+# opset has to stay within what 1.19.2 supports, so bumping these without
+# also refreshing the vendored bundle is how in-browser detection breaks
+# silently.
+skl2onnx==1.20.0
+onnx==1.23.2
+onnxruntime==1.31.1

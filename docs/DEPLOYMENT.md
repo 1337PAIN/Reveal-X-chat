@@ -187,6 +187,14 @@ constraint reads as a decision rather than an oversight.
 upgrades the connection. Long-polling is the fallback, and it is the transport
 CI asserts on, because the chat has to work even where an upgrade is blocked.
 
+Every dependency is pinned exactly, and `requirements.lock` records the
+full resolved tree. Install the lock, not `requirements.txt`, to reproduce
+the environment the suite was run in:
+
+```bash
+pip install -r requirements.lock
+```
+
 ## Environment
 
 | Variable | Purpose |

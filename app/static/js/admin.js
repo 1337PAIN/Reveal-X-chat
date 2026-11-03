@@ -138,9 +138,21 @@
             }
 
             gated('Reset password', 'btn-secondary', function () {
-                const next = prompt('New password for "' + account.username + '" (at least 8 characters):');
-                if (next === null) return;
-                socket.emit('admin_reset_password', { user_id: account.id, password: next });
+                // askSecret is defined in chat.js, which loads first; the body
+                // is set with textContent, so the username cannot inject markup.
+                askSecret({
+                    title: 'Reset password',
+                    body: 'Sets a new password for "' + account.username + '". They are '
+                        + 'not notified, so pass it on out of band.',
+                    label: 'New password',
+                    confirmLabel: 'Confirm new password',
+                    okLabel: 'Reset it',
+                    validate: (value) => value.length < 8
+                        ? 'The password must be at least 8 characters.' : null,
+                }).then(function (next) {
+                    if (next === null) return;
+                    socket.emit('admin_reset_password', { user_id: account.id, password: next });
+                });
             });
 
             // Promotion is the superadmin's alone: an admin who could promote

@@ -2497,12 +2497,27 @@ if (settingsTotp) {
         }
         // Turning it off needs proof of a current code, so the server is asked
         // with one rather than trusting the click.
-        const code = prompt('Enter a current 6-digit code to turn two-factor off:');
-        if (code === null) {
-            settingsTotp.checked = true;
-            return;
-        }
-        socket.emit('totp_disable', { code: code.trim() });
+        askSecret({
+            title: 'Turn off two-factor authentication',
+            body: 'Enter a current code from your authenticator app. Without one the '
+                + 'second factor stays on, so a borrowed session cannot quietly '
+                + 'remove it.',
+            label: 'Authenticator code',
+            placeholder: '000000',
+            numeric: true,
+            maxLength: 6,
+            autocomplete: 'one-time-code',
+            okLabel: 'Turn it off',
+            danger: true,
+            validate: (value) => /^\d{6}$/.test(value.trim())
+                ? null : 'Enter the six digits shown in your app.',
+        }).then((code) => {
+            if (code === null) {
+                settingsTotp.checked = true;
+                return;
+            }
+            socket.emit('totp_disable', { code: code.trim() });
+        });
     });
 }
 
@@ -2655,21 +2670,34 @@ const passcodeToggle = document.getElementById('settingsPasscodeLock');
 if (passcodeToggle) {
     passcodeToggle.addEventListener('change', async () => {
         if (passcodeToggle.checked) {
-            const passcode = prompt('Choose a passcode for this device (4-12 characters):');
-            if (!passcode || passcode.length < 4 || passcode.length > 12) {
+            // One dialog, not two: the old flow asked again to confirm, and a
+            // mismatch threw away both entries and closed.
+            const passcode = await askSecret({
+                title: 'Set a device passcode',
+                body: 'This locks the app on this device only. It is stored as a '
+                    + 'PBKDF2-SHA256 hash in local storage and is never transmitted. '
+                    + 'It is not a second factor and it encrypts nothing.',
+                label: 'New passcode',
+                confirmLabel: 'Confirm passcode',
+                okLabel: 'Enable lock',
+                maxLength: 12,
+                validate: (value) => (value.length < 4 || value.length > 12)
+                    ? 'The passcode must be 4 to 12 characters.' : null,
+            });
+            if (passcode === null) {
                 passcodeToggle.checked = false;
-                if (passcode !== null) settingsFeedback('Passcode must be 4-12 characters', true);
-                return;
-            }
-            if (prompt('Confirm the passcode:') !== passcode) {
-                passcodeToggle.checked = false;
-                settingsFeedback('Passcodes did not match', true);
                 return;
             }
             await setPasscode(passcode);
             settingsFeedback('Passcode lock enabled for this device.');
         } else {
-            const passcode = prompt('Enter your current passcode to turn the lock off:');
+            const passcode = await askSecret({
+                title: 'Turn off the passcode lock',
+                label: 'Current passcode',
+                okLabel: 'Turn it off',
+                danger: true,
+                maxLength: 12,
+            });
             if (passcode === null) {
                 passcodeToggle.checked = true;
                 return;
@@ -2784,6 +2812,117 @@ const deleteAccountPassword = document.getElementById('deleteAccountPassword');
 const deleteAccountUsername = document.getElementById('deleteAccountUsername');
 const deleteAccountTotp = document.getElementById('deleteAccountTotp');
 const deleteAccountError = document.getElementById('deleteAccountError');
+
+// --- Masked secret prompt -------------------------------------------------
+//
+// Replaces window.prompt() everywhere a secret is collected. prompt() renders
+// the typed value in cleartext and cannot mask it, cannot validate without
+// closing first, and is drawn by the browser rather than the application.
+// Four flows used it: the administrator password reset, turning two-factor
+// off, and setting or clearing the device passcode.
+//
+// Resolves with the entered value, or null if the user cancelled. If the
+// markup is missing it resolves null rather than falling back to prompt(),
+// because silently reverting to a cleartext dialog is the one outcome this
+// function exists to prevent.
+function askSecret(options) {
+    const modal = document.getElementById('secretPromptModal');
+    if (!modal) return Promise.resolve(null);
+
+    const opts = options || {};
+    const titleEl = document.getElementById('secretPromptTitle');
+    const bodyEl = document.getElementById('secretPromptBody');
+    const labelEl = document.getElementById('secretPromptLabel');
+    const input = document.getElementById('secretPromptInput');
+    const confirmGroup = document.getElementById('secretPromptConfirmGroup');
+    const confirmLabelEl = document.getElementById('secretPromptConfirmLabel');
+    const confirmInput = document.getElementById('secretPromptConfirm');
+    const errorEl = document.getElementById('secretPromptError');
+    const okBtn = document.getElementById('secretPromptOkBtn');
+    const cancelBtn = document.getElementById('secretPromptCancelBtn');
+
+    titleEl.textContent = opts.title || 'Confirm';
+    // textContent, not innerHTML: callers interpolate a username into the body.
+    bodyEl.textContent = opts.body || '';
+    bodyEl.classList.toggle('hidden', !opts.body);
+
+    labelEl.textContent = opts.label || 'Password';
+    // A one-time code is masked nowhere else in this application, so masking
+    // it here would be inconsistent rather than safer; passwords and
+    // passcodes are masked.
+    input.type = opts.numeric ? 'text' : 'password';
+    input.inputMode = opts.numeric ? 'numeric' : '';
+    input.autocomplete = opts.autocomplete || 'off';
+    input.maxLength = opts.maxLength || 128;
+    input.placeholder = opts.placeholder || '';
+    input.value = '';
+
+    const wantsConfirm = Boolean(opts.confirmLabel);
+    confirmGroup.classList.toggle('hidden', !wantsConfirm);
+    confirmInput.type = input.type;
+    confirmInput.maxLength = input.maxLength;
+    confirmInput.value = '';
+    if (wantsConfirm) confirmLabelEl.textContent = opts.confirmLabel;
+
+    errorEl.textContent = '';
+    okBtn.textContent = opts.okLabel || 'Confirm';
+    okBtn.className = 'btn ' + (opts.danger ? 'btn-danger' : 'btn-primary');
+
+    modal.classList.remove('hidden');
+    input.focus();
+
+    return new Promise((resolve) => {
+        function cleanup() {
+            modal.classList.add('hidden');
+            // Never leave a typed secret sitting in the DOM behind a hidden
+            // modal -- the same hygiene the delete-account dialog applies.
+            input.value = '';
+            confirmInput.value = '';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('keydown', onKey);
+        }
+
+        function onOk() {
+            const value = input.value;
+            if (wantsConfirm && confirmInput.value !== value) {
+                errorEl.textContent = 'The two entries do not match.';
+                confirmInput.value = '';
+                confirmInput.focus();
+                return;
+            }
+            const problem = opts.validate ? opts.validate(value) : null;
+            if (problem) {
+                // Correct it in place. prompt() had to close and re-open,
+                // which is why the old passcode flow lost the typed value.
+                errorEl.textContent = problem;
+                input.focus();
+                return;
+            }
+            cleanup();
+            resolve(value);
+        }
+
+        function onCancel() {
+            cleanup();
+            resolve(null);
+        }
+
+        function onKey(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                onOk();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                onCancel();
+            }
+        }
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('keydown', onKey);
+    });
+}
 
 function usesLocalPassword() {
     // Password sign-ins do not carry auth_provider at all; a Firebase one
