@@ -1,5 +1,5 @@
 # Generated: the fully resolved runtime dependency tree, including
-# transitive packages. Produced on 04 Nov 2026 by installing
+# transitive packages. Produced on 05 Nov 2026 by installing
 # requirements.txt into a clean virtual environment and freezing it:
 #
 #     python -m venv .venv
@@ -68,10 +68,10 @@ python-engineio==4.15.1
 python-socketio==5.18.1
 qrcode==8.2
 requests==2.34.2
-scikit-learn==1.9.1
+scikit-learn==1.9.0
 scipy==1.18.1
 simple-websocket==1.1.0
-threadpoolctl==3.7.0
+threadpoolctl==3.8.0
 typing_extensions==4.16.0
 urllib3==2.8.0
 Werkzeug==3.1.9

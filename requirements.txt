@@ -40,10 +40,16 @@ psycopg2-binary==2.9.13
 # 42.0.5 carried seven advisories; 50.0.0 was the first release clear of all
 # of them. Re-checked with `python -m pip_audit -r requirements.txt`.
 cryptography==50.0.2
-# The shipped tamper_detector.joblib was fitted under this scikit-learn.
-# Loading a joblib model under a different minor version is a known
-# compatibility hazard, so this pin is load-bearing, not housekeeping.
-scikit-learn==1.9.1
+# The shipped tamper_detector.joblib was fitted under scikit-learn 1.9.0, and
+# this pin has to match it. Loading a joblib model under a different version
+# raises InconsistentVersionWarning and is explicitly unsupported upstream.
+#
+# 1.9.1 was tried on 4 Nov 2026 and reverted the next day: the suite still
+# passed, but every server start logged the warning for both estimators. The
+# alternative -- refitting under 1.9.1 -- would produce a different model and
+# therefore different accuracy, feature importances and confusion matrix from
+# the ones reported in the FYP report, so the artifact is what moves last.
+scikit-learn==1.9.0
 joblib==1.6.0
 
 # Sign-in: Firebase ID token verification and TOTP second factor
