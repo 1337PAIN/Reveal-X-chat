@@ -55,11 +55,27 @@ test('same-origin app assets are cached', () => {
 });
 
 test('the allowlisted CDNs are cached', () => {
+    // What is left is fonts and an icon set: a stylesheet that fails degrades
+    // the look and nothing more.
     assert.equal(get('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'), true);
-    assert.equal(get('https://cdn.jsdelivr.net/npm/dompurify@3.0.6/purify.min.js'), true);
-    assert.equal(get('https://cdn.socket.io/4.5.4/socket.io.min.js'), true);
     assert.equal(get('https://fonts.googleapis.com/css2?family=Inter'), true);
     assert.equal(get('https://fonts.gstatic.com/s/inter/v1/font.woff2'), true);
+});
+
+test('the script CDNs are no longer trusted, because nothing loads from them', () => {
+    // socket.io and DOMPurify are vendored under /static/vendor now. They were
+    // blocking scripts in the critical path, and chat.js opens with
+    // `const socket = io()` -- so a slow or blocked CDN left io undefined and
+    // the page responded to nothing until a hard refresh. An allowlisted
+    // origin that nothing requests is dead configuration that outlives the
+    // reason it existed.
+    assert.equal(get('https://cdn.socket.io/4.5.4/socket.io.min.js'), false);
+    assert.equal(get('https://cdn.jsdelivr.net/npm/dompurify@3.0.6/purify.min.js'), false);
+});
+
+test('both critical libraries are precached from our own origin', () => {
+    assert.equal(get('http://localhost:5000/static/vendor/socketio/socket.io.min.js'), true);
+    assert.equal(get('http://localhost:5000/static/vendor/dompurify/purify.min.js'), true);
 });
 
 test('Firebase and Google sign-in traffic is never touched', () => {

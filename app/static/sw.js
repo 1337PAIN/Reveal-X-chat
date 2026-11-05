@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v23-install-prompt';
+const CACHE_NAME = 'revealx-cache-v24-vendored-critical-path';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -8,6 +8,11 @@ const ASSETS_TO_CACHE = [
     '/static/css/style.css',
     '/static/css/glass.css',
     '/static/css/settings.css',
+    // The two libraries the app cannot start without. Vendored rather
+    // than loaded from a CDN, and precached so a network blip cannot stop
+    // the app from starting.
+    '/static/vendor/socketio/socket.io.min.js',
+    '/static/vendor/dompurify/purify.min.js',
     '/static/js/sanitize.js',
     '/static/js/chat.js',
     '/static/js/crypto.js',
@@ -38,7 +43,6 @@ const ASSETS_TO_CACHE = [
 const OPTIONAL_ASSETS = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-    'https://cdn.jsdelivr.net/npm/dompurify@3.0.6/purify.min.js'
 ];
 
 // Install Event
@@ -88,8 +92,6 @@ const CACHEABLE_ORIGINS = [
     'https://fonts.googleapis.com',
     'https://fonts.gstatic.com',
     'https://cdnjs.cloudflare.com',
-    'https://cdn.jsdelivr.net',
-    'https://cdn.socket.io',
 ];
 
 /**
@@ -165,10 +167,15 @@ self.addEventListener('fetch', (event) => {
                     if (cachedResponse) {
                         return cachedResponse;
                     }
-                    // If root page fails and not in cache, fallback
                     if (event.request.mode === 'navigate') {
-                        return caches.match('/');
+                        return caches.match('/').then(
+                            (page) => page || Response.error());
                     }
+                    // Never resolve undefined. respondWith(undefined) is a
+                    // TypeError, which fails the request *and* logs nothing
+                    // useful -- so a transient miss on a script became a hard
+                    // failure that looked like a broken app.
+                    return Response.error();
                 });
             })
     );

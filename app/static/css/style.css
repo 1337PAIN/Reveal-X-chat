@@ -1845,6 +1845,38 @@ body::before {
    bottom-anchored because that is where a thumb is, and because the top of
    the screen already carries the header.
 */
+/* Shown only when a script the app cannot start without failed to load.
+   Full-screen on purpose: the page behind it looks completely normal and
+   responds to nothing, so a discreet notice would be missed. */
+.startup-failure {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+    background: #0b1126;
+    color: #f4f6fb;
+}
+
+.startup-failure.hidden {
+    display: none;
+}
+
+.startup-failure strong {
+    font-size: 1.15rem;
+}
+
+.startup-failure span {
+    max-width: 34ch;
+    opacity: 0.8;
+    line-height: 1.5;
+}
+
 .pwa-banner {
     position: fixed;
     left: 16px;

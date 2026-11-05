@@ -85,7 +85,7 @@ Full numbers, the tool, and its known limits: [docs/ACCESSIBILITY.md](docs/ACCES
 - **Failures are reported.** The server had always emitted `image_error` and `message_error`; nothing on the client listened, so a refused send -- recipient offline, message too long, unsupported image type -- looked exactly like a successful one. They now surface in a banner that is also announced to screen readers.
 - Messages and shares auto-delete after 1 hour.
 - **Deletion scope depends on who is asking.** The sender owns what they sent, so their delete removes the message for *everyone* — the row and any stored Share 1 are destroyed on both sides. The recipient can only delete their own copy; the sender keeps theirs. The delete control is labelled accordingly (`Delete for everyone` vs `Delete for me`). A recipient who deletes a share also gives up their access to it.
-- XSS protection: message bodies are rendered with `textContent`, so they can never introduce markup. DOMPurify and server-side escaping cover the remaining surfaces.
+- XSS protection: message bodies are rendered with `textContent`, so they can never introduce markup. DOMPurify and server-side escaping cover the remaining surfaces. DOMPurify is **vendored locally**, not loaded from a CDN -- its CDN URL was wrong and had been 404ing, so until 6 Nov 2026 the client-side sanitiser had never actually loaded and `cleanHTML()` had been failing closed to full escaping the whole time.
 - Password hashing with Argon2id when available, otherwise Werkzeug secure hashing.
 - PWA manifest and service worker support.
 

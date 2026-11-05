@@ -146,6 +146,16 @@ localises damage and survives a re-encode. Either alone would be weaker.
 - Socket.IO origins default to same-origin only.
 - All interpolated text goes through `escapeHtml`, which fails **closed** when
   DOMPurify is unavailable (`sanitize.js`, `tests/js/sanitize.test.mjs`).
+- **Nothing the app cannot start without is loaded from another origin.**
+  socket.io and DOMPurify are vendored under `app/static/vendor/`. Both used
+  to be blocking CDN scripts, and `chat.js` opens with `const socket = io()`
+  with no fallback: a slow or blocked CDN left `io` undefined, threw at the
+  top of the file, and left a page that rendered and responded to nothing.
+  The DOMPurify URL was additionally wrong and had been returning 404 since
+  it was written, so the client-side sanitiser was never once loaded in
+  production; `cleanHTML()` fails closed, which is why nothing looked broken.
+  `tests/test_startup_path.py` fails the build if a third-party script
+  reappears in any template.
 
 ### Data lifetime
 

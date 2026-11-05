@@ -1,6 +1,35 @@
 // Reveal-X Chat Application - Client Side
 // [MODIFIED] Fully refactored under modular organization with modern feature sets
 
+// socket.io is vendored under app/static/vendor/socketio rather than loaded
+// from cdn.socket.io, for the same reason onnxruntime-web is: a blocking
+// third-party script in the critical path is a single point of failure the
+// deployment does not control.
+//
+// It was a CDN script, and this line had no fallback. A slow, blocked or
+// failed CDN left `io` undefined, threw here at the top of the file, and
+// stopped every handler below from ever binding -- so the page rendered
+// normally and then responded to nothing at all, with no error shown. The
+// only way out was a hard refresh, which bypasses the cache and the service
+// worker and fetches the script cleanly.
+//
+// Vendoring removes the dependency. This guard makes whatever is left of that
+// failure visible instead of silent.
+if (typeof io === 'undefined') {
+    const reveal = () => {
+        const banner = document.getElementById('startupFailure');
+        if (banner) banner.classList.remove('hidden');
+        const reload = document.getElementById('startupFailureReload');
+        if (reload) reload.addEventListener('click', () => window.location.reload());
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', reveal);
+    } else {
+        reveal();
+    }
+    throw new Error('socket.io did not load; Reveal-X cannot start');
+}
+
 const socket = io();
 
 // State Container
