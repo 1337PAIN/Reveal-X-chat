@@ -1901,6 +1901,10 @@ body::before {
     min-height: 44px;
     padding: 0 16px;
     font-size: 0.88rem;
+    /* "Not now" is two words and wrapped at 375px, which pushed the install
+       prompt to 154px -- a fifth of an iPhone screen for a dismissible
+       offer. Same rule, and same reason, as the header buttons. */
+    white-space: nowrap;
 }
 
 @media (min-width: 640px) {

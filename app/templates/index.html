@@ -605,6 +605,21 @@
         </div>
     </div>
 
+    <!-- Offered on its own, because the header Install button is easy to miss.
+         Dismissing it is remembered under its own key, so "Not now" silences
+         the prompt without taking the header button away as well. -->
+    <div id="installBanner" class="pwa-banner hidden" role="dialog"
+         aria-label="Install Reveal-X">
+        <div class="pwa-banner-text">
+            <strong>Install Reveal-X</strong>
+            <span>Add it to this device for offline access and its own window.</span>
+        </div>
+        <div class="pwa-banner-actions">
+            <button id="installBannerAcceptBtn" class="btn btn-primary" type="button">Install</button>
+            <button id="installBannerDismissBtn" class="btn btn-secondary" type="button">Not now</button>
+        </div>
+    </div>
+
     <!-- iOS exposes no install API, so the manual route has to be spelled out. -->
     <div id="iosInstallHint" class="pwa-banner hidden" role="dialog" aria-label="Install on iPhone or iPad">
         <div class="pwa-banner-text">

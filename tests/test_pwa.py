@@ -228,6 +228,11 @@ def test_the_worker_activates_early_only_when_asked(service_worker):
     assert 'self.skipWaiting()' in service_worker
 
 
+def _pwa_source():
+    with open('app/static/js/pwa.js', encoding='utf-8') as handle:
+        return handle.read()
+
+
 def test_pwa_script_is_served_and_precached(client, service_worker):
     assert '/static/js/pwa.js' in service_worker
     response = client.get('/static/js/pwa.js')
@@ -238,6 +243,9 @@ def test_pwa_script_is_served_and_precached(client, service_worker):
 @pytest.mark.parametrize('element_id', [
     'installAppBtn',        # Android/Chrome install entry point
     'iosInstallHint',       # iOS has no install API, so it needs instructions
+    'installBanner',        # the prompt that offers the install unasked
+    'installBannerAcceptBtn',
+    'installBannerDismissBtn',
     'updateBanner',
     'updateAcceptBtn',
     'updateDismissBtn',
@@ -247,6 +255,56 @@ def test_the_page_carries_the_controls_pwa_js_binds_to(client, element_id):
     or deleted element removes the feature without any error."""
     page = client.get('/').get_data(as_text=True)
     assert f'id="{element_id}"' in page
+
+
+def test_the_install_prompt_starts_hidden(client):
+    """It is revealed by script once the browser says the app is installable.
+    Shipped visible it would flash on every load, including for people who
+    have already installed."""
+    page = client.get('/').get_data(as_text=True)
+    block = page[page.index('id="installBanner"'):]
+    opening = block[:block.index('>')]
+    assert 'hidden' in opening, 'the install prompt is not hidden in the markup'
+
+
+def test_the_install_prompt_is_not_offered_to_people_who_cannot_use_it():
+    """Shown in a standalone window it would offer to install an app that is
+    already installed."""
+    source = _pwa_source()
+    offer = source[source.index('function offerInstall()'):]
+    offer = offer[:offer.index('function hideInstallBanner()')]
+    for guard in ('isStandalone()', 'dismissed()', 'promptDismissed()'):
+        assert guard in offer, f'offerInstall does not check {guard}'
+
+
+def test_the_two_banners_cannot_stack():
+    """Both are fixed to the same corner, so showing both puts one on top of
+    the other."""
+    source = _pwa_source()
+    offer = source[source.index('function offerInstall()'):]
+    offer = offer[:offer.index('function hideInstallBanner()')]
+    assert 'updateBannerShowing()' in offer
+
+
+def test_dismissing_the_prompt_does_not_remove_the_install_button():
+    """Turning down a prompt means stop asking, not remove the feature. The
+    prompt therefore records its dismissal under its own key: reusing
+    DISMISS_KEY would suppress the header button on the next visit too."""
+    source = _pwa_source()
+    assert "BANNER_KEY = 'revealx-install-prompt-dismissed'" in source
+    handler = source[source.index('if (installDismissBtn)'):]
+    handler = handler[:handler.index('\n    }')]
+    assert 'rememberPrompt()' in handler
+    assert 'remember()' not in handler.replace('rememberPrompt()', '')
+    assert 'hideInstallButton()' not in handler
+
+
+def test_both_install_entry_points_run_the_same_code():
+    """A second entry point that reimplements the flow is a second thing to
+    get wrong."""
+    source = _pwa_source()
+    assert "installBtn.addEventListener('click', startInstall)" in source
+    assert "installAcceptBtn.addEventListener('click', startInstall)" in source
 
 
 def test_ios_install_route_is_spelled_out(client):

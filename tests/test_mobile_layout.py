@@ -180,6 +180,18 @@ def test_header_button_labels_stay_on_one_line(css):
     )
 
 
+def test_banner_button_labels_stay_on_one_line(css):
+    """"Not now" wrapped to two lines at 375px, which made the install prompt
+    154px tall. The prompt is an offer, not the content; it should not take a
+    fifth of the screen to decline."""
+    body = rule_body(css, '.pwa-banner-actions .btn')
+    assert body, 'the banner button rule is gone'
+    assert declares(body, 'white-space', 'nowrap'), (
+        'banner button labels can wrap again, which costs the prompt a whole '
+        'extra row of height on a phone'
+    )
+
+
 def test_logo_yields_space_before_the_buttons_do(css):
     """Flexbox has no priority order, so the shrink factors are the order:
     the wordmark goes first, the button row only once the logo is down to its

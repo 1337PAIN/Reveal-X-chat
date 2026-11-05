@@ -30,22 +30,31 @@
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
     const DISMISS_KEY = 'revealx-install-dismissed';
+    // The prompt gets its own key. Turning down a prompt means "stop asking",
+    // not "remove the feature", so dismissing it must not also hide the
+    // header button the way DISMISS_KEY does.
+    const BANNER_KEY = 'revealx-install-prompt-dismissed';
 
-    function dismissed() {
+    function readFlag(key) {
         try {
-            return localStorage.getItem(DISMISS_KEY) === '1';
+            return localStorage.getItem(key) === '1';
         } catch (err) {
             return false;   // private mode: offer it, rather than never
         }
     }
 
-    function remember() {
+    function writeFlag(key) {
         try {
-            localStorage.setItem(DISMISS_KEY, '1');
+            localStorage.setItem(key, '1');
         } catch (err) {
-            /* storage blocked: the button simply reappears next visit */
+            /* storage blocked: the offer simply reappears next visit */
         }
     }
+
+    const dismissed = () => readFlag(DISMISS_KEY);
+    const remember = () => writeFlag(DISMISS_KEY);
+    const promptDismissed = () => readFlag(BANNER_KEY);
+    const rememberPrompt = () => writeFlag(BANNER_KEY);
 
     // ----------------------------------------------------------------- install
 
@@ -62,16 +71,72 @@
         if (installBtn) installBtn.classList.add('hidden');
     }
 
+    const installBanner = document.getElementById('installBanner');
+    const installAcceptBtn = document.getElementById('installBannerAcceptBtn');
+    const installDismissBtn = document.getElementById('installBannerDismissBtn');
+
+    // Both banners are fixed to the same corner, so showing two stacks them
+    // one on top of the other. The update banner wins: running stale code is
+    // a worse problem than not having installed yet.
+    function updateBannerShowing() {
+        const banner = document.getElementById('updateBanner');
+        return Boolean(banner) && !banner.classList.contains('hidden');
+    }
+
+    // Long enough that it does not land on top of the page settling, short
+    // enough to still be connected to opening the app.
+    const OFFER_DELAY_MS = 2500;
+
+    function offerInstall() {
+        if (!installBanner) return;
+        if (isStandalone() || dismissed() || promptDismissed()) return;
+        if (updateBannerShowing()) return;
+        installBanner.classList.remove('hidden');
+        if (window.announceToScreenReader) {
+            window.announceToScreenReader('Reveal-X can be installed on this device.');
+        }
+    }
+
+    function hideInstallBanner() {
+        if (installBanner) installBanner.classList.add('hidden');
+    }
+
+    // Shared by the header button and the prompt, so the two cannot drift.
+    async function startInstall() {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            let outcome = 'dismissed';
+            try {
+                ({ outcome } = await deferredPrompt.userChoice);
+            } catch (err) {
+                /* the prompt was closed without an answer */
+            }
+            deferredPrompt = null;
+            hideInstallButton();
+            hideInstallBanner();
+            if (outcome !== 'accepted') remember();
+            return;
+        }
+        // iOS, or a browser that never fired the event: explain the manual
+        // route rather than doing nothing on click.
+        hideInstallBanner();
+        if (iosHint) iosHint.classList.toggle('hidden');
+    }
+
     window.addEventListener('beforeinstallprompt', (event) => {
         // Chrome shows its own mini-infobar unless this is called.
         event.preventDefault();
         deferredPrompt = event;
-        if (!isStandalone() && !dismissed()) showInstallButton();
+        if (!isStandalone() && !dismissed()) {
+            showInstallButton();
+            window.setTimeout(offerInstall, OFFER_DELAY_MS);
+        }
     });
 
     window.addEventListener('appinstalled', () => {
         deferredPrompt = null;
         hideInstallButton();
+        hideInstallBanner();
         if (iosHint) iosHint.classList.add('hidden');
         if (window.announceToScreenReader) {
             window.announceToScreenReader('Reveal-X was installed.');
@@ -79,23 +144,19 @@
     });
 
     if (installBtn) {
-        installBtn.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                let outcome = 'dismissed';
-                try {
-                    ({ outcome } = await deferredPrompt.userChoice);
-                } catch (err) {
-                    /* the prompt was closed without an answer */
-                }
-                deferredPrompt = null;
-                hideInstallButton();
-                if (outcome !== 'accepted') remember();
-                return;
-            }
-            // iOS, or a browser that never fired the event: explain the manual
-            // route rather than doing nothing on click.
-            if (iosHint) iosHint.classList.toggle('hidden');
+        installBtn.addEventListener('click', startInstall);
+    }
+
+    if (installAcceptBtn) {
+        installAcceptBtn.addEventListener('click', startInstall);
+    }
+
+    if (installDismissBtn) {
+        installDismissBtn.addEventListener('click', () => {
+            hideInstallBanner();
+            // Only the prompt is silenced. The header button stays, so the
+            // app is still installable for anyone who changes their mind.
+            rememberPrompt();
         });
     }
 
@@ -109,7 +170,10 @@
 
     // iOS never fires beforeinstallprompt, so the button has to be offered on
     // the strength of the platform check alone.
-    if (isIOS() && !isStandalone() && !dismissed()) showInstallButton();
+    if (isIOS() && !isStandalone() && !dismissed()) {
+        showInstallButton();
+        window.setTimeout(offerInstall, OFFER_DELAY_MS);
+    }
 
     // ------------------------------------------------------------------ update
 

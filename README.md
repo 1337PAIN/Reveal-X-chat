@@ -478,7 +478,7 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 416 server tests
+pytest                          # 425 server tests
 node --test "tests/js/*.test.mjs"   # 69 browser tests
 ```
 
@@ -488,7 +488,7 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**416 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+**425 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access, deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
 
 **69 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
