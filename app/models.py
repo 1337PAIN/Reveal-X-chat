@@ -190,6 +190,31 @@ class ChatRoom:
                 )
             """)
 
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS groups (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    created_by TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    only_admins_post BOOLEAN NOT NULL DEFAULT FALSE,
+                    only_admins_edit_info BOOLEAN NOT NULL DEFAULT TRUE
+                )
+            """)
+            # No foreign keys, for the same reason the rest of the schema has
+            # none: SQLite does not enforce them unless asked per connection,
+            # so relying on them here would be a guarantee only on Postgres.
+            # purge_user() does the cleanup explicitly instead.
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS group_members (
+                    group_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'member',
+                    joined_at TEXT NOT NULL,
+                    PRIMARY KEY (group_id, user_id)
+                )
+            """)
+
             # Backfill columns for databases created by earlier versions.
             message_columns = self._existing_columns(db, 'messages')
             user_columns = self._existing_columns(db, 'users')
@@ -198,6 +223,12 @@ class ChatRoom:
                 ('read_at', "ALTER TABLE messages ADD COLUMN read_at TEXT"),
                 ('share1_accessed', "ALTER TABLE messages ADD COLUMN share1_accessed BOOLEAN DEFAULT FALSE"),
                 ('deleted_by', "ALTER TABLE messages ADD COLUMN deleted_by TEXT NOT NULL DEFAULT '[]'"),
+                # A group message is stored as one row per member, so every
+                # existing read filter, the expiry sweep, per-recipient read
+                # receipts and the deletion scope all keep working unchanged.
+                # group_message_id ties the fan-out back together for the UI.
+                ('group_id', "ALTER TABLE messages ADD COLUMN group_id TEXT"),
+                ('group_message_id', "ALTER TABLE messages ADD COLUMN group_message_id TEXT"),
             ):
                 if column not in message_columns:
                     db.execute(ddl)
@@ -227,6 +258,8 @@ class ChatRoom:
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages(sender_id, recipient_id)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at)")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id, created_at)")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)")
 
             self._purge_stored_share2(db)
 
@@ -1098,6 +1131,407 @@ class ChatRoom:
                        (self._hash_password(new_password), user_id))
         return True, None
 
+
+    # ------------------------------------------------------------------
+    # Groups
+    #
+    # A group message is fanned out: one row per member, each carrying that
+    # member's own ciphertext. Reveal-X encrypts pairwise -- ECDH between two
+    # people -- so a group message is encrypted once per recipient rather than
+    # with a shared group key. That costs N rows and N encryptions per message,
+    # and in exchange it needs no new protocol and keeps the property that the
+    # server stores ciphertext it cannot read.
+    #
+    # It also makes removal clean: a removed member simply stops being a
+    # recipient, so they receive no further rows. Nothing has to be revoked.
+    # ------------------------------------------------------------------
+
+    GROUP_ROLE_RANK = {'member': 0, 'admin': 1, 'owner': 2}
+    VALID_GROUP_ROLES = tuple(GROUP_ROLE_RANK)
+    MAX_GROUP_NAME = 60
+    MAX_GROUP_DESCRIPTION = 200
+    MAX_GROUP_MEMBERS = 50
+
+    def group_role_rank(self, role):
+        return self.GROUP_ROLE_RANK.get(role or 'member', 0)
+
+    def _row_to_group(self, row, role=None, member_count=None):
+        return {
+            'id': row['id'],
+            'name': row['name'],
+            'description': row['description'] or '',
+            'created_by': row['created_by'],
+            'created_at': row['created_at'],
+            'only_admins_post': bool(row['only_admins_post']),
+            'only_admins_edit_info': bool(row['only_admins_edit_info']),
+            'role': role,
+            'member_count': member_count,
+            'is_group': True,
+        }
+
+    def create_group(self, creator_id, name, description='', member_ids=()):
+        name = (name or '').strip()
+        if not name:
+            return None, 'A group needs a name'
+        if len(name) > self.MAX_GROUP_NAME:
+            return None, f'Name must be {self.MAX_GROUP_NAME} characters or fewer'
+        description = (description or '').strip()[:self.MAX_GROUP_DESCRIPTION]
+        if not self.get_user(creator_id):
+            return None, 'No such account'
+
+        # Deduplicate, drop the creator (added below as owner) and drop any id
+        # that is not a real account, so a crafted list cannot seed membership
+        # rows pointing at nothing.
+        wanted = []
+        for user_id in member_ids or ():
+            if user_id and user_id != creator_id and user_id not in wanted:
+                if self.get_user(user_id):
+                    wanted.append(user_id)
+        if len(wanted) + 1 > self.MAX_GROUP_MEMBERS:
+            return None, f'A group holds at most {self.MAX_GROUP_MEMBERS} members'
+
+        now = datetime.utcnow().isoformat()
+        group_id = secrets.token_urlsafe(12)
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO groups (id, name, description, created_by, created_at,"
+                " only_admins_post, only_admins_edit_info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (group_id, name, description, creator_id, now, False, True),
+            )
+            db.execute(
+                "INSERT INTO group_members (group_id, user_id, role, joined_at)"
+                " VALUES (?, ?, ?, ?)",
+                (group_id, creator_id, 'owner', now),
+            )
+            for user_id in wanted:
+                db.execute(
+                    "INSERT INTO group_members (group_id, user_id, role, joined_at)"
+                    " VALUES (?, ?, ?, ?)",
+                    (group_id, user_id, 'member', now),
+                )
+        return self.get_group(group_id, creator_id), None
+
+    def get_group(self, group_id, viewer_id=None):
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
+            if not row:
+                return None
+            count = db.execute(
+                "SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?", (group_id,)
+            ).fetchone()['n']
+        return self._row_to_group(row, role=self.group_role(group_id, viewer_id) if viewer_id else None,
+                                  member_count=int(count))
+
+    def group_role(self, group_id, user_id):
+        if not group_id or not user_id:
+            return None
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT role FROM group_members WHERE group_id = ? AND user_id = ?",
+                (group_id, user_id),
+            ).fetchone()
+        return row['role'] if row else None
+
+    def is_group_member(self, group_id, user_id):
+        return self.group_role(group_id, user_id) is not None
+
+    def get_group_members(self, group_id):
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT group_members.user_id, group_members.role, group_members.joined_at,"
+                "       users.username, users.profile_image, users.status"
+                "  FROM group_members"
+                "  JOIN users ON users.id = group_members.user_id"
+                " WHERE group_members.group_id = ?"
+                " ORDER BY group_members.joined_at ASC",
+                (group_id,),
+            ).fetchall()
+        return [
+            {
+                'id': r['user_id'],
+                'username': r['username'],
+                'role': r['role'],
+                'joined_at': r['joined_at'],
+                'profile_image': r['profile_image'],
+                'status': r['status'],
+            }
+            for r in rows
+        ]
+
+    def get_group_member_ids(self, group_id):
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT user_id FROM group_members WHERE group_id = ?", (group_id,)
+            ).fetchall()
+        return [r['user_id'] for r in rows]
+
+    def get_groups_for_user(self, user_id):
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT groups.*, group_members.role AS viewer_role,"
+                "       (SELECT COUNT(*) FROM group_members m WHERE m.group_id = groups.id) AS n"
+                "  FROM groups"
+                "  JOIN group_members ON group_members.group_id = groups.id"
+                " WHERE group_members.user_id = ?"
+                " ORDER BY groups.created_at DESC",
+                (user_id,),
+            ).fetchall()
+        return [self._row_to_group(r, role=r['viewer_role'], member_count=int(r['n'])) for r in rows]
+
+    def can_manage_in_group(self, group_id, actor_id, target_id):
+        """May `actor` act on `target` inside this group?
+
+        The same rule as the server-wide one in can_manage: strictly greater
+        rank, never on yourself. An admin therefore cannot remove or demote
+        another admin, and nobody can touch the owner.
+        """
+        if not actor_id or not target_id or actor_id == target_id:
+            return False
+        actor = self.group_role(group_id, actor_id)
+        target = self.group_role(group_id, target_id)
+        if actor is None or target is None:
+            return False
+        return self.group_role_rank(actor) > self.group_role_rank(target)
+
+    def may_post_to_group(self, group_id, user_id):
+        role = self.group_role(group_id, user_id)
+        if role is None:
+            return False
+        group = self.get_group(group_id)
+        if group and group['only_admins_post']:
+            return self.group_role_rank(role) >= 1
+        return True
+
+    def may_edit_group_info(self, group_id, user_id):
+        role = self.group_role(group_id, user_id)
+        if role is None:
+            return False
+        group = self.get_group(group_id)
+        if group and group['only_admins_edit_info']:
+            return self.group_role_rank(role) >= 1
+        return True
+
+    def add_group_members(self, group_id, user_ids):
+        added = []
+        now = datetime.utcnow().isoformat()
+        existing = set(self.get_group_member_ids(group_id))
+        if len(existing) >= self.MAX_GROUP_MEMBERS:
+            return [], f'A group holds at most {self.MAX_GROUP_MEMBERS} members'
+        with self._connect() as db:
+            for user_id in user_ids or ():
+                if user_id in existing or not self.get_user(user_id):
+                    continue
+                if len(existing) + len(added) >= self.MAX_GROUP_MEMBERS:
+                    break
+                db.execute(
+                    "INSERT INTO group_members (group_id, user_id, role, joined_at)"
+                    " VALUES (?, ?, ?, ?)",
+                    (group_id, user_id, 'member', now),
+                )
+                added.append(user_id)
+        return added, None
+
+    def remove_group_member(self, group_id, user_id):
+        with self._connect() as db:
+            db.execute(
+                "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
+                (group_id, user_id),
+            )
+        return True
+
+    def set_group_role(self, group_id, user_id, role):
+        """Promote to admin or demote to member.
+
+        'owner' is not assignable here. There is exactly one owner and it moves
+        only through transfer_group_ownership, for the same reason the
+        superadmin rank is not assignable through set_role.
+        """
+        if role not in ('member', 'admin'):
+            return False, 'Role must be member or admin'
+        if self.group_role(group_id, user_id) == 'owner':
+            return False, 'The group owner cannot be demoted'
+        if not self.is_group_member(group_id, user_id):
+            return False, 'That account is not in this group'
+        with self._connect() as db:
+            db.execute(
+                "UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?",
+                (role, group_id, user_id),
+            )
+        return True, None
+
+    def transfer_group_ownership(self, group_id, new_owner_id):
+        if not self.is_group_member(group_id, new_owner_id):
+            return False
+        with self._connect() as db:
+            db.execute(
+                "UPDATE group_members SET role = 'member' WHERE group_id = ? AND role = 'owner'",
+                (group_id,),
+            )
+            db.execute(
+                "UPDATE group_members SET role = 'owner' WHERE group_id = ? AND user_id = ?",
+                (group_id, new_owner_id),
+            )
+        return True
+
+    def update_group_info(self, group_id, name=None, description=None):
+        fields, params = [], []
+        if name is not None:
+            name = name.strip()
+            if not name:
+                return False, 'A group needs a name'
+            if len(name) > self.MAX_GROUP_NAME:
+                return False, f'Name must be {self.MAX_GROUP_NAME} characters or fewer'
+            fields.append("name = ?")
+            params.append(name)
+        if description is not None:
+            fields.append("description = ?")
+            params.append(description.strip()[:self.MAX_GROUP_DESCRIPTION])
+        if not fields:
+            return False, 'Nothing to change'
+        params.append(group_id)
+        with self._connect() as db:
+            db.execute(f"UPDATE groups SET {', '.join(fields)} WHERE id = ?", tuple(params))
+        return True, None
+
+    def update_group_settings(self, group_id, only_admins_post=None, only_admins_edit_info=None):
+        fields, params = [], []
+        if only_admins_post is not None:
+            fields.append("only_admins_post = ?")
+            params.append(bool(only_admins_post))
+        if only_admins_edit_info is not None:
+            fields.append("only_admins_edit_info = ?")
+            params.append(bool(only_admins_edit_info))
+        if not fields:
+            return False, 'Nothing to change'
+        params.append(group_id)
+        with self._connect() as db:
+            db.execute(f"UPDATE groups SET {', '.join(fields)} WHERE id = ?", tuple(params))
+        return True, None
+
+    def leave_group(self, group_id, user_id):
+        """Returns (deleted_group, new_owner_id).
+
+        An owner who leaves hands the group to the longest-serving admin, or
+        failing that the longest-serving member. A group whose last member
+        leaves is deleted rather than left ownerless and unreachable.
+        """
+        role = self.group_role(group_id, user_id)
+        if role is None:
+            return False, None
+        members = [m for m in self.get_group_members(group_id) if m['id'] != user_id]
+        if not members:
+            self.delete_group(group_id)
+            return True, None
+        new_owner = None
+        if role == 'owner':
+            admins = [m for m in members if m['role'] == 'admin']
+            new_owner = (admins or members)[0]['id']
+        self.remove_group_member(group_id, user_id)
+        if new_owner:
+            self.transfer_group_ownership(group_id, new_owner)
+        return False, new_owner
+
+    def delete_group(self, group_id):
+        with self._connect() as db:
+            db.execute("DELETE FROM group_members WHERE group_id = ?", (group_id,))
+            db.execute("DELETE FROM messages WHERE group_id = ?", (group_id,))
+            db.execute("DELETE FROM groups WHERE id = ?", (group_id,))
+        return True
+
+    def add_group_message(self, sender_id, group_id, msg_type, payloads, extra=None):
+        """Fan a message out, one row per member.
+
+        `payloads` maps a member id to {'content': ..., 'iv': ...}. Each
+        member's copy is encrypted under that member's own pairwise key, so
+        each carries its own IV. Only current members are written: an id that
+        is not in the group is dropped rather than trusted, so a crafted
+        payload map cannot deliver to outsiders.
+        """
+        self.cleanup_old_messages()
+        sender = self.get_user(sender_id)
+        group = self.get_group(group_id)
+        if not sender or not group:
+            return None
+        # Images are one-to-one only. The visual cryptography split delivers
+        # Share 2 live to a single recipient and never stores it, which cannot
+        # be satisfied for a group where members are offline.
+        if msg_type not in ('text', 'voice'):
+            return None
+
+        members = set(self.get_group_member_ids(group_id))
+        if sender_id not in members:
+            return None
+
+        created_at = datetime.utcnow().isoformat()
+        expires_at = (datetime.fromisoformat(created_at)
+                      + timedelta(hours=MESSAGE_TTL_HOURS)).isoformat()
+        extra = {k: v for k, v in (extra or {}).items() if k not in FORBIDDEN_EXTRA_KEYS}
+        group_message_id = secrets.token_urlsafe(12)
+        extra = dict(extra)
+        extra['group_message_id'] = group_message_id
+
+        written = []
+        with self._connect() as db:
+            for member_id in sorted(members):
+                payload = (payloads or {}).get(member_id)
+                if payload is None:
+                    # No ciphertext for this member: skip rather than store a
+                    # placeholder they could never decrypt.
+                    continue
+                if isinstance(payload, dict):
+                    content = payload.get('content')
+                    row_extra = dict(extra)
+                    if payload.get('iv'):
+                        row_extra['iv'] = payload['iv']
+                else:
+                    content, row_extra = payload, dict(extra)
+                if not content:
+                    continue
+                row_id = secrets.token_urlsafe(12)
+                db.execute(
+                    "INSERT INTO messages (id, sender_id, recipient_id, type, content, extra,"
+                    " read_at, created_at, expires_at, share1_accessed, group_id, group_message_id)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (row_id, sender_id, member_id, msg_type, content, json.dumps(row_extra),
+                     None, created_at, expires_at, False, group_id, group_message_id),
+                )
+                written.append((member_id, row_id))
+        if not written:
+            return None
+        return {
+            'group_id': group_id,
+            'group_message_id': group_message_id,
+            'sender_id': sender_id,
+            'username': sender['username'],
+            'type': msg_type,
+            'created_at': created_at,
+            'expires_at': expires_at,
+            'rows': dict(written),
+        }
+
+    def get_group_conversation(self, group_id, user_id):
+        """The rows addressed to this user in this group."""
+        if not self.is_group_member(group_id, user_id):
+            return []
+        self.cleanup_old_messages()
+        with self._connect() as db:
+            rows = db.execute(self._JOINED_SELECT + """
+                WHERE messages.group_id = ? AND messages.recipient_id = ?
+                ORDER BY messages.created_at ASC
+            """, (group_id, user_id)).fetchall()
+        out = []
+        for row in rows:
+            if user_id in _load_deleted_by(row):
+                continue
+            message = self._row_to_message(row)
+            message['group_id'] = group_id
+            message['group_message_id'] = message['extra'].get('group_message_id')
+            out.append(message)
+        return out
+
+    def get_system_message_recipients(self, group_id):
+        return self.get_group_member_ids(group_id)
+
     def purge_user(self, user_id):
         """Delete an account and everything belonging to it.
 
@@ -1106,7 +1540,13 @@ class ChatRoom:
         clean up.
         """
         self.delete_user_messages(user_id)
+        # Hand on or dissolve any group this account owns before the row goes,
+        # or the group is left with an owner that does not exist and nobody
+        # able to manage it.
+        for group in self.get_groups_for_user(user_id):
+            self.leave_group(group['id'], user_id)
         with self._connect() as db:
+            db.execute("DELETE FROM group_members WHERE user_id = ?", (user_id,))
             db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         return True, None
 

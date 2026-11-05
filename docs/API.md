@@ -1,6 +1,6 @@
 # API reference
 
-Everything the server exposes: 9 HTTP routes and 32 Socket.IO events, with the
+Everything the server exposes: 9 HTTP routes and 42 Socket.IO events, with the
 fields each one actually reads. Extracted from `app/routes.py`, not written from
 memory.
 
@@ -163,6 +163,46 @@ without being restarted with `REVEALX_ADMIN_USER` set.
 Like `admin_delete_account` it purges messages and stored shares, writes an
 audit line, and signs out every session the account holds — not just the one
 that asked.
+
+### Groups
+
+| Event | In | Out |
+| --- | --- | --- |
+| `group_create` | `name`, `description`, `member_ids` | `group_created`, `group_updated` to each member |
+| `group_list` | — | `group_list` |
+| `group_open` | `group_id` | `group_opened` with the group, its members and this caller's copy of the transcript |
+| `group_send` | `group_id`, `payloads` (member id → `{content, iv}`), `encrypted`, `reply_to` | `new_group_message` to each member |
+| `group_add_members` | `group_id`, `user_ids` | `group_ok`, `group_notice`, `group_updated` |
+| `group_remove_member` | `group_id`, `user_id` | `group_ok`, `group_removed` to the target |
+| `group_set_role` | `group_id`, `user_id`, `role` (`member` or `admin`) | `group_ok`, `group_updated` |
+| `group_update_info` | `group_id`, `name`, `description` | `group_ok`, `group_updated` |
+| `group_update_settings` | `group_id`, `only_admins_post`, `only_admins_edit_info` | `group_ok`, `group_updated` |
+| `group_leave` | `group_id` | `group_ok`, `group_removed` to the caller |
+
+**Ranks are per group and separate from the server's.** A group has one
+`owner`, any number of `admin`s and the rest `member`s, and the rule is the
+same as the server-wide one: an account may act only on one *strictly below*
+its own rank, and never on itself. So an admin cannot remove or demote a peer
+admin or the owner, and the owner cannot be demoted at all. Being a server
+administrator confers nothing inside a group you are not a member of.
+
+**A group message is fanned out, one row per member.** Reveal-X encrypts
+pairwise — ECDH between two people — so there is no group key. The sender
+encrypts one copy per member under that member's own key and sends them all in
+`payloads`; the server writes a row per *current* member and silently drops any
+id that is not one, so a crafted payload map cannot deliver to an outsider.
+Removal therefore needs no revocation: a removed member simply stops being a
+recipient.
+
+**Images are refused in groups.** `send_image` is one-to-one only. The visual
+cryptography split delivers Share 2 live to a single recipient and never
+stores it, which cannot be satisfied for a group whose members are offline.
+
+**Membership notices are live only.** `group_notice` announces joins, removals
+and role changes to whoever is connected; it is deliberately not stored,
+because the message table otherwise holds only ciphertext the server cannot
+read, and writing "X removed Y" into it in plaintext would put group metadata
+in the one place this project keeps unreadable.
 
 ### Administration
 
