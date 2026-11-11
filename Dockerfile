@@ -26,8 +26,14 @@ WORKDIR /app
 # Requirements first: this layer only rebuilds when the pins change, not on
 # every source edit. requirements-dev is deliberately absent -- production must
 # stand up without the test and ONNX-export toolchain.
-COPY requirements.txt ./
-RUN pip install --upgrade pip && pip install -r requirements.txt
+#
+# The *lock* is what gets installed, not requirements.txt. requirements.txt
+# pins the direct dependencies; the lock pins their transitive ones too, so
+# the image is the tree the suite actually ran against rather than whatever
+# pip resolves on the day the image is built. requirements.txt is copied for
+# reference only.
+COPY requirements.txt requirements.lock ./
+RUN pip install --upgrade pip && pip install -r requirements.lock
 
 COPY . .
 

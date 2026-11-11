@@ -44,7 +44,7 @@ jobs:
       - name: Install from the pinned requirements
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -r requirements.lock -r requirements-dev.txt
 
       - name: Show what actually got installed
         # When a transitive pin drifts, this is the first place to look.
@@ -75,7 +75,7 @@ jobs:
         # Needed to regenerate the parity fixture from the server's own detector.
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
 
       - name: The feature-parity fixture is current
         # The browser/server parity test compares against recorded server output.
@@ -181,10 +181,11 @@ jobs:
 
       - name: Install runtime dependencies only
         # Deliberately not requirements-dev: production must stand up without
-        # the test and ONNX-export toolchain.
+        # the test and ONNX-export toolchain. From the lock, so this boots
+        # the same tree the image ships rather than a fresh resolution.
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock
 
       - name: Boot the server exactly as the Procfile does
         run: |
