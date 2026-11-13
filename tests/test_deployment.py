@@ -254,7 +254,8 @@ def test_the_redirect_happens_before_the_request_is_handled(client, https_env, m
     from app import routes
     https_env(trust='true', force='true')
     called = []
-    monkeypatch.setattr(routes, '_lab_rate_limited', lambda address: called.append(1) or 0)
+    from app.handlers import http as http_handlers
+    monkeypatch.setattr(http_handlers, '_lab_rate_limited', lambda address: called.append(1) or 0)
     response = client.post('/api/lab/features', json={}, headers={'X-Forwarded-Proto': 'http'})
     assert response.status_code in (301, 308)
     assert not called, 'the handler ran before the redirect'

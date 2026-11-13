@@ -39,7 +39,8 @@ class Clock:
 @pytest.fixture
 def clock(monkeypatch):
     c = Clock()
-    monkeypatch.setattr(routes, '_send_clock', c)
+    from app.handlers import common
+    monkeypatch.setattr(common, '_send_clock', c)
     return c
 
 
@@ -113,8 +114,9 @@ def test_images_are_refused_before_any_work_is_done(pair, store, clock, monkeypa
     a, b, alice, bob = pair
     burst = routes.SEND_LIMITS['image'][0]
     decoded = []
-    real = routes._validate_share1_png
-    monkeypatch.setattr(routes, '_validate_share1_png',
+    from app.handlers import shares
+    real = shares._validate_share1_png
+    monkeypatch.setattr(shares, '_validate_share1_png',
                         lambda value: decoded.append(1) or real(value))
     for i in range(burst + 3):
         a.emit('send_share', share_payload(bob['id'], seed=i))

@@ -117,7 +117,7 @@ them signed in.
 **The panel decides what to draw. It decides nothing about what is allowed.**
 
 Every admin action is a Socket.IO event that passes through one function,
-`_require_admin()` in `app/routes.py`. It:
+`_require_admin()` in `app/handlers/common.py`. It:
 
 1. Requires an authenticated session on that socket, and
 2. **Re-reads the caller's role from the database** rather than trusting the

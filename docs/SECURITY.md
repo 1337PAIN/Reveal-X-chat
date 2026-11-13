@@ -108,14 +108,14 @@ teaching tool with no recipient, and nothing it processes is stored.
 | Control | Where | Held by |
 | --- | --- | --- |
 | Argon2id password hashing | `models.py`, `PasswordHasher` | `test_auth.py` |
-| Login throttling: 8 per account, 50 per address, 15-minute window; each attempt reserved under a lock *before* verification, so parallel guesses cannot outrun it | `routes.py`, `_reserve_login_attempt` | `test_rate_limit.py` |
-| Only *wrong passwords* count toward the throttle | `routes.py`, `handle_login` | `test_rate_limit.py` |
+| Login throttling: 8 per account, 50 per address, 15-minute window; each attempt reserved under a lock *before* verification, so parallel guesses cannot outrun it | `handlers/common.py`, `_reserve_login_attempt` | `test_rate_limit.py` |
+| Only *wrong passwords* count toward the throttle | `handlers/auth.py`, `handle_login` | `test_rate_limit.py` |
 | Unknown usernames and password-less (Google-only) accounts are rejected after an Argon2 verify against a dummy hash, so response time does not reveal which accounts exist (it was ~0.3 ms against ~50 ms) | `models.py`, `authenticate` | `test_auth.py` |
 | TOTP second factor (RFC 6238) | `auth/totp.py` | `test_auth.py` |
 | Secrets collected in a masked in-app dialog, never `window.prompt()` | `chat.js`, `askSecret` | `test_secret_prompts.py`, `tests/js/secret-prompt.test.mjs` |
-| Wrong TOTP codes counted against the **account and address**, not the socket | `routes.py`, `handle_verify_totp` | `test_auth.py` |
-| Re-authentication (`totp_disable`, `totp_confirm_enrol`, `delete_account`) draws on the **same** sign-in buckets; past the limit a correct secret is refused until the window passes | `routes.py`, `_reserve_reauthentication` | `test_auth.py` |
-| Account requests capped at 5 per address per 10 minutes, checked **before** the hash | `routes.py`, `_register_rate_limited` | `test_auth.py` |
+| Wrong TOTP codes counted against the **account and address**, not the socket | `handlers/auth.py`, `handle_verify_totp` | `test_auth.py` |
+| Re-authentication (`totp_disable`, `totp_confirm_enrol`, `delete_account`) draws on the **same** sign-in buckets; past the limit a correct secret is refused until the window passes | `handlers/common.py`, `_reserve_reauthentication` | `test_auth.py` |
+| Account requests capped at 5 per address per 10 minutes, checked **before** the hash | `handlers/common.py`, `_register_rate_limited` | `test_auth.py` |
 | Firebase ID tokens verified by the Admin SDK | `auth/firebase_auth.py` | `test_auth.py` |
 | Firebase accounts keyed on **UID only, never email** | `claims_to_identity` | `test_firebase_account_never_matched_on_email_alone` |
 | Clock-drift tolerance on token timestamps | `_clock_skew_seconds` | `test_auth.py` |
@@ -188,7 +188,7 @@ is the entire point of having it.
 - Compared with `hmac.compare_digest`, not `==`.
 - **One-time access.** Share 1 is served only against an unguessable
   `secrets.token_urlsafe(32)` capability, and fetching it burns the access
-  (`routes.py`, `get_share1`). The burn is a conditional `UPDATE ... WHERE
+  (`handlers/http.py`, `get_share1`). The burn is a conditional `UPDATE ... WHERE
   share1_accessed` is unset, and only the request whose UPDATE changed the row
   is served. It was a SELECT followed by an UPDATE, which let eight concurrent
   requests all receive the same one-time share.
@@ -201,7 +201,7 @@ localises damage and survives a re-encode. Either alone would be weaker.
 
 ### Transport and browser
 
-- CSP sent as a response header (`routes.py`, `add_security_headers`), with
+- CSP sent as a response header (`handlers/http.py`, `add_security_headers`), with
   `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, no
   `'unsafe-inline'` for scripts, and no CDN at all: socket.io, DOMPurify, Font
   Awesome and Inter are vendored, so the only third-party origins left are
@@ -321,7 +321,7 @@ environment next to the app, so this protects copies of the database (backups,
 dumps, snapshots), not a compromised server. There is no key rotation yet.
 
 **Denial of service generally.** Sending is limited per user by token buckets
-(`SEND_LIMITS` in `routes.py`): text and group posts 30 at once then one a
+(`SEND_LIMITS` in `handlers/common.py`): text and group posts 30 at once then one a
 second, voice 10 then one every 6 s, images 5 then one every 15 s, checked
 before an image is decoded (`tests/test_send_limits.py`). Before this, one
 signed-in socket could loop sends without limit. Beyond that there is no global

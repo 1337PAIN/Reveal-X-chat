@@ -241,7 +241,9 @@ def test_the_server_split_is_gone(pair, store, monkeypatch):
     assert not events(b, 'new_message')
     assert any('browser' in e.lower() for e in errors(a))
     assert not hasattr(routes, 'parse_image_data_url')
-    assert 'REVEALX_LEGACY_SERVER_SPLIT' not in Path(routes.__file__).read_text(encoding='utf-8')
+    handlers = Path(routes.__file__).resolve().parent / 'handlers'
+    for module in handlers.glob('*.py'):
+        assert 'REVEALX_LEGACY_SERVER_SPLIT' not in module.read_text(encoding='utf-8'), module.name
 
 
 # ----------------------------------------------------------------------

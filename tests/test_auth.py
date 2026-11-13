@@ -266,7 +266,7 @@ def test_a_first_google_sign_in_only_requests_an_account(store):
     Without this the whole gate is decorative: anyone with a Google account
     could sign in while password sign-ups sat waiting for an admin.
     """
-    with patch('app.routes.verify_id_token', return_value=FAKE_CLAIMS):
+    with patch('app.handlers.auth.verify_id_token', return_value=FAKE_CLAIMS):
         sock = socketio.test_client(flask_app)
         sock.emit('firebase_login', {'id_token': 'pretend-token'})
 
@@ -279,7 +279,7 @@ def test_a_first_google_sign_in_only_requests_an_account(store):
 
 
 def test_firebase_login_creates_and_then_reuses_one_account(store):
-    with patch('app.routes.verify_id_token', return_value=FAKE_CLAIMS):
+    with patch('app.handlers.auth.verify_id_token', return_value=FAKE_CLAIMS):
         first = socketio.test_client(flask_app)
         first.emit('firebase_login', {'id_token': 'pretend-token'})   # request
         first.disconnect()
@@ -304,7 +304,7 @@ def test_firebase_login_creates_and_then_reuses_one_account(store):
 
 def test_an_unverifiable_token_grants_nothing(store):
     """Anything the Admin SDK rejects must not reach the account layer."""
-    with patch('app.routes.verify_id_token', side_effect=FirebaseAuthError('Sign-in token was rejected')):
+    with patch('app.handlers.auth.verify_id_token', side_effect=FirebaseAuthError('Sign-in token was rejected')):
         sock = socketio.test_client(flask_app)
         sock.emit('firebase_login', {'id_token': 'forged'})
 
@@ -317,25 +317,25 @@ def test_firebase_accounts_do_not_collide_on_username(store):
     """Two Google accounts with the same email local-part still get one row each."""
     other = dict(FAKE_CLAIMS, uid='firebase-uid-456', email='alice@other.example', name='Alice Example')
 
-    with patch('app.routes.verify_id_token', return_value=FAKE_CLAIMS):
+    with patch('app.handlers.auth.verify_id_token', return_value=FAKE_CLAIMS):
         a = socketio.test_client(flask_app)
         a.emit('firebase_login', {'id_token': 't1'})     # request
         a.disconnect()
-    with patch('app.routes.verify_id_token', return_value=other):
+    with patch('app.handlers.auth.verify_id_token', return_value=other):
         b = socketio.test_client(flask_app)
         b.emit('firebase_login', {'id_token': 't2'})     # request
         b.disconnect()
     approve_all(store)
 
     _received.clear()
-    with patch('app.routes.verify_id_token', return_value=FAKE_CLAIMS):
+    with patch('app.handlers.auth.verify_id_token', return_value=FAKE_CLAIMS):
         a = socketio.test_client(flask_app)
         a.emit('firebase_login', {'id_token': 't1'})
         user_a = events(a, 'auth_success')[0]['args'][0]['user']
         a.disconnect()
 
     _received.clear()
-    with patch('app.routes.verify_id_token', return_value=other):
+    with patch('app.handlers.auth.verify_id_token', return_value=other):
         b = socketio.test_client(flask_app)
         b.emit('firebase_login', {'id_token': 't2'})
         user_b = events(b, 'auth_success')[0]['args'][0]['user']
@@ -347,7 +347,7 @@ def test_firebase_accounts_do_not_collide_on_username(store):
 
 def test_firebase_sign_in_also_passes_through_totp(store):
     """Google sign-in is a first factor like any other."""
-    with patch('app.routes.verify_id_token', return_value=FAKE_CLAIMS):
+    with patch('app.handlers.auth.verify_id_token', return_value=FAKE_CLAIMS):
         setup = socketio.test_client(flask_app)
         setup.emit('firebase_login', {'id_token': 't'})   # request
         setup.disconnect()
@@ -381,7 +381,7 @@ def test_firebase_account_never_matched_on_email_alone(store):
     store.update_bio(local['id'], 'original owner')
 
     claims = dict(FAKE_CLAIMS, uid='attacker-uid', email='victim@example.com', name='victim')
-    with patch('app.routes.verify_id_token', return_value=claims):
+    with patch('app.handlers.auth.verify_id_token', return_value=claims):
         sock = socketio.test_client(flask_app)
         sock.emit('firebase_login', {'id_token': 'x'})
         sock.disconnect()

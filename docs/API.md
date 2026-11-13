@@ -1,7 +1,7 @@
 # API reference
 
 Everything the server exposes: 9 HTTP routes and 44 Socket.IO events, with the
-fields each one actually reads. Extracted from `app/routes.py`, not written from
+fields each one actually reads. Extracted from `app/handlers/`, not written from
 memory.
 
 **One rule runs through all of it:** no handler trusts what the client says

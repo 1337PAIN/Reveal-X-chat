@@ -108,3 +108,21 @@ def test_the_readme_server_count_is_the_suite(request):
     assert stated == collected, (
         f'README says {stated} server tests; the suite collects {collected}. '
         'The README counts every collected test, skips included.')
+
+
+def test_every_file_and_function_security_md_names_exists():
+    """SECURITY.md says each control "names the file that implements it". When
+    routes.py was split, a dozen of those names pointed at the wrong file."""
+    pairs = re.findall(r'`([\w/]+\.py)`,\s+`(\w+)`', SECURITY)
+    pairs += [(f, n) for n, f in re.findall(r'`(\w+)` in `([\w/]+\.py)`', SECURITY)]
+    assert pairs
+    app_dir = ROOT / 'app'
+    for filename, name in pairs:
+        candidates = [p for p in app_dir.rglob('*.py')
+                      if p.as_posix().endswith('/' + filename)]
+        assert candidates, f'SECURITY.md names {filename}, which does not exist'
+        source = candidates[0].read_text(encoding='utf-8')
+        defined = re.search(
+            rf'^\s*(?:async\s+)?(?:def|class)\s+{name}\b|^{name}\s*=|^\s*(?:from\s+\S+\s+)?import\b.*\b{name}\b',
+            source, re.M)
+        assert defined, f'SECURITY.md says {name} is in {filename}; it is not'
