@@ -356,3 +356,19 @@ def test_the_recording_clock_is_shown(chat_js, client):
     assert 'formatVoiceClock' in chat_js
     page = client.get('/').get_data(as_text=True)
     assert 'id="voiceTimer"' in page
+
+
+def test_the_permissions_policy_lets_the_app_use_its_own_microphone(store):
+    """`microphone=()` is an empty allowlist: it disables the microphone for
+    every origin, the app's own included. Chrome then rejects getUserMedia
+    with NotAllowedError before any prompt, so recording a voice note could
+    never have worked there. `(self)` allows this origin and still denies any
+    embedded frame."""
+    import re
+    client = flask_app.test_client()
+    policy = client.get('/').headers['Permissions-Policy']
+    directives = dict(re.findall(r'([a-z-]+)=\(([^)]*)\)', policy))
+    assert directives.get('microphone') == 'self'
+    # Nothing else was widened along with it.
+    assert directives.get('camera') == ''
+    assert directives.get('geolocation') == ''

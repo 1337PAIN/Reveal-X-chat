@@ -755,7 +755,10 @@ def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['Referrer-Policy'] = 'same-origin'
-    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    # microphone=(self), not (): an empty allowlist disables the microphone for
+    # the app's own origin too, so getUserMedia failed before any prompt and
+    # voice notes could not be recorded in browsers that enforce this header.
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(self), geolocation=()'
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
         # www.gstatic.com serves the Firebase SDK; apis.google.com and the

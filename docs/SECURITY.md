@@ -175,6 +175,9 @@ localises damage and survives a re-encode. Either alone would be weaker.
   nothing but misled anyone reading it, and it has been removed.
 - `HttpOnly`, `SameSite=Lax`, and `Secure` when `REVEAL_X_COOKIE_SECURE=true`.
 - HSTS on HTTPS requests, and an optional HTTP→HTTPS redirect that runs before the request is handled. `X-Forwarded-Proto` is believed only with `REVEALX_TRUST_PROXY`; it used to be read from any client.
+- `Permissions-Policy: camera=(), microphone=(self), geolocation=()`. It was
+  `microphone=()`, which disables the microphone for the app's own origin as
+  well, so voice notes could not be recorded in browsers that enforce it.
 - Socket.IO origins default to same-origin only.
 - All interpolated text goes through `escapeHtml`, which fails **closed** when
   DOMPurify is unavailable (`sanitize.js`, `tests/js/sanitize.test.mjs`).
