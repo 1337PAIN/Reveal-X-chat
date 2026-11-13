@@ -13,6 +13,7 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import uuid
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -40,6 +41,14 @@ USER_STATUSES = ('online', 'away', 'dnd')
 # Keys that must never survive in the messages.extra blob. Share 2 is delivered
 # live to the recipient and is not allowed to reach server storage.
 FORBIDDEN_EXTRA_KEYS = {'share2', 'share2_b64', 'share2_filename', 'share2_live'}
+
+
+# Verified against when there is no real hash to check, so that rejecting an
+# unknown username costs the same Argon2 work as rejecting a wrong password.
+# Built on first use with the store's own hasher, so its parameters (and so
+# its cost) always match real hashes; see ChatRoom._dummy_password_hash.
+_DUMMY_PASSWORD_HASH = None
+_DUMMY_PASSWORD_LOCK = threading.Lock()
 
 
 def _load_deleted_by(row):
@@ -273,6 +282,14 @@ class ChatRoom:
             return self.password_hasher.hash(password)
         return generate_password_hash(password)
 
+    def _dummy_password_hash(self):
+        global _DUMMY_PASSWORD_HASH
+        if _DUMMY_PASSWORD_HASH is None:
+            with _DUMMY_PASSWORD_LOCK:
+                if _DUMMY_PASSWORD_HASH is None:
+                    _DUMMY_PASSWORD_HASH = self._hash_password(secrets.token_urlsafe(32))
+        return _DUMMY_PASSWORD_HASH
+
     def _verify_password(self, password, password_hash):
         if not password_hash:
             return False
@@ -406,7 +423,16 @@ class ChatRoom:
         with self._connect() as db:
             row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
 
-        if not row or not self._verify_password(password or '', row['password_hash']):
+        # No row, or a Google-only row with no password, used to return here
+        # without hashing anything: ~0.3 ms against ~50 ms for a wrong
+        # password on a real account. The message was identical and the
+        # clock said which usernames exist. Both now pay for one verification
+        # against a dummy hash, whose result is discarded.
+        stored_hash = row['password_hash'] if row else ''
+        if not stored_hash:
+            self._verify_password(password or '', self._dummy_password_hash())
+            return None, self.ERROR_BAD_CREDENTIALS
+        if not self._verify_password(password or '', stored_hash):
             return None, self.ERROR_BAD_CREDENTIALS
 
         # The password check comes first on purpose. Reporting "awaiting

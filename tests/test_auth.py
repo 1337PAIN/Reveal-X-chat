@@ -691,3 +691,61 @@ def test_guesses_are_capped_even_across_sockets_opened_in_advance(store):
     for sock in waiting:
         sock.disconnect()
     FAILED_LOGINS.clear()
+
+
+def test_unknown_and_known_usernames_take_comparable_time(store):
+    """A missing account must cost as much to reject as a wrong password.
+
+    authenticate returned as soon as the SELECT found no row, so a wrong
+    password for a real account spent ~100 ms in Argon2 while an unknown name
+    came back in about a millisecond. The error message was identical; the
+    clock gave the answer anyway, and enumerating usernames took one request
+    per guess. The limit here is loose on purpose -- the gap it guards
+    against was two orders of magnitude, and CI machines are noisy.
+    """
+    import statistics
+    import time as _time
+
+    store.create_user('realperson', 'the-real-password-1')
+    store.authenticate('warmup', 'x')  # first call may build the dummy hash
+
+    def timed(username):
+        samples = []
+        for _ in range(5):
+            started = _time.perf_counter()
+            user, error = store.authenticate(username, 'definitely-wrong')
+            samples.append(_time.perf_counter() - started)
+            assert user is None and error == store.ERROR_BAD_CREDENTIALS
+        return statistics.median(samples)
+
+    known = timed('realperson')
+    unknown = timed('nobody-by-this-name')
+    ratio = max(known, unknown) / min(known, unknown)
+    assert ratio < 3, (
+        f'known {known * 1000:.1f} ms vs unknown {unknown * 1000:.1f} ms: '
+        f'the response time says whether the account exists'
+    )
+
+
+def test_an_account_without_a_password_is_rejected_at_the_same_cost(store):
+    """Google-only accounts have no password hash, and returned instantly."""
+    import time as _time
+
+    store.create_user('realperson', 'the-real-password-1')
+    # A first Google sign-in creates a pending row whose username is the
+    # display name and whose password_hash is empty.
+    store.get_or_create_firebase_user('uid-timing-1', email=None,
+                                      display_name='googler', provider='google.com')
+    store.authenticate('warmup', 'x')
+
+    def best(username):
+        out = []
+        for _ in range(3):
+            started = _time.perf_counter()
+            store.authenticate(username, 'whatever')
+            out.append(_time.perf_counter() - started)
+        return min(out)
+
+    known = best('realperson')
+    passwordless = best('googler')
+    assert max(known, passwordless) / min(known, passwordless) < 3

@@ -81,6 +81,7 @@ limitation rather than glossed over.
 | Argon2id password hashing | `models.py`, `PasswordHasher` | `test_auth.py` |
 | Login throttling: 8 per account, 50 per address, 15-minute window; each attempt reserved under a lock *before* verification, so parallel guesses cannot outrun it | `routes.py`, `_reserve_login_attempt` | `test_rate_limit.py` |
 | Only *wrong passwords* count toward the throttle | `routes.py`, `handle_login` | `test_rate_limit.py` |
+| Unknown usernames and password-less (Google-only) accounts are rejected after an Argon2 verify against a dummy hash, so response time does not reveal which accounts exist (it was ~0.3 ms against ~50 ms) | `models.py`, `authenticate` | `test_auth.py` |
 | TOTP second factor (RFC 6238) | `auth/totp.py` | `test_auth.py` |
 | Secrets collected in a masked in-app dialog, never `window.prompt()` | `chat.js`, `askSecret` | `test_secret_prompts.py`, `tests/js/secret-prompt.test.mjs` |
 | Wrong TOTP codes counted against the **account and address**, not the socket | `routes.py`, `handle_verify_totp` | `test_auth.py` |
