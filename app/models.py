@@ -309,137 +309,19 @@ class ChatRoom:
         return {row['name'] for row in rows}
 
     def init_db(self):
+        """Bring the schema up to date, then run the checks every start needs.
+
+        The schema is built by numbered, recorded migrations (app/migrations.py).
+        This used to be one function that created every table with its newest
+        columns and then ALTERed in whatever an older database lacked, with no
+        record of which version a database was at.
+        """
+        from app.migrations import migrate
+        migrate(self)
+        # Not migrations: these run on every start because what they check
+        # can change between starts (a forbidden key written by an old build,
+        # REVEALX_DATA_KEY being set, removed or wrong).
         with self._connect() as db:
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY,
-                    username TEXT NOT NULL UNIQUE,
-                    password_hash TEXT NOT NULL,
-                    profile_image TEXT,
-                    public_key TEXT,
-                    bio TEXT,
-                    status TEXT,
-                    firebase_uid TEXT,
-                    email TEXT,
-                    auth_provider TEXT NOT NULL DEFAULT 'password',
-                    totp_secret TEXT,
-                    role TEXT NOT NULL DEFAULT 'user',
-                    account_state TEXT NOT NULL DEFAULT 'active',
-                    last_seen TEXT,
-                    created_at TEXT NOT NULL,
-                    session_epoch INTEGER NOT NULL DEFAULT 0
-                )
-            """)
-            # Only a SHA-256 of each token is kept, so a copy of the database
-            # cannot be used to resume anybody's session.
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS resume_tokens (
-                    token_hash TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    session_epoch INTEGER NOT NULL,
-                    expires_at TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )
-            """)
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    id TEXT PRIMARY KEY,
-                    sender_id TEXT NOT NULL,
-                    recipient_id TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    extra TEXT NOT NULL DEFAULT '{}',
-                    read_at TEXT,
-                    created_at TEXT NOT NULL,
-                    expires_at TEXT,
-                    share1_accessed BOOLEAN DEFAULT FALSE,
-                    deleted_by TEXT NOT NULL DEFAULT '[]',
-                    msg_uuid_key TEXT
-                )
-            """)
-
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS groups (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT NOT NULL DEFAULT '',
-                    created_by TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    only_admins_post BOOLEAN NOT NULL DEFAULT FALSE,
-                    only_admins_edit_info BOOLEAN NOT NULL DEFAULT TRUE
-                )
-            """)
-            # No foreign keys, for the same reason the rest of the schema has
-            # none: SQLite does not enforce them unless asked per connection,
-            # so relying on them here would be a guarantee only on Postgres.
-            # purge_user() does the cleanup explicitly instead.
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS group_members (
-                    group_id TEXT NOT NULL,
-                    user_id TEXT NOT NULL,
-                    role TEXT NOT NULL DEFAULT 'member',
-                    joined_at TEXT NOT NULL,
-                    PRIMARY KEY (group_id, user_id)
-                )
-            """)
-
-            # Backfill columns for databases created by earlier versions.
-            message_columns = self._existing_columns(db, 'messages')
-            user_columns = self._existing_columns(db, 'users')
-            for column, ddl in (
-                ('expires_at', "ALTER TABLE messages ADD COLUMN expires_at TEXT"),
-                ('read_at', "ALTER TABLE messages ADD COLUMN read_at TEXT"),
-                ('share1_accessed', "ALTER TABLE messages ADD COLUMN share1_accessed BOOLEAN DEFAULT FALSE"),
-                ('deleted_by', "ALTER TABLE messages ADD COLUMN deleted_by TEXT NOT NULL DEFAULT '[]'"),
-                # A group message is stored as one row per member, so every
-                # existing read filter, the expiry sweep, per-recipient read
-                # receipts and the deletion scope all keep working unchanged.
-                # group_message_id ties the fan-out back together for the UI.
-                ('group_id', "ALTER TABLE messages ADD COLUMN group_id TEXT"),
-                ('group_message_id', "ALTER TABLE messages ADD COLUMN group_message_id TEXT"),
-                # "<lower user id>|<higher user id>|<msg_uuid>" for E2EE v2
-                # messages, NULL otherwise. One column rather than three so a
-                # single UNIQUE index covers the conversation in both
-                # directions; see message_uuid_key().
-                ('msg_uuid_key', "ALTER TABLE messages ADD COLUMN msg_uuid_key TEXT"),
-            ):
-                if column not in message_columns:
-                    db.execute(ddl)
-            for column, ddl in (
-                ('last_seen', "ALTER TABLE users ADD COLUMN last_seen TEXT"),
-                ('profile_image', "ALTER TABLE users ADD COLUMN profile_image TEXT"),
-                ('public_key', "ALTER TABLE users ADD COLUMN public_key TEXT"),
-                ('bio', "ALTER TABLE users ADD COLUMN bio TEXT"),
-                ('status', "ALTER TABLE users ADD COLUMN status TEXT"),
-                ('firebase_uid', "ALTER TABLE users ADD COLUMN firebase_uid TEXT"),
-                ('email', "ALTER TABLE users ADD COLUMN email TEXT"),
-                ('auth_provider', "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'password'"),
-                ('totp_secret', "ALTER TABLE users ADD COLUMN totp_secret TEXT"),
-                # 'admin' or 'user'. Deliberately a column rather than a
-                # hardcoded username, so the admin can be renamed.
-                ('role', "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"),
-                # 'pending' | 'active' | 'disabled'. Note this is NOT the
-                # existing `status` column, which is presence (online/away/dnd).
-                # Accounts that predate this migration default to 'active' so
-                # an upgrade never locks anyone out.
-                ('account_state', "ALTER TABLE users ADD COLUMN account_state TEXT NOT NULL DEFAULT 'active'"),
-                # Bumped whenever outstanding resume tokens must stop working.
-                ('session_epoch', "ALTER TABLE users ADD COLUMN session_epoch INTEGER NOT NULL DEFAULT 0"),
-            ):
-                if column not in user_columns:
-                    db.execute(ddl)
-
-            db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid)")
-            db.execute("CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)")
-            db.execute("CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages(sender_id, recipient_id)")
-            db.execute("CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at)")
-            db.execute("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id, created_at)")
-            db.execute("CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)")
-            db.execute("CREATE INDEX IF NOT EXISTS idx_resume_tokens_user ON resume_tokens(user_id)")
-            # NULLs are distinct in a UNIQUE index on both SQLite and Postgres,
-            # so plaintext and v1 rows (no uuid) are unaffected.
-            db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_msg_uuid ON messages(msg_uuid_key)")
-
             self._purge_stored_share2(db)
             self._migrate_secrets_at_rest(db)
 

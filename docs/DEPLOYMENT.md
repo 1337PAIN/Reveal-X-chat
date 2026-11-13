@@ -238,6 +238,19 @@ header. It now counts `REVEALX_PROXY_HOPS` entries in from the right:
 If the header has fewer entries than the hop count, the request did not come
 through the proxies you described, and `remote_addr` is used instead.
 
+## Upgrading the database
+
+The schema is versioned (`app/migrations.py`). On start the app applies every
+numbered migration the database has not yet run, each in its own transaction,
+and records it in `schema_version` with its name and time. A database made
+before versioning has no `schema_version` table; it replays every step, and
+each step finds its work already done and skips it, so an upgrade from any
+earlier Reveal-X keeps its accounts and messages
+(`tests/test_migrations.py` builds both kinds and upgrades them).
+
+Start one process first after an upgrade. Two processes migrating the same
+database at the same moment is not guarded against.
+
 ## HTTPS
 
 Terminate TLS at a reverse proxy (nginx, Caddy, your host's load balancer) and
