@@ -194,6 +194,16 @@ it; images are not.
 are all visible to the server and to anyone watching the network. Message
 *contents* are encrypted; the social graph is not.
 
+**Replay is detected, not prevented, against a malicious server.** Since
+protocol v2 a ciphertext is bound to its sender, recipient and `msg_uuid`, and
+each direction has its own key, so the server can no longer reflect a message
+back to its author or move it to another conversation. It can still store a
+second copy of a ciphertext under a new row id; the client recognises the
+repeated `msg_uuid` among the messages it has loaded and shows a notice in its
+place. A replay of a message that has already expired, or that the client has
+not loaded in the same tab, is not caught. v1 had none of this: one key for
+both directions and no associated data.
+
 **No forward secrecy.** ECDH key pairs are long-lived. Compromising one
 participant's private key allows decryption of every past message in that
 conversation that an attacker captured. A ratchet (Double Ratchet or similar)

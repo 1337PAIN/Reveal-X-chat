@@ -4,6 +4,7 @@ Route and Socket.IO handlers for Reveal-X.
 
 import base64
 from datetime import datetime
+import re
 import hmac
 import os
 import secrets
@@ -358,6 +359,8 @@ def client_message(message, current_user_id=None):
             'reactions': extra.get('reactions', {}),
             'encrypted': extra.get('encrypted', False),
             'iv': extra.get('iv'),
+            'v': extra.get('v'),
+            'msg_uuid': extra.get('msg_uuid'),
         }
     else:
         extra = msg_dict.get('extra', {})
@@ -368,6 +371,10 @@ def client_message(message, current_user_id=None):
             'encrypted': extra.get('encrypted', False),
             'iv': extra.get('iv'),
             'mime': extra.get('mime'),
+            # The recipient rebuilds the AES-GCM associated data from these,
+            # so they must come back exactly as the sender wrote them.
+            'v': extra.get('v'),
+            'msg_uuid': extra.get('msg_uuid'),
         }
 
     return msg_dict
@@ -1463,6 +1470,33 @@ def handle_select_chat(data):
     })
 
 
+#: E2EE protocol version for new messages. Older versions are still *read*
+#: by the client (rows expire within the hour), but are no longer accepted.
+E2EE_PROTOCOL = 2
+_MSG_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+DUPLICATE_MESSAGE_ERROR = 'This message was already delivered'
+
+
+def _e2ee_envelope(data, sender_id, recipient_id):
+    """Validate the v2 envelope of an encrypted send.
+
+    Returns (fields_to_store, error). The server cannot check the ciphertext,
+    but it can make sure the two values the recipient authenticates it with
+    -- `v` and `msg_uuid` -- are present, well formed and unused in this
+    conversation. A v1 send is refused: v1 used one key for both directions
+    and no associated data, which is what let a ciphertext be reflected back
+    to its own sender as though the peer had written it.
+    """
+    if data.get('v') != E2EE_PROTOCOL or isinstance(data.get('v'), bool):
+        return None, 'Unsupported encryption version. Reload the page.'
+    msg_uuid = data.get('msg_uuid')
+    if not isinstance(msg_uuid, str) or not _MSG_UUID_RE.match(msg_uuid):
+        return None, 'Invalid encrypted payload'
+    if chat_room.has_message_uuid(sender_id, recipient_id, msg_uuid):
+        return None, DUPLICATE_MESSAGE_ERROR
+    return {'v': E2EE_PROTOCOL, 'msg_uuid': msg_uuid}, None
+
+
 @socketio.on('send_message')
 def handle_message(data):
     """Handle private text messages, encrypted or plaintext."""
@@ -1487,13 +1521,20 @@ def handle_message(data):
         if not iv or len(iv) > 64:
             emit('message_error', {'error': 'Invalid encrypted payload'})
             return
+        envelope, error = _e2ee_envelope(data, current_user['id'], recipient_id)
+        if error:
+            emit('message_error', {'error': error})
+            return
         extra['encrypted'] = True
         extra['iv'] = iv
+        extra.update(envelope)
     if reply_to_id:
         extra['reply_to'] = reply_preview(chat_room.get_message_for_user(reply_to_id, current_user['id']))
 
     msg_obj = chat_room.add_message(current_user['id'], recipient_id, 'text', message, extra)
     if not msg_obj:
+        if encrypted:
+            emit('message_error', {'error': DUPLICATE_MESSAGE_ERROR})
         return
 
     deliver_message(msg_obj, current_user['id'], recipient_id)
@@ -1538,9 +1579,14 @@ def handle_voice(data):
             emit('message_error', {'error': 'Voice message is too large'})
             return
 
+        envelope, error = _e2ee_envelope(data, current_user['id'], recipient_id)
+        if error:
+            emit('message_error', {'error': error})
+            return
         extra['encrypted'] = True
         extra['iv'] = iv
         extra['mime'] = mime
+        extra.update(envelope)
     else:
         if not audio_data.startswith('data:audio/') or ',' not in audio_data or ';base64' not in audio_data.split(',', 1)[0]:
             emit('message_error', {'error': 'Invalid voice message'})
@@ -1563,6 +1609,8 @@ def handle_voice(data):
 
     msg_obj = chat_room.add_message(current_user['id'], recipient_id, 'voice', audio_data, extra)
     if not msg_obj:
+        if encrypted:
+            emit('message_error', {'error': DUPLICATE_MESSAGE_ERROR})
         return
 
     deliver_message(msg_obj, current_user['id'], recipient_id)

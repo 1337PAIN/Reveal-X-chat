@@ -25,6 +25,11 @@ try:
 except ImportError:
     POSTGRES_AVAILABLE = False
 
+# A UNIQUE index violation, on either backend. Used where the database, not
+# a prior SELECT, is what decides that an insert is a duplicate.
+INTEGRITY_ERRORS = (sqlite3.IntegrityError,) + (
+    (psycopg2.IntegrityError,) if POSTGRES_AVAILABLE else ())
+
 try:
     from argon2 import PasswordHasher
     from argon2.exceptions import VerifyMismatchError
@@ -195,7 +200,8 @@ class ChatRoom:
                     created_at TEXT NOT NULL,
                     expires_at TEXT,
                     share1_accessed BOOLEAN DEFAULT FALSE,
-                    deleted_by TEXT NOT NULL DEFAULT '[]'
+                    deleted_by TEXT NOT NULL DEFAULT '[]',
+                    msg_uuid_key TEXT
                 )
             """)
 
@@ -238,6 +244,11 @@ class ChatRoom:
                 # group_message_id ties the fan-out back together for the UI.
                 ('group_id', "ALTER TABLE messages ADD COLUMN group_id TEXT"),
                 ('group_message_id', "ALTER TABLE messages ADD COLUMN group_message_id TEXT"),
+                # "<lower user id>|<higher user id>|<msg_uuid>" for E2EE v2
+                # messages, NULL otherwise. One column rather than three so a
+                # single UNIQUE index covers the conversation in both
+                # directions; see message_uuid_key().
+                ('msg_uuid_key', "ALTER TABLE messages ADD COLUMN msg_uuid_key TEXT"),
             ):
                 if column not in message_columns:
                     db.execute(ddl)
@@ -269,6 +280,9 @@ class ChatRoom:
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id, created_at)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)")
+            # NULLs are distinct in a UNIQUE index on both SQLite and Postgres,
+            # so plaintext and v1 rows (no uuid) are unaffected.
+            db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_msg_uuid ON messages(msg_uuid_key)")
 
             self._purge_stored_share2(db)
 
@@ -731,7 +745,27 @@ class ChatRoom:
             'is_legacy': row['type'] in ('text', 'voice') and not extra.get('encrypted', False),
         }
 
+    @staticmethod
+    def message_uuid_key(user_a, user_b, msg_uuid):
+        """The per-conversation identity of an E2EE v2 message.
+
+        Sorted, so A->B and B->A share one namespace: a uuid already used in
+        the conversation is refused whichever side sends it again.
+        """
+        low, high = sorted((user_a, user_b))
+        return f'{low}|{high}|{msg_uuid}'
+
+    def has_message_uuid(self, user_a, user_b, msg_uuid):
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT 1 FROM messages WHERE msg_uuid_key = ?",
+                (self.message_uuid_key(user_a, user_b, msg_uuid),)
+            ).fetchone()
+        return row is not None
+
     def add_message(self, sender_id, recipient_id, msg_type, content, extra=None):
+        """Store a direct message. Returns None when either account is gone,
+        or when an E2EE v2 msg_uuid is already used in this conversation."""
         self.cleanup_old_messages()
         sender = self.get_user(sender_id)
         recipient = self.get_user(recipient_id)
@@ -760,14 +794,25 @@ class ChatRoom:
             'is_legacy': msg_type in ('text', 'voice') and not extra.get('encrypted', False),
         }
 
-        with self._connect() as db:
-            db.execute("""
-                INSERT INTO messages (id, sender_id, recipient_id, type, content, extra, read_at, created_at, expires_at, share1_accessed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                message['id'], sender_id, recipient_id, msg_type, content,
-                json.dumps(extra), None, created_at, expires_at, False,
-            ))
+        uuid_key = (self.message_uuid_key(sender_id, recipient_id, extra['msg_uuid'])
+                    if extra.get('msg_uuid') else None)
+        try:
+            with self._connect() as db:
+                db.execute("""
+                    INSERT INTO messages (id, sender_id, recipient_id, type, content, extra,
+                                          read_at, created_at, expires_at, share1_accessed,
+                                          msg_uuid_key)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    message['id'], sender_id, recipient_id, msg_type, content,
+                    json.dumps(extra), None, created_at, expires_at, False, uuid_key,
+                ))
+        except INTEGRITY_ERRORS:
+            # The handler checks first, but two simultaneous sends both pass
+            # that check. The index is what actually guarantees one row.
+            if uuid_key is None:
+                raise
+            return None
 
         return message
 

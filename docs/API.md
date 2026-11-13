@@ -126,8 +126,8 @@ check the code at all.
 | Event | In | Out |
 | --- | --- | --- |
 | `select_chat` | `recipient_id`, `send_read_receipts` | `chat_history` |
-| `send_message` | `recipient_id`, `message`, `encrypted`, `iv`, `reply_to` | `new_message`, `message_error` |
-| `send_voice` | `recipient_id`, `audio`, `mime`, `encrypted`, `iv`, `reply_to` | `new_message`, `message_error` |
+| `send_message` | `recipient_id`, `message`, `encrypted`, `iv`, `v`, `msg_uuid`, `reply_to` | `new_message`, `message_error` |
+| `send_voice` | `recipient_id`, `audio`, `mime`, `encrypted`, `iv`, `v`, `msg_uuid`, `reply_to` | `new_message`, `message_error` |
 | `send_image` | `recipient_id`, `image`, `reply_to` | `new_message`, `image_error` |
 | `forward_message` | `message_id`, `recipient_id` | `new_message`, `message_error` |
 | `react_message` | `message_id`, `emoji` | `message_reactions` |
@@ -137,6 +137,15 @@ check the code at all.
 | `revoke_share` | `message_id` | `share_revoked` |
 
 `encrypted` + `iv` mean the body is AES-GCM ciphertext the server cannot read.
+An encrypted send must also carry `v: 2` and `msg_uuid`, a lowercase RFC 4122
+UUID. Both are stored and handed back in `extra` unchanged, because the
+recipient authenticates the ciphertext against
+`v2|<sender_id>|<recipient_id>|<msg_uuid>`. The server answers
+`message_error` for a missing or malformed envelope, for `v` other than 2
+("Unsupported encryption version"), and for a `msg_uuid` already used in the
+conversation in either direction ("This message was already delivered"). A
+UNIQUE index enforces the last one, so two simultaneous sends cannot both be
+stored. Uniqueness lasts as long as the row: one hour.
 With `encrypted` false the server stores plaintext — kept so the project can
 demonstrate the difference side by side.
 

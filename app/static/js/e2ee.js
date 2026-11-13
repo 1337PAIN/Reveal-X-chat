@@ -7,13 +7,53 @@
  * script - an XSS bug can abuse the session but cannot exfiltrate the key.
  *
  * The server only ever sees the public key and the ciphertext.
+ *
+ * Protocol v2 (current). v1 derived one key per *pair* of users and used it
+ * in both directions, with no associated data. Two consequences followed:
+ *
+ *   - Reflection. A ciphertext Alice sent Bob decrypted just as well when the
+ *     server presented it to Alice as a message *from* Bob, so the server
+ *     could put Alice's own words in Bob's mouth.
+ *   - Replay and relabelling. Nothing bound a ciphertext to who sent it, to
+ *     whom, or to which message it was, so the server could deliver it twice
+ *     or attribute it to a different conversation row.
+ *
+ * v2 derives a separate key per direction (HKDF info carries the sender's and
+ * then the recipient's public key) and authenticates
+ * "v2|<sender_id>|<recipient_id>|<msg_uuid>" as AES-GCM additional data. The
+ * ids come from the server's row, so relabelling a row breaks the tag, and
+ * msg_uuid lets a client notice the same ciphertext delivered twice.
+ *
+ * v1 decryption is kept for rows written before the upgrade. Messages expire
+ * after an hour, so that path has nothing to open soon after deployment. New
+ * messages are always v2, and v2 rows are never tried under v1.
  */
 
 const RX_DB_NAME = 'revealx-e2ee';
 const RX_STORE = 'keypairs';
 const RX_INFO = 'reveal-x-message-key-v1';
+const RX_INFO_V2 = 'reveal-x-message-key-v2';
+const RX_PROTOCOL = 2;
 
-const derivedKeyCache = new Map(); // peerPublicKeyB64 -> CryptoKey
+// "<version>|<sender public key>|<recipient public key>" -> CryptoKey. v1 keys
+// are direction-free and cached under "1|<peer public key>".
+const derivedKeyCache = new Map();
+
+function associatedData(senderId, recipientId, msgUuid) {
+    return new TextEncoder().encode(`v2|${senderId}|${recipientId}|${msgUuid}`);
+}
+
+function newMessageUuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+    // RFC 4122 v4 from getRandomValues, for engines without randomUUID.
+    const b = window.crypto.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 
 function bufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
@@ -122,15 +162,20 @@ class E2EESession {
     }
 
     /**
-     * Derive the AES-GCM key shared with one peer.
+     * Derive an AES-GCM key shared with one peer.
      *
      * The HKDF salt is bound to both public keys (sorted, so each side computes
-     * the same value) which keeps the message key distinct per conversation.
+     * the same value). For v2 the HKDF info additionally names the direction:
+     * sender's public key, then recipient's, so A->B and B->A are different
+     * keys and one direction's ciphertext cannot be replayed as the other's.
      */
-    async deriveKeyFor(peerPublicKeyB64) {
+    async deriveKeyFor(peerPublicKeyB64, direction = null) {
         if (!this.isReady() || !peerPublicKeyB64) return null;
 
-        const cached = derivedKeyCache.get(peerPublicKeyB64);
+        const cacheKey = direction
+            ? `2|${direction.senderPublicKey}|${direction.recipientPublicKey}`
+            : `1|${peerPublicKeyB64}`;
+        const cached = derivedKeyCache.get(cacheKey);
         if (cached) return cached;
 
         const peerKey = await window.crypto.subtle.importKey(
@@ -149,68 +194,112 @@ class E2EESession {
 
         const pair = [this.publicKey, peerPublicKeyB64].sort().join('|');
         const salt = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(pair));
+        const info = direction
+            ? `${RX_INFO_V2}|${direction.senderPublicKey}|${direction.recipientPublicKey}`
+            : RX_INFO;
 
         const hkdfKey = await window.crypto.subtle.importKey(
             'raw', sharedBits, 'HKDF', false, ['deriveKey']
         );
         const messageKey = await window.crypto.subtle.deriveKey(
-            { name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode(RX_INFO) },
+            { name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode(info) },
             hkdfKey,
             { name: 'AES-GCM', length: 256 },
             false,
             ['encrypt', 'decrypt']
         );
 
-        derivedKeyCache.set(peerPublicKeyB64, messageKey);
+        derivedKeyCache.set(cacheKey, messageKey);
         return messageKey;
     }
 
-    /**
-     * Encrypt arbitrary bytes (used for voice recordings).
-     * Returns {ciphertext, iv} in base64, or null when the peer has no key yet.
-     */
-    async encryptBytes(peerPublicKeyB64, bytes) {
-        const key = await this.deriveKeyFor(peerPublicKeyB64);
-        if (!key) return null;
-
-        const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        // Encrypt the message before sending it to the other user.
-        const ciphertext = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes);
-        return { ciphertext: bufferToBase64(ciphertext), iv: bufferToBase64(iv) };
+    /** Which way a message went, from this session's point of view. */
+    direction(peerPublicKeyB64, senderId) {
+        const outgoing = senderId === this.userId;
+        return outgoing
+            ? { senderPublicKey: this.publicKey, recipientPublicKey: peerPublicKeyB64 }
+            : { senderPublicKey: peerPublicKeyB64, recipientPublicKey: this.publicKey };
     }
 
-    /** Decrypt to an ArrayBuffer, or null when the payload cannot be opened. */
-    async decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64) {
-        const key = await this.deriveKeyFor(peerPublicKeyB64);
-        if (!key || !ciphertextB64 || !ivB64) return null;
+    /**
+     * Encrypt bytes to a peer (used directly for voice recordings).
+     *
+     * `context.recipientId` is the peer's user id; `context.msgUuid` is
+     * generated when absent. Returns {ciphertext, iv, v, msg_uuid} with the
+     * binary fields in base64, or null when the peer has no key yet.
+     */
+    async encryptBytes(peerPublicKeyB64, bytes, context = {}) {
+        const key = await this.deriveKeyFor(
+            peerPublicKeyB64, this.direction(peerPublicKeyB64, this.userId));
+        if (!key) return null;
 
+        const msgUuid = context.msgUuid || newMessageUuid();
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        // Encrypt the message before sending it to the other user.
+        const ciphertext = await window.crypto.subtle.encrypt(
+            {
+                name: 'AES-GCM',
+                iv,
+                additionalData: associatedData(this.userId, context.recipientId || '', msgUuid),
+            },
+            key,
+            bytes
+        );
+        return {
+            ciphertext: bufferToBase64(ciphertext),
+            iv: bufferToBase64(iv),
+            v: RX_PROTOCOL,
+            msg_uuid: msgUuid,
+        };
+    }
+
+    /**
+     * Decrypt to an ArrayBuffer, or null when the payload cannot be opened.
+     *
+     * `context` is rebuilt from the stored row: {v, senderId, recipientId,
+     * msgUuid}. Anything but v === 2 is a legacy v1 row.
+     */
+    async decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64, context = {}) {
+        if (!ciphertextB64 || !ivB64) return null;
+        const v2 = context.v === RX_PROTOCOL;
+        const key = await this.deriveKeyFor(
+            peerPublicKeyB64, v2 ? this.direction(peerPublicKeyB64, context.senderId) : null);
+        if (!key) return null;
+
+        const params = { name: 'AES-GCM', iv: new Uint8Array(base64ToBuffer(ivB64)) };
+        if (v2) {
+            params.additionalData = associatedData(
+                context.senderId || '', context.recipientId || '', context.msgUuid || '');
+        }
         try {
-            return await window.crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv: new Uint8Array(base64ToBuffer(ivB64)) },
-                key,
-                base64ToBuffer(ciphertextB64)
-            );
+            return await window.crypto.subtle.decrypt(params, key, base64ToBuffer(ciphertextB64));
         } catch (error) {
-            // Wrong key, rotated peer key, or a tampered payload.
+            // Wrong key, rotated peer key, wrong direction or context, or a
+            // tampered payload. AES-GCM does not say which, by design.
             return null;
         }
     }
 
-    /** Returns {ciphertext, iv} in base64, or null when the peer has no key yet. */
-    async encrypt(peerPublicKeyB64, plaintext) {
-        return this.encryptBytes(peerPublicKeyB64, new TextEncoder().encode(plaintext));
+    /** Returns {ciphertext, iv, v, msg_uuid}, or null when the peer has no key yet. */
+    async encrypt(peerPublicKeyB64, plaintext, context = {}) {
+        return this.encryptBytes(peerPublicKeyB64, new TextEncoder().encode(plaintext), context);
     }
 
     /** Returns the plaintext, or null when the message cannot be opened. */
-    async decrypt(peerPublicKeyB64, ciphertextB64, ivB64) {
-        const plaintext = await this.decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64);
+    async decrypt(peerPublicKeyB64, ciphertextB64, ivB64, context = {}) {
+        const plaintext = await this.decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64, context);
         return plaintext === null ? null : new TextDecoder().decode(plaintext);
     }
 
     /** Drop cached keys, e.g. after the peer publishes a new public key. */
     forgetPeer(peerPublicKeyB64) {
-        if (peerPublicKeyB64) derivedKeyCache.delete(peerPublicKeyB64);
-        else derivedKeyCache.clear();
+        if (!peerPublicKeyB64) {
+            derivedKeyCache.clear();
+            return;
+        }
+        for (const cacheKey of Array.from(derivedKeyCache.keys())) {
+            if (cacheKey.split('|').includes(peerPublicKeyB64)) derivedKeyCache.delete(cacheKey);
+        }
     }
 }
 

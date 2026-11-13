@@ -200,11 +200,12 @@ Text messages and voice notes are encrypted in the browser before they reach the
 | Stage | Mechanism |
 | --- | --- |
 | Key agreement | ECDH on P-256 |
-| Key derivation | HKDF-SHA256, salted with both public keys |
-| Message encryption | AES-GCM 256 with a fresh 96-bit IV per message |
+| Key derivation | HKDF-SHA256, salted with both public keys; one key **per direction** (the HKDF info names the sender's key, then the recipient's) |
+| Message encryption | AES-GCM 256 with a fresh 96-bit IV per message, authenticating `v2\|sender_id\|recipient_id\|msg_uuid` as additional data |
 
 - The private key is generated **non-extractable** and stored in IndexedDB. Script cannot read it back out, so an XSS bug cannot exfiltrate it.
 - Only the base64 SPKI public key is published to the server.
+- Every message carries `v: 2` and a random `msg_uuid`. Because the sender, recipient and uuid are authenticated, the server cannot hand Alice's own message back to her as though Bob wrote it (one key per direction stops that), attribute it to another conversation, or deliver it twice unnoticed: it refuses a reused `msg_uuid`, and the client refuses to show a second row carrying one. Version 1 rows (one key for both directions, no additional data) still decrypt until they expire; new v1 sends are refused.
 - The server stores ciphertext and the IV. It cannot read message contents, so reply previews and notifications show `Encrypted message` / `Voice message` rather than the body.
 - Voice notes take the same path: the recording is encrypted as raw bytes, and the server stores base64 ciphertext plus the IV and the container type (`audio/webm`, `audio/wav`, …). The recipient decrypts to a `Blob` and plays it from an object URL — the audio never exists in the clear on the server.
 - If a peer has not published a key yet, the message is sent in plaintext and is **labelled `[not encrypted]`** in the UI. The padlock badge appears only on messages that were genuinely encrypted.
@@ -483,8 +484,8 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 493 server tests
-node --test "tests/js/*.test.mjs"   # 71 browser tests
+pytest                          # 507 server tests
+node --test "tests/js/*.test.mjs"   # 79 browser tests
 ```
 
 Both run on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
@@ -493,13 +494,11 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**493 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+**507 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
 
-**71 browser tests** run the shipped `app/static/js` files verbatim on Node's
+**79 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
-They cover the E2EE session (two independent sessions, so a symmetrically broken
-key agreement cannot pass by talking to itself), the escaping layer, and the
-service worker's request scoping.
+They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v2 reflection, associated-data and downgrade cases; and the shipped v1 client as a fixture, so old rows are proven to still decrypt), the escaping layer, and the service worker's request scoping.
 
 ### Feature parity (M2)
 

@@ -12,20 +12,42 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { STATIC_JS, loadBrowserScript, makeWindow, makeIndexedDB } from './harness.mjs';
 
 const E2EE = join(STATIC_JS, 'e2ee.js');
+// The v1 client exactly as it shipped (git show 2c030ff:app/static/js/e2ee.js),
+// so "old rows still decrypt" is tested against the real old code rather than
+// a re-derivation of it that could share the new code's mistakes.
+const E2EE_V1 = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'e2ee-v1.js');
 
 /** A fresh session with its own key store, as a separate browser would have. */
-async function newSession(userId) {
-    const indexedDB = makeIndexedDB();
+async function newSession(userId, indexedDB = makeIndexedDB(), file = E2EE) {
     const window = makeWindow({ indexedDB });
-    loadBrowserScript(E2EE, { window, indexedDB, console });
+    loadBrowserScript(file, { window, indexedDB, console });
     const session = window.revealxE2EE;
     const publicKey = await session.init(userId);
-    return { session, publicKey, indexedDB, window };
+    return { id: userId, session, publicKey, indexedDB, window };
+}
+
+/** from -> to, the way chat.js sends. */
+function send(from, to, text) {
+    return from.session.encrypt(to.publicKey, text, { recipientId: to.id });
+}
+
+/** The context a receiver rebuilds from the stored row. */
+function ctx(sent, senderId, recipientId) {
+    return { v: sent.v, senderId, recipientId, msgUuid: sent.msg_uuid };
+}
+
+/** `by` opens a message that went from -> to. */
+function open(by, from, to, sent, overrides = {}) {
+    const peer = by.id === from.id ? to : from;
+    const c = { ...ctx(sent, from.id, to.id), ...overrides };
+    return by.session.decrypt(peer.publicKey, overrides.ciphertext ?? sent.ciphertext,
+        overrides.iv ?? sent.iv, c);
 }
 
 test('a session generates a usable key pair on first use', async () => {
@@ -67,21 +89,21 @@ test('two sessions derive the same key and can read each other', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
 
-    const sent = await alice.session.encrypt(bob.publicKey, 'the shares are in the vault');
+    const sent = await send(alice, bob, 'the shares are in the vault');
     assert.ok(sent && sent.ciphertext && sent.iv, 'encrypt returned a payload');
 
-    const read = await bob.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv);
+    const read = await open(bob, alice, bob, sent);
     assert.equal(read, 'the shares are in the vault');
 });
 
-test('the conversation key is symmetric in both directions', async () => {
+test('both directions work, and each side can read what it sent', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
 
-    const fromBob = await bob.session.encrypt(alice.publicKey, 'acknowledged');
-    const readByAlice = await alice.session.decrypt(bob.publicKey, fromBob.ciphertext, fromBob.iv);
-
-    assert.equal(readByAlice, 'acknowledged');
+    const fromBob = await send(bob, alice, 'acknowledged');
+    assert.equal(await open(alice, bob, alice, fromBob), 'acknowledged');
+    // The sender's own transcript is decrypted from the stored row too.
+    assert.equal(await open(bob, bob, alice, fromBob), 'acknowledged');
 });
 
 test('a third party holding both public keys cannot read the message', async () => {
@@ -89,12 +111,13 @@ test('a third party holding both public keys cannot read the message', async () 
     const bob = await newSession('bob');
     const eve = await newSession('eve');
 
-    const sent = await alice.session.encrypt(bob.publicKey, 'secret');
+    const sent = await send(alice, bob, 'secret');
+    const c = ctx(sent, 'alice', 'bob');
 
     // Eve knows every public key -- they are published by design. Without a
     // private half, that has to be worth nothing.
-    const asAlice = await eve.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv);
-    const asBob = await eve.session.decrypt(bob.publicKey, sent.ciphertext, sent.iv);
+    const asAlice = await eve.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv, c);
+    const asBob = await eve.session.decrypt(bob.publicKey, sent.ciphertext, sent.iv, c);
 
     assert.equal(asAlice, null);
     assert.equal(asBob, null);
@@ -104,13 +127,13 @@ test('a tampered ciphertext is rejected, not silently mangled', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
 
-    const sent = await alice.session.encrypt(bob.publicKey, 'transfer approved');
+    const sent = await send(alice, bob, 'transfer approved');
 
     const bytes = Buffer.from(sent.ciphertext, 'base64');
     bytes[0] ^= 0x01;                     // one bit
     const tampered = bytes.toString('base64');
 
-    const read = await bob.session.decrypt(alice.publicKey, tampered, sent.iv);
+    const read = await open(bob, alice, bob, sent, { ciphertext: tampered });
     assert.equal(read, null, 'AES-GCM authentication caught the change');
 });
 
@@ -118,11 +141,11 @@ test('a tampered IV is rejected', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
 
-    const sent = await alice.session.encrypt(bob.publicKey, 'transfer approved');
+    const sent = await send(alice, bob, 'transfer approved');
     const iv = Buffer.from(sent.iv, 'base64');
     iv[0] ^= 0x01;
 
-    const read = await bob.session.decrypt(alice.publicKey, sent.ciphertext, iv.toString('base64'));
+    const read = await open(bob, alice, bob, sent, { iv: iv.toString('base64') });
     assert.equal(read, null);
 });
 
@@ -132,7 +155,7 @@ test('each message gets a fresh IV', async () => {
 
     const seen = new Set();
     for (let i = 0; i < 25; i++) {
-        const sent = await alice.session.encrypt(bob.publicKey, 'same text every time');
+        const sent = await send(alice, bob, 'same text every time');
         seen.add(sent.iv);
     }
     // A repeated IV under one AES-GCM key is a catastrophic failure, not a
@@ -144,8 +167,8 @@ test('identical plaintext does not produce identical ciphertext', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
 
-    const a = await alice.session.encrypt(bob.publicKey, 'yes');
-    const b = await alice.session.encrypt(bob.publicKey, 'yes');
+    const a = await send(alice, bob, 'yes');
+    const b = await send(alice, bob, 'yes');
 
     assert.notEqual(a.ciphertext, b.ciphertext);
 });
@@ -158,8 +181,9 @@ test('binary payloads survive the round trip byte for byte', async () => {
     const audio = new Uint8Array(1024);
     for (let i = 0; i < audio.length; i++) audio[i] = i % 256;
 
-    const sent = await alice.session.encryptBytes(bob.publicKey, audio);
-    const back = await bob.session.decryptBytes(alice.publicKey, sent.ciphertext, sent.iv);
+    const sent = await alice.session.encryptBytes(bob.publicKey, audio, { recipientId: 'bob' });
+    const back = await bob.session.decryptBytes(alice.publicKey, sent.ciphertext, sent.iv,
+        ctx(sent, 'alice', 'bob'));
 
     assert.deepEqual(new Uint8Array(back), audio);
 });
@@ -169,8 +193,8 @@ test('unicode survives the round trip', async () => {
     const bob = await newSession('bob');
 
     const text = 'شیئر محفوظ ہے — 共有は安全です — 🔐';
-    const sent = await alice.session.encrypt(bob.publicKey, text);
-    assert.equal(await bob.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv), text);
+    const sent = await send(alice, bob, text);
+    assert.equal(await open(bob, alice, bob, sent), text);
 });
 
 test('encrypting to nobody returns null rather than sending in the clear', async () => {
@@ -182,8 +206,9 @@ test('encrypting to nobody returns null rather than sending in the clear', async
 test('decrypt returns null on a missing ciphertext or iv', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
-    assert.equal(await bob.session.decrypt(alice.publicKey, '', 'aaaa'), null);
-    assert.equal(await bob.session.decrypt(alice.publicKey, 'aaaa', ''), null);
+    const c = { v: 2, senderId: 'alice', recipientId: 'bob', msgUuid: 'x' };
+    assert.equal(await bob.session.decrypt(alice.publicKey, '', 'aaaa', c), null);
+    assert.equal(await bob.session.decrypt(alice.publicKey, 'aaaa', '', c), null);
 });
 
 test('fingerprints identify a key and differ between keys', async () => {
@@ -203,15 +228,16 @@ test('forgetPeer drops the cached key so a rotated peer key is picked up', async
     const alice = await newSession('alice');
     const bob = await newSession('bob');
 
-    const sent = await alice.session.encrypt(bob.publicKey, 'before rotation');
-    assert.equal(await bob.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv), 'before rotation');
+    const sent = await send(alice, bob, 'before rotation');
+    assert.equal(await open(bob, alice, bob, sent), 'before rotation');
 
     // Bob rotates. Alice's cached derivation is now stale.
     const rotated = await bob.session.init('bob', { regenerate: true });
     alice.session.forgetPeer(bob.publicKey);
 
-    const after = await alice.session.encrypt(rotated, 'after rotation');
-    assert.equal(await bob.session.decrypt(alice.publicKey, after.ciphertext, after.iv), 'after rotation');
+    const after = await alice.session.encrypt(rotated, 'after rotation', { recipientId: 'bob' });
+    assert.equal(await bob.session.decrypt(alice.publicKey, after.ciphertext, after.iv,
+        ctx(after, 'alice', 'bob')), 'after rotation');
 });
 
 test('a session without Web Crypto degrades instead of throwing', async () => {
@@ -227,4 +253,82 @@ test('a session without Web Crypto degrades instead of throwing', async () => {
     assert.equal(await session.init('alice'), '');
     assert.equal(session.isReady(), false);
     assert.equal(await session.encrypt('anything', 'secret'), null);
+});
+
+
+// ----------------------------------------------------------------------
+// Protocol v2: direction-bound keys and associated data
+// ----------------------------------------------------------------------
+
+test('new messages are v2 and carry a random UUID', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const a = await send(alice, bob, 'one');
+    const b = await send(alice, bob, 'two');
+    assert.equal(a.v, 2);
+    assert.match(a.msg_uuid, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.notEqual(a.msg_uuid, b.msg_uuid);
+});
+
+test('a ciphertext sent A->B does not open as B->A (reflection)', async () => {
+    // v1 used one key for both directions, so a server could hand Alice's
+    // own message back to her as if Bob had said it, and it decrypted.
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await send(alice, bob, 'I agree to the transfer');
+
+    assert.equal(await open(alice, bob, alice, sent), null, 'reflected to the sender');
+    assert.equal(await open(bob, bob, alice, sent), null, 'relabelled for the recipient');
+});
+
+for (const [field, value] of [
+    ['senderId', 'mallory'],
+    ['recipientId', 'mallory'],
+    ['msgUuid', '00000000-0000-4000-8000-000000000000'],
+]) {
+    test(`changing the associated ${field} fails authentication`, async () => {
+        const alice = await newSession('alice');
+        const bob = await newSession('bob');
+        const sent = await send(alice, bob, 'bound to its context');
+        assert.equal(await open(bob, alice, bob, sent), 'bound to its context');
+        assert.equal(await open(bob, alice, bob, sent, { [field]: value }), null);
+    });
+}
+
+test('relabelling a v2 message as v1 does not open it (no downgrade)', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await send(alice, bob, 'v2 only');
+    assert.equal(await open(bob, alice, bob, sent, { v: 1 }), null);
+    assert.equal(await open(bob, alice, bob, sent, { v: undefined }), null);
+});
+
+test('rows written by the v1 client still decrypt', async () => {
+    // Same browser, same key store: the user upgraded with messages from the
+    // last hour still on the server.
+    const aliceStore = makeIndexedDB();
+    const bobStore = makeIndexedDB();
+    const oldAlice = await newSession('alice', aliceStore, E2EE_V1);
+    const oldBob = await newSession('bob', bobStore, E2EE_V1);
+    const legacy = await oldAlice.session.encrypt(oldBob.publicKey, 'written before v2');
+    assert.equal(legacy.v, undefined, 'the fixture really is the v1 client');
+
+    const alice = await newSession('alice', aliceStore);
+    const bob = await newSession('bob', bobStore);
+    assert.equal(alice.publicKey, oldAlice.publicKey);
+
+    const legacyCtx = { senderId: 'alice', recipientId: 'bob' };
+    assert.equal(await bob.session.decrypt(alice.publicKey, legacy.ciphertext, legacy.iv, legacyCtx),
+        'written before v2');
+    assert.equal(await alice.session.decrypt(bob.publicKey, legacy.ciphertext, legacy.iv, legacyCtx),
+        'written before v2', 'the sender still reads their own old message');
+});
+
+test('a v1 client cannot read a v2 message, so nothing silently falls back', async () => {
+    const bobStore = makeIndexedDB();
+    const alice = await newSession('alice');
+    const bob = await newSession('bob', bobStore);
+    const sent = await send(alice, bob, 'new format');
+    const oldBob = await newSession('bob', bobStore, E2EE_V1);
+    assert.equal(await oldBob.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv), null);
 });

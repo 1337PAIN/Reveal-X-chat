@@ -1151,6 +1151,43 @@ function localTimeLabel(msg) {
         : msg.timestamp;
 }
 
+/**
+ * The E2EE v2 context for a stored message: what e2ee.js authenticates as
+ * AES-GCM associated data. The ids are the server's, from the row itself, so
+ * a row relabelled with another sender or recipient no longer decrypts.
+ */
+function e2eeContext(msg) {
+    const extra = msg.extra || {};
+    return {
+        v: extra.v,
+        senderId: msg.sender_id,
+        recipientId: msg.recipient_id,
+        msgUuid: extra.msg_uuid,
+    };
+}
+
+// "<sorted user ids>|<msg_uuid>" -> the first message id seen carrying it.
+//
+// The server refuses a msg_uuid it has already stored, but the server is the
+// party E2EE does not trust. A server replaying a ciphertext has to keep its
+// msg_uuid -- it is authenticated -- so a second row with the same uuid and a
+// different id is a replay, and is not shown as a fresh message.
+const seenMessageUuids = new Map();
+
+function isReplayedMessage(msg) {
+    const extra = msg.extra || {};
+    if (extra.v !== 2 || !extra.msg_uuid) return false;
+    const key = `${[msg.sender_id, msg.recipient_id].sort().join('|')}|${extra.msg_uuid}`;
+    const first = seenMessageUuids.get(key);
+    if (!first) {
+        seenMessageUuids.set(key, msg.id);
+        return false;
+    }
+    return first !== msg.id;
+}
+
+const REPLAYED_NOTICE = 'Repeated message - this encrypted message was already delivered, so it is not shown again.';
+
 /** Fill a message body, decrypting first when the payload is E2EE. */
 async function fillTextContent(node, msg) {
     if (!node) return;
@@ -1160,11 +1197,19 @@ async function fillTextContent(node, msg) {
         return;
     }
 
+    if (isReplayedMessage(msg)) {
+        node.textContent = REPLAYED_NOTICE;
+        node.classList.add('undecryptable');
+        return;
+    }
+
     node.textContent = 'Decrypting...';
     const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
     const peerKey = peerPublicKey(otherId);
     const iv = msg.extra ? msg.extra.iv : null;
-    const plaintext = peerKey ? await window.revealxE2EE.decrypt(peerKey, msg.content, iv) : null;
+    const plaintext = peerKey
+        ? await window.revealxE2EE.decrypt(peerKey, msg.content, iv, e2eeContext(msg))
+        : null;
 
     if (plaintext === null) {
         node.textContent = 'Encrypted message - cannot be opened with the current key pair.';
@@ -1185,11 +1230,22 @@ async function fillVoiceContent(player, status, msg) {
         return;
     }
 
+    if (isReplayedMessage(msg)) {
+        player.remove();
+        if (status) {
+            status.textContent = REPLAYED_NOTICE;
+            status.classList.add('undecryptable');
+        }
+        return;
+    }
+
     if (status) status.textContent = 'Decrypting voice message...';
     const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
     const peerKey = peerPublicKey(otherId);
     const iv = msg.extra ? msg.extra.iv : null;
-    const bytes = peerKey ? await window.revealxE2EE.decryptBytes(peerKey, msg.content, iv) : null;
+    const bytes = peerKey
+        ? await window.revealxE2EE.decryptBytes(peerKey, msg.content, iv, e2eeContext(msg))
+        : null;
 
     if (!bytes) {
         player.remove();
@@ -1776,13 +1832,15 @@ async function sendMessage() {
 
     if (peerKey) {
         try {
-            const sealed = await window.revealxE2EE.encrypt(peerKey, text);
+            const sealed = await window.revealxE2EE.encrypt(peerKey, text, { recipientId });
             if (sealed) {
                 payload = {
                     recipient_id: recipientId,
                     message: sealed.ciphertext,
                     iv: sealed.iv,
                     encrypted: true,
+                    v: sealed.v,
+                    msg_uuid: sealed.msg_uuid,
                 };
             }
         } catch (error) {
@@ -1842,7 +1900,8 @@ async function notifyForIncoming(msg) {
             const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
             const peerKey = peerPublicKey(otherId);
             const plaintext = peerKey
-                ? await window.revealxE2EE.decrypt(peerKey, msg.content, msg.extra && msg.extra.iv)
+                ? await window.revealxE2EE.decrypt(
+                    peerKey, msg.content, msg.extra && msg.extra.iv, e2eeContext(msg))
                 : null;
             searchable = plaintext || '';
             preview = 'Encrypted message';
@@ -2036,7 +2095,8 @@ async function sendVoiceMessage(blob, recipientId) {
 
     if (peerKey) {
         try {
-            const sealed = await window.revealxE2EE.encryptBytes(peerKey, await blob.arrayBuffer());
+            const sealed = await window.revealxE2EE.encryptBytes(
+                peerKey, await blob.arrayBuffer(), { recipientId });
             if (sealed) {
                 socket.emit('send_voice', {
                     recipient_id: recipientId,
@@ -2044,6 +2104,8 @@ async function sendVoiceMessage(blob, recipientId) {
                     iv: sealed.iv,
                     mime,
                     encrypted: true,
+                    v: sealed.v,
+                    msg_uuid: sealed.msg_uuid,
                 });
                 return;
             }
