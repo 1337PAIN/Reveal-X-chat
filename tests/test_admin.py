@@ -197,8 +197,11 @@ def test_an_anonymous_socket_cannot_use_any_admin_event(store, event, payload):
     sock = socketio.test_client(flask_app)
     sock.emit(event, payload) if payload is not None else sock.emit(event)
 
-    assert events(sock, 'admin_error')
+    # Refused before the admin check is reached: the socket has no session at
+    # all, which every session handler now reports as auth_required.
+    assert events(sock, 'auth_required')
     assert events(sock, 'admin_accounts') == []
+    assert events(sock, 'admin_ok') == []
     sock.disconnect()
 
 

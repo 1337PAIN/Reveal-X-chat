@@ -4,6 +4,7 @@ Route and Socket.IO handlers for Reveal-X.
 
 import base64
 from datetime import datetime
+import functools
 import re
 import hmac
 import os
@@ -758,6 +759,55 @@ def emit_users():
         }, to=session_id)
 
 
+#: Events a socket may send before it has a session. Every other handler is
+#: wrapped in session_required, so it answers `auth_required` instead of
+#: returning silently. tests/test_resume.py enumerates the server's handler
+#: table against this set, so a new handler is covered without being listed.
+PRE_AUTH_EVENTS = frozenset({
+    'register', 'login', 'firebase_login', 'verify_totp', 'resume_session', 'logout',
+})
+
+AUTH_REQUIRED_MESSAGE = 'Your session has ended. Sign in again.'
+
+
+def session_required(handler):
+    """Tell a socket with no session that it has none.
+
+    Handlers used to check for a session and return silently without one.
+    After a dropped connection the page came back on a new socket with no
+    session, still looked signed in, and every action vanished: no message
+    sent, nothing said why. The client now hears `auth_required`, tries its
+    resume token, and asks the user to sign in only if that fails.
+    """
+    @functools.wraps(handler)
+    def wrapper(*args, **kwargs):
+        if not chat_room.get_session_user(request.sid):
+            emit('auth_required', {'error': AUTH_REQUIRED_MESSAGE}, to=request.sid)
+            return None
+        return handler(*args, **kwargs)
+    return wrapper
+
+
+@socketio.on('resume_session')
+def handle_resume_session(data):
+    """Restore a session on a new socket from a resume token.
+
+    Within the token's 12 hours this skips the password and the second
+    factor: the token can only have been issued after both were satisfied
+    (_establish_session is the only place that issues one), and it dies
+    early on logout or any change to the account.
+    """
+    data = data or {}
+    token = data.get('token')
+    user_id = chat_room.redeem_resume_token(token if isinstance(token, str) else None)
+    user = chat_room.get_auth_user(user_id) if user_id else None
+    if not user:
+        emit('auth_required', {'error': 'Your session expired. Sign in again.',
+                               'resume_failed': True}, to=request.sid)
+        return
+    _establish_session(user, resume_token=token)
+
+
 @socketio.on('connect')
 def handle_connect():
     print(f"User connected: {request.sid}")
@@ -775,7 +825,7 @@ def handle_disconnect():
         print(f"User disconnected: {user['username']}")
 
 
-def _establish_session(user):
+def _establish_session(user, resume_token=None):
     """Attach a fully authenticated user to this socket.
 
     The failed-login buckets are cleared *here* rather than when the password
@@ -789,9 +839,15 @@ def _establish_session(user):
     fresh = chat_room.get_auth_user(user['id']) or user
     chat_room.add_user(request.sid, fresh)
     chat_room.cleanup_old_messages()
+    # A resumed session keeps the token it presented rather than being given
+    # a fresh one: re-issuing would let a token renew itself for ever, and
+    # the 12 hours are meant to bound how long a sign-in lasts.
+    token = resume_token or chat_room.issue_resume_token(fresh['id'])
     emit('auth_success', {
         'user': fresh,
         'users': chat_room.get_users_list(fresh['id']),
+        'resume_token': token,
+        'resumed': bool(resume_token),
     }, to=request.sid)
     # Admins get the account list immediately, so the panel and its pending
     # badge are populated before they open it.
@@ -945,6 +1001,7 @@ def _disconnect_user_sessions(user_id, reason):
 
 
 @socketio.on('admin_list_accounts')
+@session_required
 def handle_admin_list_accounts():
     if not _require_admin():
         return
@@ -954,6 +1011,7 @@ def handle_admin_list_accounts():
 
 
 @socketio.on('admin_set_state')
+@session_required
 def handle_admin_set_state(data):
     """Approve a request, disable an account, or re-enable a disabled one."""
     admin = _require_admin()
@@ -980,6 +1038,7 @@ def handle_admin_set_state(data):
 
 
 @socketio.on('admin_create_account')
+@session_required
 def handle_admin_create_account(data):
     """Create an account directly, already approved."""
     admin = _require_admin()
@@ -1008,6 +1067,7 @@ def handle_admin_create_account(data):
 
 
 @socketio.on('admin_reset_password')
+@session_required
 def handle_admin_reset_password(data):
     admin = _require_admin()
     if not admin:
@@ -1028,6 +1088,7 @@ def handle_admin_reset_password(data):
 
 
 @socketio.on('admin_delete_account')
+@session_required
 def handle_admin_delete_account(data):
     admin = _require_admin()
     if not admin:
@@ -1049,6 +1110,7 @@ def handle_admin_delete_account(data):
 
 
 @socketio.on('admin_set_role')
+@session_required
 def handle_admin_set_role(data):
     """Promote a user to administrator, or demote one back.
 
@@ -1253,14 +1315,22 @@ def handle_verify_totp(data):
 
 @socketio.on('logout')
 def handle_logout():
-    """Log out the current socket session."""
+    """Log out the current socket session.
+
+    Also ends every resume token the account holds, on every device: signing
+    out is the user saying this session is over, and a token that outlived it
+    would bring it back on the next reconnect.
+    """
     user = chat_room.remove_user(request.sid)
+    if user:
+        chat_room.bump_session_epoch(user['id'])
     emit('logout_success', {}, to=request.sid)
     if user:
         emit_users()
 
 
 @socketio.on('register_public_key')
+@session_required
 def handle_register_public_key(data):
     """Publish the caller's ECDH public key so peers can derive a shared secret.
 
@@ -1288,6 +1358,7 @@ def handle_register_public_key(data):
 
 
 @socketio.on('update_profile')
+@session_required
 def handle_update_profile(data):
     """Update the current user's profile picture."""
     data = data or {}
@@ -1319,6 +1390,7 @@ def handle_update_profile(data):
 
 
 @socketio.on('totp_begin_enrol')
+@session_required
 def handle_totp_begin_enrol(data):
     """Issue a new TOTP secret and its QR code.
 
@@ -1344,6 +1416,7 @@ def handle_totp_begin_enrol(data):
 
 
 @socketio.on('totp_confirm_enrol')
+@session_required
 def handle_totp_confirm_enrol(data):
     """Turn two-factor on, once a code from the new secret checks out."""
     data = data or {}
@@ -1372,6 +1445,7 @@ def handle_totp_confirm_enrol(data):
 
 
 @socketio.on('totp_disable')
+@session_required
 def handle_totp_disable(data):
     """Turn two-factor off, but only for someone holding a current code."""
     data = data or {}
@@ -1398,6 +1472,7 @@ def handle_totp_disable(data):
 
 
 @socketio.on('update_username')
+@session_required
 def handle_update_username(data):
     """Rename the signed-in account."""
     data = data or {}
@@ -1416,6 +1491,7 @@ def handle_update_username(data):
 
 
 @socketio.on('update_bio')
+@session_required
 def handle_update_bio(data):
     """Store the short profile bio shown to other accounts."""
     data = data or {}
@@ -1430,6 +1506,7 @@ def handle_update_bio(data):
 
 
 @socketio.on('update_status')
+@session_required
 def handle_update_status(data):
     """Set availability (online / away / do not disturb)."""
     data = data or {}
@@ -1444,6 +1521,7 @@ def handle_update_status(data):
 
 
 @socketio.on('select_chat')
+@session_required
 def handle_select_chat(data):
     """Send private chat history for the selected account."""
     data = data or {}
@@ -1498,6 +1576,7 @@ def _e2ee_envelope(data, sender_id, recipient_id):
 
 
 @socketio.on('send_message')
+@session_required
 def handle_message(data):
     """Handle private text messages, encrypted or plaintext."""
     data = data or {}
@@ -1541,6 +1620,7 @@ def handle_message(data):
 
 
 @socketio.on('send_voice')
+@session_required
 def handle_voice(data):
     """Handle private voice messages, encrypted or plaintext.
 
@@ -1617,6 +1697,7 @@ def handle_voice(data):
 
 
 @socketio.on('react_message')
+@session_required
 def handle_reaction(data):
     """Set or replace the current user's reaction on a message."""
     data = data or {}
@@ -1646,6 +1727,7 @@ def handle_reaction(data):
 
 
 @socketio.on('forward_message')
+@session_required
 def handle_forward(data):
     """Forward an existing visible message to another account."""
     data = data or {}
@@ -1680,6 +1762,7 @@ def handle_forward(data):
 
 
 @socketio.on('mark_read')
+@session_required
 def handle_mark_read(data):
     """Mark messages from the selected sender as read."""
     data = data or {}
@@ -1694,6 +1777,7 @@ def handle_mark_read(data):
 
 
 @socketio.on('typing')
+@session_required
 def handle_typing(data):
     """Forward typing state to the selected recipient."""
     data = data or {}
@@ -1713,6 +1797,7 @@ def handle_typing(data):
 
 
 @socketio.on('send_image')
+@session_required
 def handle_image(data):
     """Handle private encrypted image sharing."""
     try:
@@ -1804,6 +1889,7 @@ def handle_image(data):
 
 
 @socketio.on('revoke_share')
+@session_required
 def handle_revoke_share(data):
     """Revoke access to a share (burns its one-time access)."""
     data = data or {}
@@ -1829,6 +1915,7 @@ def handle_revoke_share(data):
 
 
 @socketio.on('delete_message')
+@session_required
 def handle_delete_message(data):
     """Delete a message.
 
@@ -1948,6 +2035,7 @@ def _group_notice(group_id, text, extra_user_ids=()):
 
 
 @socketio.on('group_create')
+@session_required
 def handle_group_create(data):
     user = chat_room.get_session_user(request.sid)
     if not user:
@@ -1968,6 +2056,7 @@ def handle_group_create(data):
 
 
 @socketio.on('group_list')
+@session_required
 def handle_group_list():
     user = chat_room.get_session_user(request.sid)
     if not user:
@@ -1977,6 +2066,7 @@ def handle_group_list():
 
 
 @socketio.on('group_open')
+@session_required
 def handle_group_open(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -1994,6 +2084,7 @@ def handle_group_open(data):
 
 
 @socketio.on('group_send')
+@session_required
 def handle_group_send(data):
     """One ciphertext per member, encrypted client-side under each member's
     pairwise key. The server never sees a group key because there is not one."""
@@ -2051,6 +2142,7 @@ def handle_group_send(data):
 
 
 @socketio.on('group_add_members')
+@session_required
 def handle_group_add_members(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -2074,6 +2166,7 @@ def handle_group_add_members(data):
 
 
 @socketio.on('group_remove_member')
+@session_required
 def handle_group_remove_member(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -2099,6 +2192,7 @@ def handle_group_remove_member(data):
 
 
 @socketio.on('group_set_role')
+@session_required
 def handle_group_set_role(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -2123,6 +2217,7 @@ def handle_group_set_role(data):
 
 
 @socketio.on('group_update_info')
+@session_required
 def handle_group_update_info(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -2144,6 +2239,7 @@ def handle_group_update_info(data):
 
 
 @socketio.on('group_update_settings')
+@session_required
 def handle_group_update_settings(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -2165,6 +2261,7 @@ def handle_group_update_settings(data):
 
 
 @socketio.on('group_leave')
+@session_required
 def handle_group_leave(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -2190,6 +2287,7 @@ def handle_group_leave(data):
     emit('group_ok', {'message': 'You left the group.'}, to=request.sid)
 
 @socketio.on('delete_account')
+@session_required
 def handle_delete_account(data):
     """Delete the signed-in account, its messages and its stored shares.
 

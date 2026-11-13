@@ -365,7 +365,9 @@ def test_delete_account_requires_a_session(store):
 
     sock.emit('delete_account', {})
 
-    assert events(sock, 'auth_error'), 'refused'
+    # Refused with auth_required, which every session handler now sends
+    # rather than its own error (or nothing at all); see test_resume.py.
+    assert events(sock, 'auth_required'), 'refused'
     assert not events(sock, 'logout_success')
     sock.disconnect()
 

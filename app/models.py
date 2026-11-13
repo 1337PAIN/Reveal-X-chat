@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import json
 import os
 import re
+import hashlib
 import secrets
 import sqlite3
 import threading
@@ -40,6 +41,10 @@ except ImportError:
 
 USERNAME_RE = re.compile(r'^[A-Za-z0-9_.-]{3,30}$')
 MESSAGE_TTL_HOURS = 1
+#: How long a reconnecting socket may get its session back without signing in
+#: again (and without a second TOTP prompt). Anything that changes who the
+#: account is or what it may do ends this early: see bump_session_epoch.
+RESUME_TOKEN_TTL_HOURS = 12
 MAX_BIO_LENGTH = 150
 USER_STATUSES = ('online', 'away', 'dnd')
 
@@ -185,6 +190,18 @@ class ChatRoom:
                     role TEXT NOT NULL DEFAULT 'user',
                     account_state TEXT NOT NULL DEFAULT 'active',
                     last_seen TEXT,
+                    created_at TEXT NOT NULL,
+                    session_epoch INTEGER NOT NULL DEFAULT 0
+                )
+            """)
+            # Only a SHA-256 of each token is kept, so a copy of the database
+            # cannot be used to resume anybody's session.
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS resume_tokens (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    session_epoch INTEGER NOT NULL,
+                    expires_at TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 )
             """)
@@ -270,6 +287,8 @@ class ChatRoom:
                 # Accounts that predate this migration default to 'active' so
                 # an upgrade never locks anyone out.
                 ('account_state', "ALTER TABLE users ADD COLUMN account_state TEXT NOT NULL DEFAULT 'active'"),
+                # Bumped whenever outstanding resume tokens must stop working.
+                ('session_epoch', "ALTER TABLE users ADD COLUMN session_epoch INTEGER NOT NULL DEFAULT 0"),
             ):
                 if column not in user_columns:
                     db.execute(ddl)
@@ -280,6 +299,7 @@ class ChatRoom:
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id, created_at)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_resume_tokens_user ON resume_tokens(user_id)")
             # NULLs are distinct in a UNIQUE index on both SQLite and Postgres,
             # so plaintext and v1 rows (no uuid) are unaffected.
             db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_msg_uuid ON messages(msg_uuid_key)")
@@ -1083,6 +1103,76 @@ class ChatRoom:
             return False
         return self.role_rank(self.get_role(actor_id)) > self.role_rank(self.get_role(target_id))
 
+    # ------------------------------------------------------------------
+    # Resume tokens
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _token_hash(token):
+        return hashlib.sha256((token or '').encode('utf-8')).hexdigest()
+
+    def issue_resume_token(self, user_id):
+        """A 256-bit bearer token that lets a reconnecting socket resume.
+
+        Returned once, to the page that signed in, which keeps it in memory
+        only. The database keeps its SHA-256 and the account's current
+        session_epoch; bumping the epoch invalidates every token issued
+        before it.
+        """
+        token = secrets.token_urlsafe(32)
+        now = datetime.utcnow()
+        with self._connect() as db:
+            row = db.execute("SELECT session_epoch FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not row:
+                return None
+            db.execute("DELETE FROM resume_tokens WHERE expires_at < ?", (now.isoformat(),))
+            db.execute(
+                "INSERT INTO resume_tokens (token_hash, user_id, session_epoch, expires_at, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (self._token_hash(token), user_id, row['session_epoch'] or 0,
+                 (now + timedelta(hours=RESUME_TOKEN_TTL_HOURS)).isoformat(), now.isoformat()),
+            )
+        return token
+
+    def redeem_resume_token(self, token):
+        """The user id a live token belongs to, or None.
+
+        Live means: known, not expired, issued in the account's current
+        session epoch, and the account is still active.
+        """
+        if not token or len(token) > 128:
+            return None
+        with self._connect() as db:
+            row = db.execute("""
+                SELECT resume_tokens.user_id, resume_tokens.expires_at,
+                       resume_tokens.session_epoch AS token_epoch,
+                       users.session_epoch AS user_epoch, users.account_state
+                FROM resume_tokens JOIN users ON users.id = resume_tokens.user_id
+                WHERE resume_tokens.token_hash = ?
+            """, (self._token_hash(token),)).fetchone()
+        if not row:
+            return None
+        if row['expires_at'] < datetime.utcnow().isoformat():
+            return None
+        if (row['token_epoch'] or 0) != (row['user_epoch'] or 0):
+            return None
+        if (row['account_state'] or 'active') != 'active':
+            return None
+        return row['user_id']
+
+    def bump_session_epoch(self, user_id):
+        """End every resume token the account holds.
+
+        Called on logout and on anything that changes who the account is or
+        what it may do -- password reset, disable, role change, deletion --
+        so a token issued before the change cannot carry the old session past
+        it. The rows are deleted as well; the epoch is what makes that
+        guarantee hold even for a token minted concurrently.
+        """
+        with self._connect() as db:
+            db.execute("UPDATE users SET session_epoch = session_epoch + 1 WHERE id = ?", (user_id,))
+            db.execute("DELETE FROM resume_tokens WHERE user_id = ?", (user_id,))
+
     def set_role(self, user_id, role):
         """Promote or demote. The superadmin rank is not assignable here: it
         comes from the environment at startup and nowhere else, so there is
@@ -1096,6 +1186,7 @@ class ChatRoom:
             if not row:
                 return False, 'No such account'
             db.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
+        self.bump_session_epoch(user_id)
         return True, None
 
     def count_admins(self, exclude_user_id=None):
@@ -1193,6 +1284,7 @@ class ChatRoom:
             if not row:
                 return False, 'No such account'
             db.execute("UPDATE users SET account_state = ? WHERE id = ?", (state, user_id))
+        self.bump_session_epoch(user_id)
         return True, None
 
     def set_password(self, user_id, new_password):
@@ -1214,6 +1306,7 @@ class ChatRoom:
                 return False, 'Password cannot match username'
             db.execute("UPDATE users SET password_hash = ? WHERE id = ?",
                        (self._hash_password(new_password), user_id))
+        self.bump_session_epoch(user_id)
         return True, None
 
 
@@ -1631,6 +1724,7 @@ class ChatRoom:
         for group in self.get_groups_for_user(user_id):
             self.leave_group(group['id'], user_id)
         with self._connect() as db:
+            db.execute("DELETE FROM resume_tokens WHERE user_id = ?", (user_id,))
             db.execute("DELETE FROM group_members WHERE user_id = ?", (user_id,))
             db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         return True, None

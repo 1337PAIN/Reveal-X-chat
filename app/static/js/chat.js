@@ -60,7 +60,14 @@ const state = {
     visibleMessagesCount: 50,
     swipeStart: null,
     onlineStatus: navigator.onLine,
-    reconnectAttempts: 0
+    reconnectAttempts: 0,
+    // Issued at sign-in and held in memory only -- never web storage, which
+    // any script on the origin can read and which outlives the tab. A reload
+    // therefore means signing in again; reload survival would need an
+    // HttpOnly cookie and is deliberately not done here.
+    resumeToken: null,
+    resuming: false,
+    hasConnected: false,
 };
 
 // UI Element Mappings
@@ -330,6 +337,7 @@ function extendSession() {
 
 function logoutUser() {
     share2Memory.clear();
+    state.resumeToken = null;
     clearTimeout(state.sessionTimeoutTimer);
     clearTimeout(state.sessionWarningTimer);
     if (state.countdownInterval) clearInterval(state.countdownInterval);
@@ -859,6 +867,8 @@ document.getElementById('totpCancelBtn').addEventListener('click', async () => {
 
 socket.on('auth_success', (data) => {
     state.currentUser = data.user;
+    if (data.resume_token) state.resumeToken = data.resume_token;
+    state.resuming = false;
     const totpChallenge = document.getElementById('totpModal');
     if (totpChallenge) totpChallenge.classList.add('hidden');
     localStorage.setItem('revealx_username', state.currentUser.username);
@@ -881,7 +891,40 @@ socket.on('auth_success', (data) => {
     if (window.revealxApplyAdminVisibility) window.revealxApplyAdminVisibility(data.user);
     initE2EEKeys();
     resetInactivityTimers();
-    showWelcome();
+    // A resumed session is the same sign-in on a new socket: stay in the open
+    // conversation and refetch it, rather than dropping back to the welcome
+    // screen as a fresh sign-in does.
+    if (data.resumed && state.selectedRecipientId) {
+        requestChatHistory(state.selectedRecipientId);
+    } else {
+        showWelcome();
+    }
+});
+
+/** Put the sign-in dialog back, e.g. when a session could not be resumed. */
+function showSignIn(reason) {
+    state.currentUser = null;
+    state.resumeToken = null;
+    state.resuming = false;
+    share2Memory.clear();
+    setChatEnabled(false);
+    authModal.style.display = '';
+    authError.textContent = reason || 'Please sign in again.';
+}
+
+// The server sends this from every handler that needs a session, where it
+// used to return silently -- which, after a dropped connection, left a page
+// that looked signed in and did nothing at all.
+socket.on('auth_required', (data) => {
+    const failedResume = Boolean(data && data.resume_failed);
+    if (state.resuming && !failedResume) return; // a resume is already on its way
+    if (state.resumeToken && !failedResume) {
+        state.resuming = true;
+        socket.emit('resume_session', { token: state.resumeToken });
+        showTransientError('Reconnecting your session. Try that again in a moment.');
+        return;
+    }
+    showSignIn(data && data.error);
 });
 
 socket.on('auth_error', (data) => {
@@ -1931,9 +1974,19 @@ async function decideHowToSend(recipientId) {
     return decision.action;
 }
 
+// While disconnected, socket.io buffers emits and flushes them on reconnect
+// -- before the resume token has been presented -- so they would reach a
+// socket with no session and be refused. Better to say so now.
+function connectionReady() {
+    if (socket.connected && !state.resuming) return true;
+    showTransientError('Reconnecting. Try again in a moment.');
+    return false;
+}
+
 async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || !state.selectedRecipientId) return;
+    if (!connectionReady()) return;
 
     const mode = await decideHowToSend(state.selectedRecipientId);
     if (!mode) return;
@@ -2244,6 +2297,7 @@ async function sendVoiceMessage(blob, recipientId) {
         alert('Voice message is too long. Keep it under a minute.');
         return;
     }
+    if (!connectionReady()) return;
 
     const mode = await decideHowToSend(recipientId);
     if (!mode) return;
@@ -3530,6 +3584,13 @@ if (sidebarFooter) {
 // Handle socket connectivity states
 socket.on('connect', () => {
     console.log("WebSocket connected!");
+    // A reconnect is a new socket, and the server's session was tied to the
+    // old one. Present the resume token before anything else needs it.
+    if (state.hasConnected && state.currentUser && state.resumeToken) {
+        state.resuming = true;
+        socket.emit('resume_session', { token: state.resumeToken });
+    }
+    state.hasConnected = true;
 });
 
 socket.on('disconnect', () => {

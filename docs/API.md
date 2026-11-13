@@ -80,7 +80,23 @@ set out in [SECURITY.md](SECURITY.md).
 | `login` | `username`, `password` | `auth_success` / `totp_required` / `auth_error` |
 | `firebase_login` | `id_token` | `auth_success` / `totp_required` / `auth_error` |
 | `verify_totp` | `code` | `auth_success`, `totp_error`, `auth_error` |
+| `resume_session` | `token` | `auth_success` (with `resumed: true`) / `auth_required` (with `resume_failed: true`) |
 | `logout` | — | `logout_success` |
+
+`auth_success` carries `resume_token`, a 256-bit bearer token issued only once
+the sign-in is complete (after the second factor, if one is enabled). A socket
+that reconnects sends it as `resume_session` to get its session back without
+the password or a TOTP code. It lasts **12 hours** from sign-in and is not
+renewed by resuming. It stops working early on `logout` (on every device) and
+when the account's password is reset, its role changes, it is disabled, or it
+is deleted. The server stores only its SHA-256. The client keeps it in memory,
+so a page reload means signing in again.
+
+Every event other than `register`, `login`, `firebase_login`, `verify_totp`,
+`resume_session` and `logout` needs a session. Without one it answers
+`auth_required` with an `error` string and does nothing else. It used to return
+silently, so a page whose connection had dropped looked signed in and quietly
+ignored everything.
 
 `register` **does not sign anyone in.** Accounts start `pending` and an
 administrator approves them.
@@ -239,7 +255,7 @@ tested for refusal from a non-admin and from an anonymous socket
 `new_message`, `users_updated`, `chat_history`, `message_reactions`,
 `message_deleted`, `share_revoked`, `profile_updated`, `public_key_registered`,
 `totp_state`, `totp_enrolment`, `totp_required`, `admin_accounts`, `admin_ok`,
-`force_signed_out`, `auth_success`, and the error channels `auth_error`,
+`force_signed_out`, `auth_success`, `auth_required`, and the error channels `auth_error`,
 `admin_error`, `settings_error`, `message_error`, `image_error`, `totp_error`.
 
 `force_signed_out` is pushed when an account is disabled or deleted while a

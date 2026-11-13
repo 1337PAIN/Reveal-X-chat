@@ -110,6 +110,20 @@ rate is a couple of hours for anyone already holding the password. Wrong
 codes are now recorded against the account and the address, the throttle is
 consulted before each guess, and the password path no longer clears it.
 
+**Reconnecting does not mean signing in again, and a session cannot outlive
+its account.** A dropped socket comes back as a new one with no session, so
+sign-in issues a resume token: `secrets.token_urlsafe(32)`, returned once and
+held in page memory, stored server-side only as SHA-256 with the account's
+`session_epoch` and a 12-hour expiry (`issue_resume_token` /
+`redeem_resume_token` in `models.py`). Resuming skips the second factor for
+those 12 hours, which is the point and also the cost: whoever holds the token
+within that window is the user, so it is never written to web storage, and
+`bump_session_epoch` ends every outstanding token on logout, password reset,
+role change, disable and deletion. Handlers without a session now answer
+`auth_required` instead of returning silently (`session_required`,
+`tests/test_resume.py`, which enumerates the server's handler table so a new
+handler cannot be missed).
+
 **Registration is rate limited because it is expensive.** `register` is
 unauthenticated and the first thing it did was an Argon2id hash - 64 MiB and a
 measured 55 ms. On a single worker that is a denial of service in a handful of

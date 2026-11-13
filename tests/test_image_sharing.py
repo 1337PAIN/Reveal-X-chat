@@ -254,7 +254,7 @@ def test_an_anonymous_socket_cannot_send(store):
     sock = socketio.test_client(flask_app)
     sock.emit('send_image', {'recipient_id': 'anyone', 'image': png_data_url(sample_image())})
 
-    assert events(sock, 'image_error')
+    assert events(sock, 'auth_required')
     assert events(sock, 'new_message') == []
     sock.disconnect()
 
