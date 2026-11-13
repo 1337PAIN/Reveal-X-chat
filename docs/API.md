@@ -183,8 +183,9 @@ message. It is stored as the message `content`, so the recipient does not have
 to be online. A payload that also carries `image` or any plaintext Share 2
 field is refused, not stripped.
 
-`send_image`, which uploaded the image itself for the server to split, answers
-`image_error` without decoding anything unless `REVEALX_LEGACY_SERVER_SPLIT=true`.
+`send_image`, which uploaded the image itself for the server to split, is
+retired. It answers `image_error` ("split in your browser, reload") and decodes
+nothing.
 
 `react_message` with an empty emoji clears the reaction. `delete_message` scope
 depends on who asks — a sender deletes for everyone and Share 1 leaves the disk;

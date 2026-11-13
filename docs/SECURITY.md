@@ -13,9 +13,9 @@ in place. Anything stated without one of those is a claim, not a control.
 | Asset | Where it lives |
 | --- | --- |
 | Message plaintext | The two participants' browsers only |
-| A shared image | The sender's browser, the server briefly, the recipient's browser |
+| A shared image | The sender's and the recipient's browsers only |
 | Share 1 | `app/shares/` on the server, and the recipient's browser once fetched |
-| Share 2 | Delivered live to the recipient; **never written down** |
+| Share 2 | Inside an E2EE envelope stored as the message body; plaintext only in the two browsers' memory |
 | Account passwords | Argon2 hashes in the database |
 | TOTP secrets | The database |
 | ECDH private keys | Non-extractable `CryptoKey` in each browser's IndexedDB |
@@ -35,40 +35,69 @@ in place. Anything stated without one of those is a claim, not a control.
 
 ## The boundary that matters most
 
-**Text and voice messages are end-to-end encrypted. Shared images are not.**
-
-This distinction is easy to miss and an examiner is entitled to ask about it.
+**Text, voice and images are all end-to-end encrypted from the server. The
+`/lab` dashboard is not part of the chat and is the one place the server still
+sees an image.**
 
 Messages are encrypted in the browser with a key derived from ECDH, so the
-server stores ciphertext it cannot read. Images are different: the browser
-uploads the image, and **the server decodes it and performs the visual
-cryptography split itself** (`routes.py`, `handle_image` →
-`parse_image_data_url`). For that moment the plaintext image is in server
-memory.
+server stores ciphertext it cannot read. Images used to be the exception: the
+browser uploaded the picture and the server decoded it and performed the
+visual cryptography split itself, so for that moment the plaintext image was
+in server memory, and Share 2 could only be handed over live to an online
+recipient. That path (`send_image`) is retired; the event now only tells a
+stale page to reload, without decoding anything.
 
-So the guarantee for images is not confidentiality from the server. It is this:
+The split now happens in the sender's browser (`vc-client.js`, `send_share`):
 
-> **Nothing persisted on the server is enough to reconstruct the image.**
+1. The image is converted to grey with the same integer BT.601 weights the
+   in-browser detector uses.
+2. **Share 1** is `crypto.getRandomValues` bytes; **Share 2** is image XOR
+   Share 1. Both are written as 8-bit single-channel PNGs.
+3. Only Share 1 is uploaded. On its own it is a one-time pad, statistically
+   independent of the image. The server stores it byte for byte, records its
+   HMAC and runs the tamper detector on it, as it always has.
+4. Share 2 travels inside an E2EE v2 message whose plaintext is
+   `{share2_png_b64, share1_sha256, width, height}`. The server stores that
+   ciphertext as the message body and cannot open it, so the recipient no
+   longer has to be online.
+5. The recipient downloads Share 1 through its one-time capability, hashes the
+   bytes **before decoding them**, and compares the hash with the one sealed in
+   the envelope, then XORs the two shares exactly.
 
-Share 1 is written to disk; Share 2 is sent to the recipient live and never
-stored. Share 1 alone is an `os.urandom` one-time pad — statistically
-independent of the original. An attacker with the entire server filesystem and
-the entire database has random noise.
+So the guarantee is now confidentiality from the server, not only that nothing
+persisted can reconstruct the image: the server holds random noise and a
+ciphertext. The four checks the recipient sees answer different questions:
 
+| Check | Computed by | Catches |
+| --- | --- | --- |
+| HMAC-SHA256 | Server, keyed | Share 1 changed on disk since upload |
+| Server ML | Server | Share 1 *looks* edited (localises damage) |
+| In-browser ML | Recipient | The bytes that arrived look edited |
+| End-to-end SHA-256 | Sender, checked by recipient | Share 1 is not the one the sender made — even if the server changed it *and* its own HMAC record |
+
+Only the last does not trust the server. It cannot say *where* a change is;
+the detectors can.
+
+The server still refuses anything that is not plausibly a share: not a PNG,
+more than one channel, outside 8–1600 px a side, over 3 MB, or a histogram far
+from uniform (a Pearson chi-square ten standard deviations out). That last
+check catches a client uploading the picture by mistake. It is not a defence
+against a sender who wants to leak their own image — nothing could be — and a
+histogram-equalised picture would pass it. A payload that carries the image or
+any plaintext Share 2 field is refused outright, and
 `FORBIDDEN_EXTRA_KEYS = {'share2', 'share2_b64', 'share2_filename',
-'share2_live'}` exists to keep it that way: it is a hard refusal in the storage
-layer, so a future change cannot casually start persisting Share 2.
+'share2_live'}` remains a hard refusal in the storage layer.
 
-The browser follows the same rule. Share 2 is held in an in-memory `Map` in
-`chat.js`, emptied on logout, forced sign-out, **Clear cache**, delete and
-revoke. It used to be copied into `sessionStorage`, which any script on the
-origin can read and which outlives logout while the tab stays open. The
-consequence is stated plainly: reloading the page loses Share 2, so a recipient
-who reloads before opening a share can no longer reconstruct it.
+In the browser, a decrypted Share 2 is held in an in-memory `Map` in `chat.js`,
+emptied on logout, forced sign-out, **Clear cache**, delete and revoke; it is
+never written to web storage. Because the envelope is stored, a reload no
+longer loses it: the recipient decrypts it again.
 
-Closing this gap properly would mean splitting the image in the browser and
-uploading only Share 1 — a real design change, recorded here as a known
-limitation rather than glossed over.
+Two limits, stated plainly. Images are greyscale: colour images are converted
+before the split, as they were before, and a per-channel colour split is not
+implemented. And the `/lab` dashboard, which demonstrates the split, attacks
+and metrics step by step, still uploads its image to the server; it is a
+teaching tool with no recipient, and nothing it processes is stored.
 
 ---
 
@@ -217,9 +246,11 @@ Stated plainly, because a threat model that only lists wins is marketing.
 server. Malware or a malicious extension in either participant's browser reads
 the plaintext before encryption and after decryption. Nothing here changes that.
 
-**A malicious server, for images.** See the boundary section above — the server
-sees uploaded images in plaintext at split time. Text and voice are safe from
-it; images are not.
+**A malicious server, for images, partly.** The server no longer sees images
+(see the boundary section). It can still withhold or delete Share 1, or serve a
+different one; the end-to-end hash turns the last into a visible mismatch, not
+a silent wrong picture. It sees each share's size and dimensions, which give
+away the image's.
 
 **Metadata.** Who talks to whom, how often, when, and how large each message is
 are all visible to the server and to anyone watching the network. Message

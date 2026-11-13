@@ -364,30 +364,6 @@ def _clear_failed_logins(username, address):
             FAILED_LOGINS.pop(key, None)
 
 
-def parse_image_data_url(data_url):
-    """Validate and decode an image data URL from the browser."""
-    if not data_url or ',' not in data_url:
-        raise ValueError('No valid image was received')
-
-    header, encoded = data_url.split(',', 1)
-    if not header.startswith('data:') or ';base64' not in header:
-        raise ValueError('Only base64 image uploads are accepted')
-
-    mime_type = header[5:].split(';', 1)[0].lower()
-    if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
-        raise ValueError('Unsupported image type')
-
-    image_bytes = base64.b64decode(encoded, validate=True)
-    if not image_bytes or len(image_bytes) > MAX_IMAGE_BYTES:
-        raise ValueError('Image is too large')
-
-    image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
-    if image is None:
-        raise ValueError('Could not read image')
-
-    return image
-
-
 def _validate_share1_png(encoded):
     """Decode and check an uploaded Share 1. Returns (png_bytes, pixels).
 
@@ -1940,104 +1916,17 @@ def handle_typing(data):
 
 @socketio.on('send_image')
 @session_required
-def handle_image(data):
-    """Handle private encrypted image sharing."""
-    try:
-        data = data or {}
-        current_user = chat_room.get_session_user(request.sid)
-        recipient_id = data.get('recipient_id')
-        image_data = data.get('image', '')
-        reply_to_id = data.get('reply_to')
+def handle_retired_send_image(_data=None):
+    """The server-side split, retired.
 
-        if not current_user:
-            emit('image_error', {'error': 'Log in first'})
-            return
-        # The server-side split is retired in favour of send_share. It stays
-        # behind this flag only until the browser path has been exercised.
-        if os.environ.get('REVEALX_LEGACY_SERVER_SPLIT', '').lower() != 'true':
-            emit('image_error', {
-                'error': 'Images are now split in your browser. Reload the page to update.'})
-            return
-        if not chat_room.is_active_user(recipient_id):
-            emit('image_error', {'error': 'Select a user first'})
-            return
-        # Before any decoding: this is the expensive path.
-        if not _take_send_token(current_user['id'], 'image'):
-            emit('image_error', {'error': SEND_TOO_FAST})
-            return
-
-        recipient_sessions = chat_room.get_sessions_for_user(recipient_id)
-        if not recipient_sessions:
-            emit('image_error', {'error': 'Recipient must be online to receive live Share 2'})
-            return
-
-        original_image = parse_image_data_url(image_data)
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        share1_token = secrets.token_urlsafe(32)
-        share1_filename = f'share1_{timestamp}_{secrets.token_urlsafe(12)}.png'
-        share1_path = os.path.join(app.config['SHARES_FOLDER'], share1_filename)
-
-        share1, share2, original = vc.generate_shares_from_image(original_image)
-        if not cv2.imwrite(share1_path, share1):
-            emit('image_error', {'error': 'Could not save Share 1'})
-            return
-
-        ok2, share2_buffer = cv2.imencode('.png', share2)
-        if not ok2:
-            try:
-                os.remove(share1_path)
-            except OSError:
-                pass
-            emit('image_error', {'error': 'Could not encode live Share 2'})
-            return
-
-        share2_b64 = base64.b64encode(share2_buffer).decode('utf-8')
-
-        # Re-read what actually landed on disk so the tag covers the bytes the
-        # recipient will later download, not the in-memory array.
-        stored_share1 = cv2.imread(share1_path, cv2.IMREAD_GRAYSCALE)
-        if stored_share1 is None:
-            try:
-                os.remove(share1_path)
-            except OSError:
-                pass
-            emit('image_error', {'error': 'Could not verify stored Share 1'})
-            return
-
-        extra = {
-            'share1_filename': share1_filename,
-            'share1_token': share1_token,
-            'share1_sha256': sha256_image(stored_share1),
-            'share1_hmac': _share_hmac(stored_share1),
-            'timestamp': timestamp
-        }
-        if reply_to_id:
-            extra['reply_to'] = reply_preview(chat_room.get_message_for_user(reply_to_id, current_user['id']))
-
-        msg_obj_db = chat_room.add_message(current_user['id'], recipient_id, 'share', 'Shared an encrypted image', extra)
-        if not msg_obj_db:
-            try:
-                os.remove(share1_path)
-            except OSError:
-                pass
-            emit('image_error', {'error': 'Image message could not be saved'})
-            return
-
-        # Sender never receives the token, so they cannot reconstruct.
-        sender_payload = client_message(msg_obj_db, current_user['id'])
-        for session_id in set(chat_room.get_sessions_for_user(current_user['id'])) | {request.sid}:
-            emit('new_message', sender_payload, to=session_id)
-
-        recipient_msg = client_message(msg_obj_db, recipient_id)
-        recipient_msg['extra'] = dict(recipient_msg['extra'])
-        recipient_msg['extra']['share2_live'] = f'data:image/png;base64,{share2_b64}'
-        for session_id in recipient_sessions:
-            emit('new_message', recipient_msg, to=session_id)
-    except ValueError as exc:
-        emit('image_error', {'error': str(exc)})
-    except Exception as exc:
-        print(f"Image share failed: {exc}")
-        emit('image_error', {'error': 'Image could not be sent'})
+    send_image uploaded the image itself and the server split it, so the
+    server held every picture in memory and Share 2 could only be handed over
+    live. send_share replaced it (the browser splits; see vc-client.js). This
+    stub stays so that a page still running the old script hears why its
+    image did not send, instead of nothing at all. It reads nothing from the
+    payload: the point is that no image is decoded here any more.
+    """
+    emit('image_error', {'error': 'Images are now split in your browser. Reload the page to update.'})
 
 
 @socketio.on('send_share')

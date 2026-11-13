@@ -13,6 +13,7 @@ import base64
 import hashlib
 import os
 import uuid
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -229,17 +230,18 @@ def test_the_envelope_must_be_encrypted_v2_and_alone(pair, store, overrides, why
     assert errors(a), why
 
 
-def test_the_server_split_no_longer_accepts_an_image(pair, store, monkeypatch):
-    """send_image took the picture itself. It is refused now, before the
-    upload is so much as decoded."""
+def test_the_server_split_is_gone(pair, store, monkeypatch):
+    """send_image took the picture itself. Nothing on the server decodes an
+    uploaded image for chat any more; a stale page is told to reload."""
     a, b, alice, bob = pair
-    monkeypatch.delenv('REVEALX_LEGACY_SERVER_SPLIT', raising=False)
     decoded = []
-    monkeypatch.setattr(routes, 'parse_image_data_url', lambda value: decoded.append(1))
+    monkeypatch.setattr(routes.cv2, 'imdecode', lambda *x, **k: decoded.append(1))
     a.emit('send_image', {'recipient_id': bob['id'], 'image': 'data:image/png;base64,' + png_b64(structured_image())})
     assert not decoded
     assert not events(b, 'new_message')
     assert any('browser' in e.lower() for e in errors(a))
+    assert not hasattr(routes, 'parse_image_data_url')
+    assert 'REVEALX_LEGACY_SERVER_SPLIT' not in Path(routes.__file__).read_text(encoding='utf-8')
 
 
 # ----------------------------------------------------------------------
@@ -288,3 +290,49 @@ def test_vc_client_is_loaded_and_precached():
     index = (root / 'templates' / 'index.html').read_text(encoding='utf-8')
     assert index.index('js/vc-client.js') < index.index('js/chat.js')
     assert "'/static/js/vc-client.js'" in (root / 'static' / 'sw.js').read_text(encoding='utf-8')
+
+
+# ----------------------------------------------------------------------
+# Carried over from the retired server-split tests
+# ----------------------------------------------------------------------
+
+def test_an_anonymous_socket_cannot_send_a_share(store):
+    sock = socketio.test_client(flask_app)
+    sock.emit('send_share', payload('anyone'))
+    assert events(sock, 'auth_required')
+    assert not events(sock, 'new_message')
+    assert os.listdir(store.shares_folder) == []
+    sock.disconnect()
+
+
+def test_sending_to_an_unknown_account_is_refused(pair, store):
+    a, b, alice, bob = pair
+    a.emit('send_share', payload('no-such-id'))
+    assert errors(a)
+    assert os.listdir(store.shares_folder) == []
+
+
+def test_nothing_the_server_stores_is_share2_in_the_clear(pair, store):
+    """The storage-layer refusal (FORBIDDEN_EXTRA_KEYS) still stands, and the
+    only form Share 2 now reaches the server in is the sealed envelope."""
+    from app.models import FORBIDDEN_EXTRA_KEYS
+    a, b, alice, bob = pair
+    body = payload(bob['id'])
+    a.emit('send_share', body)
+    with store._connect() as db:
+        row = db.execute("SELECT content, extra FROM messages WHERE type = 'share'").fetchone()
+    assert row['content'] == body['envelope']
+    for key in FORBIDDEN_EXTRA_KEYS:
+        assert key not in row['extra']
+
+
+def test_the_stored_share1_is_uniform_noise(pair, store):
+    """What sits on disk carries nothing of the image: the server cannot even
+    have chosen it, because the sender's browser did."""
+    a, b, alice, bob = pair
+    a.emit('send_share', payload(bob['id'], share1=random_share(64, 64, seed=21)))
+    message = events(b, 'new_message')[0]['args'][0]
+    pixels = cv2.imread(stored_path(store, message['id'], bob['id']), cv2.IMREAD_UNCHANGED)
+    counts = np.bincount(pixels.ravel(), minlength=256)
+    expected = pixels.size / 256
+    assert ((counts - expected) ** 2 / expected).sum() < routes.SHARE_CHI_SQUARE_LIMIT

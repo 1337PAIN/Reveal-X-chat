@@ -222,9 +222,11 @@ Text messages and voice notes are encrypted in the browser before they reach the
 
 ### 4. Visual Cryptography Image Sharing
 
-- Images are converted to grayscale and split into two XOR shares.
-- `Share 1` is stored/transmitted as the network share. Its mask comes from `os.urandom`, not `np.random`.
-- `Share 2` is delivered live to the receiver and is never persisted in the database, nor in browser storage: the client holds it in memory, so a reload drops it.
+- **The split happens in the sender's browser** (`vc-client.js`); the server never receives the image. Images are converted to grayscale and split into two XOR shares.
+- `Share 1` is fresh `crypto.getRandomValues` bytes and is the only thing uploaded, as a single-channel PNG the server stores byte for byte.
+- `Share 2` travels inside an end-to-end encrypted (v2) message, together with the SHA-256 of Share 1's bytes. The server stores that ciphertext and cannot open it, so the recipient does not have to be online. In the browser the decrypted Share 2 is held in memory only.
+- The recipient hashes the Share 1 it downloads against the sealed hash before decoding it. The tamper panel shows four checks: HMAC (server), server ML, in-browser ML, and this end-to-end hash — the only one that does not trust the server.
+- The server-side split this replaced (`send_image`) is retired; the `/lab` dashboard still splits on the server, as a demonstration with no recipient.
 - Reconstruction uses XOR:
 
 ```text
@@ -491,7 +493,7 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 649 server tests
+pytest                          # 635 server tests
 node --test "tests/js/*.test.mjs"   # 110 browser tests
 ```
 
@@ -501,7 +503,7 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**649 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+**635 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
 
 **110 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
@@ -564,10 +566,11 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 | [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | WCAG contrast measurements, the audit tool, and the correction to an earlier claim |
 | [FINAL_DEMO_GUIDE.md](FINAL_DEMO_GUIDE.md) | Running the demo |
 
-Two of these are worth reading before a viva. **SECURITY.md** states plainly
-that text and voice are end-to-end encrypted while shared images are not — the
-server performs the visual cryptography split, so it sees the plaintext image.
-The guarantee for images is that nothing *persisted* can reconstruct them.
+Two of these are worth reading before a viva. **SECURITY.md** explains the
+boundary: text, voice and images are end-to-end encrypted from the server. The
+image used to be split on the server, which therefore saw it; the split now
+runs in the sender's browser, and only random Share 1 and a sealed Share 2
+reach the server. It also lists what that still does not protect.
 **ACCESSIBILITY.md** records an audit that was confidently wrong and how it was
 corrected.
 
