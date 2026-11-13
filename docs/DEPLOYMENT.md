@@ -211,7 +211,8 @@ pip install -r requirements.lock
 | `REVEALX_CLIENT_IP_HEADER` | With trust on: a single-value header your edge *overwrites* with the client address (e.g. `True-Client-IP`, `CF-Connecting-IP`). Used in preference to `X-Forwarded-For` when present |
 | `REVEAL_X_FORCE_HTTPS` | `true` to redirect plain HTTP to HTTPS (301 for GET/HEAD, 308 otherwise), before the request is handled. Behind a proxy this needs `REVEALX_TRUST_PROXY=true`, or every request looks like plain HTTP and is redirected for ever |
 | `REVEALX_ADMIN_USER` / `REVEALX_ADMIN_PASSWORD` | Bootstraps the superadmin on first start |
-| `DATABASE_URL` | PostgreSQL DSN. Unset uses SQLite |
+| `DATABASE_URL` | PostgreSQL DSN. Unset uses SQLite, in WAL mode with a 5-second busy timeout (so expect `reveal_x.db-wal` and `-shm` beside the database; back up all three, or stop the app first) |
+| `REVEALX_PG_POOL_MAX` | PostgreSQL only: connections kept in the pool (default 20). Threads beyond that wait up to 30 s for one rather than failing. Keep it under the server's connection limit |
 | `FIREBASE_*` | Google sign-in — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md) |
 
 ### `REVEALX_TRUST_PROXY` and login throttling

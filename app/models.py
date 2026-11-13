@@ -28,9 +28,13 @@ from app.timeutil import utcnow
 try:
     import psycopg2
     import psycopg2.extras
+    from psycopg2.pool import ThreadedConnectionPool
     POSTGRES_AVAILABLE = True
 except ImportError:
     POSTGRES_AVAILABLE = False
+
+#: SQLite: how long a writer waits for the lock before "database is locked".
+SQLITE_BUSY_TIMEOUT_MS = 5000
 
 # A UNIQUE index violation, on either backend. Used where the database, not
 # a prior SELECT, is what decides that an insert is a duplicate.
@@ -185,6 +189,7 @@ class ChatRoom:
             os.path.dirname(os.path.abspath(__file__)), 'shares'
         )
 
+        self._setup_connection_pool()
         self.sessions = {}  # {session_id: user dict}
         self.user_sessions = {}  # {user_id: set(session_id)}
         self._db_dir_ready = False
@@ -205,12 +210,31 @@ class ChatRoom:
     # Connection handling
     # ------------------------------------------------------------------
 
+    def _setup_connection_pool(self):
+        """PostgreSQL connections come from a pool, created on first use.
+
+        Every operation used to open a TCP connection, authenticate, and close
+        it again. psycopg2's ThreadedConnectionPool raises the moment it is
+        empty instead of waiting, and the server runs 100 threads, so a
+        semaphore of the same size makes threads queue for a connection.
+        """
+        self._pool = None
+        self._pool_lock = threading.Lock()
+        self._pool_size = max(int(os.environ.get('REVEALX_PG_POOL_MAX', '20') or 20), 1)
+        self._pool_slots = threading.BoundedSemaphore(self._pool_size)
+        self._wal_ready_for = None
+
+    def _pg_pool(self):
+        if self._pool is None:
+            with self._pool_lock:
+                if self._pool is None:
+                    self._pool = ThreadedConnectionPool(
+                        1, self._pool_size, self.database_url,
+                        cursor_factory=psycopg2.extras.RealDictCursor,
+                    )
+        return self._pool
+
     def _raw_connection(self):
-        if self.use_postgres:
-            return psycopg2.connect(
-                self.database_url,
-                cursor_factory=psycopg2.extras.RealDictCursor,
-            )
         # The directory only has to exist once. This ran on every connection,
         # and add_message alone opens four -- a syscall per connection for a
         # condition that cannot become false while the process is running.
@@ -218,8 +242,17 @@ class ChatRoom:
         if not self._db_dir_ready:
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
             self._db_dir_ready = True
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)
         conn.row_factory = sqlite3.Row
+        # Per connection: wait for a lock rather than fail at once. (The
+        # timeout argument does the same; stated here so it is visible.)
+        conn.execute(f'PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}')
+        # Per database file, and persistent, so once per path is enough. WAL
+        # lets readers carry on while one thread writes; with the default
+        # rollback journal every reader waited behind every write.
+        if self._wal_ready_for != self.db_path:
+            conn.execute('PRAGMA journal_mode = WAL')
+            self._wal_ready_for = self.db_path
         return conn
 
     @contextmanager
@@ -230,6 +263,10 @@ class ChatRoom:
         context manager does not close either, so both backends dropped work
         or leaked connections before this was centralised here.
         """
+        if self.use_postgres:
+            with self._pooled_connection() as conn:
+                yield _Db(conn, True)
+            return
         conn = self._raw_connection()
         try:
             yield _Db(conn, self.use_postgres)
@@ -239,6 +276,27 @@ class ChatRoom:
             raise
         finally:
             conn.close()
+
+    @contextmanager
+    def _pooled_connection(self):
+        """Borrow a PostgreSQL connection, commit or roll back, give it back."""
+        if not self._pool_slots.acquire(timeout=30):
+            raise RuntimeError('No database connection became free within 30 seconds')
+        pool = self._pg_pool()
+        conn = None
+        try:
+            conn = pool.getconn()
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        finally:
+            if conn is not None:
+                # A connection the server dropped is discarded, not reused.
+                pool.putconn(conn, close=bool(getattr(conn, 'closed', 0)))
+            self._pool_slots.release()
 
     def _existing_columns(self, db, table):
         if self.use_postgres:
