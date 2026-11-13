@@ -1,6 +1,6 @@
 # API reference
 
-Everything the server exposes: 9 HTTP routes and 42 Socket.IO events, with the
+Everything the server exposes: 9 HTTP routes and 44 Socket.IO events, with the
 fields each one actually reads. Extracted from `app/routes.py`, not written from
 memory.
 

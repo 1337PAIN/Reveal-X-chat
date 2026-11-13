@@ -184,7 +184,7 @@ Two buckets, because either alone is easy to sidestep:
 | Bucket | Limit | Stops |
 | --- | --- | --- |
 | Per account | 8 per 15 min | Grinding a password list against one victim |
-| Per address | 20 per 15 min | Spraying one common password across many accounts |
+| Per address | 50 per 15 min | Spraying one common password across many accounts |
 
 The refusal message is identical whether or not the account exists, so this does
 not become a way to test which usernames are real, and a successful sign-in
@@ -493,7 +493,7 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 635 server tests
+pytest                          # 652 server tests
 node --test "tests/js/*.test.mjs"   # 110 browser tests
 ```
 
@@ -503,7 +503,7 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**635 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+**652 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
 
 **110 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
@@ -533,16 +533,16 @@ python scripts/generate_feature_parity_fixture.py
 ### Chat demo (shows the feature working in a real application)
 
 1. Open two browsers and register two accounts.
-2. Open the key manager (🔑) and show that both sides have exchanged real ECDH public keys, with fingerprints.
+2. Open the key manager (🔑) and show that both sides have exchanged real ECDH public keys, and that both screens show the same 60-digit safety number.
 3. Send a text message. Show in the database that only ciphertext is stored:
 
 ```bash
 python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reveal_x.db').execute('select content, extra from messages')])"
 ```
 
-4. Send an image. The recipient's bubble immediately shows **✅ Share 1 verified intact**, HMAC match, ML confidence and the check time.
-5. Open **Attack simulation (demo)**, pick *Block replacement*, and run it.
-6. The verdict flips live to **⚠️ Tampering detected**, with the HMAC mismatch, the ML confidence, the heatmap and the model's reasoning.
+4. Send an image. It is split in the sender's browser; the recipient's bubble shows **✅ Share 1 verified intact**, HMAC match, ML confidence and the check time.
+5. Modify the stored Share 1 from outside the app with the one-liner in [Tamper Detection in the Live Chat](#6-tamper-detection-in-the-live-chat) -- the chat itself has no control for causing tampering -- then press **Re-check integrity** on the message.
+6. The verdict flips to **⚠️ Tampering detected**, with the HMAC mismatch, the ML confidence, the heatmap and the model's reasoning. On Reconstruct, the end-to-end SHA-256 row reports a mismatch as well.
 7. Click Reconstruct. The panel repeats the warning, and the reconstructed image is visibly damaged.
 8. Try to open the share a second time — access is one-time, so it is refused.
 
@@ -559,7 +559,7 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 | Document | What it covers |
 | --- | --- |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model: assets, adversaries, every control mapped to the code and test that holds it — and an explicit list of what is **not** defended |
-| [docs/API.md](docs/API.md) | All 9 HTTP routes and 42 Socket.IO events, with the fields each reads |
+| [docs/API.md](docs/API.md) | All 9 HTTP routes and 44 Socket.IO events, with the fields each reads |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, Render, and running it from Windows behind a tunnel |
 | [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) | Google sign-in, start to finish, including the failures and what each means |
 | [docs/ADMIN.md](docs/ADMIN.md) | Roles, the approval gate, and the rank rules |
