@@ -23,6 +23,8 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from app.timeutil import utcnow
+
 try:
     import psycopg2
     import psycopg2.extras
@@ -453,8 +455,8 @@ class ChatRoom:
 
     def cleanup_old_messages(self):
         """Delete expired messages and the Share 1 files they own."""
-        now = datetime.utcnow().isoformat()
-        cutoff = (datetime.utcnow() - timedelta(hours=MESSAGE_TTL_HOURS)).isoformat()
+        now = utcnow().isoformat()
+        cutoff = (utcnow() - timedelta(hours=MESSAGE_TTL_HOURS)).isoformat()
         with self._connect() as db:
             stale = db.execute(
                 "SELECT extra FROM messages WHERE type = ? AND (created_at < ? OR expires_at < ?)",
@@ -494,7 +496,7 @@ class ChatRoom:
             'id': str(uuid.uuid4()),
             'username': username,
             'password_hash': self._hash_password(password),
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': utcnow().isoformat(),
         }
 
         try:
@@ -706,7 +708,7 @@ class ChatRoom:
             else:
                 desired = display_name or (email.split('@')[0] if email else '') or 'user'
                 username = self._unique_username(db, desired)
-                created_at = datetime.utcnow().isoformat()
+                created_at = utcnow().isoformat()
                 user_id = str(uuid.uuid4())
                 # A first-time Google/Firebase sign-in is an account *request*,
                 # exactly like filling in the register form. Without this, an
@@ -858,7 +860,7 @@ class ChatRoom:
             db.execute("UPDATE users SET public_key = ? WHERE id = ?", (public_key or '', user_id))
 
     def update_last_seen(self, user_id):
-        seen_at = datetime.utcnow().isoformat()
+        seen_at = utcnow().isoformat()
         with self._connect() as db:
             db.execute("UPDATE users SET last_seen = ? WHERE id = ?", (seen_at, user_id))
         return seen_at
@@ -922,7 +924,7 @@ class ChatRoom:
         if not self.is_active_user(recipient_id):
             return None
 
-        created_at = datetime.utcnow().isoformat()
+        created_at = utcnow().isoformat()
         expires_at = (datetime.fromisoformat(created_at) + timedelta(hours=MESSAGE_TTL_HOURS)).isoformat()
         extra = {k: v for k, v in (extra or {}).items() if k not in FORBIDDEN_EXTRA_KEYS}
 
@@ -1036,7 +1038,7 @@ class ChatRoom:
         return message
 
     def mark_messages_read(self, reader_id, sender_id):
-        read_at = datetime.utcnow().isoformat()
+        read_at = utcnow().isoformat()
         with self._connect() as db:
             rows = db.execute("""
                 SELECT id FROM messages
@@ -1081,7 +1083,7 @@ class ChatRoom:
                 return None
             if row['share1_accessed']:
                 return None
-            if row['expires_at'] and row['expires_at'] < datetime.utcnow().isoformat():
+            if row['expires_at'] and row['expires_at'] < utcnow().isoformat():
                 return None
             # A recipient who deleted the message gave up their access to it.
             if row['recipient_id'] in _load_deleted_by(row):
@@ -1250,7 +1252,7 @@ class ChatRoom:
         before it.
         """
         token = secrets.token_urlsafe(32)
-        now = datetime.utcnow()
+        now = utcnow()
         with self._connect() as db:
             row = db.execute("SELECT session_epoch FROM users WHERE id = ?", (user_id,)).fetchone()
             if not row:
@@ -1282,7 +1284,7 @@ class ChatRoom:
             """, (self._token_hash(token),)).fetchone()
         if not row:
             return None
-        if row['expires_at'] < datetime.utcnow().isoformat():
+        if row['expires_at'] < utcnow().isoformat():
             return None
         if (row['token_epoch'] or 0) != (row['user_epoch'] or 0):
             return None
@@ -1500,7 +1502,7 @@ class ChatRoom:
         if len(wanted) + 1 > self.MAX_GROUP_MEMBERS:
             return None, f'A group holds at most {self.MAX_GROUP_MEMBERS} members'
 
-        now = datetime.utcnow().isoformat()
+        now = utcnow().isoformat()
         group_id = secrets.token_urlsafe(12)
         with self._connect() as db:
             db.execute(
@@ -1623,7 +1625,7 @@ class ChatRoom:
 
     def add_group_members(self, group_id, user_ids):
         added = []
-        now = datetime.utcnow().isoformat()
+        now = utcnow().isoformat()
         existing = set(self.get_group_member_ids(group_id))
         if len(existing) >= self.MAX_GROUP_MEMBERS:
             return [], f'A group holds at most {self.MAX_GROUP_MEMBERS} members'
@@ -1775,7 +1777,7 @@ class ChatRoom:
         # restores it) but receives nothing while disabled.
         members = self.active_user_ids(members) | {sender_id}
 
-        created_at = datetime.utcnow().isoformat()
+        created_at = utcnow().isoformat()
         expires_at = (datetime.fromisoformat(created_at)
                       + timedelta(hours=MESSAGE_TTL_HOURS)).isoformat()
         extra = {k: v for k, v in (extra or {}).items() if k not in FORBIDDEN_EXTRA_KEYS}

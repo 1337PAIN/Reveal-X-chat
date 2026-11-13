@@ -19,6 +19,7 @@ import numpy as np
 
 from app import app, socketio
 from app.models import FORBIDDEN_EXTRA_KEYS, chat_room
+from app.timeutil import utcnow
 from app.vc_core import VisualCryptography, VCReconstructor
 from app.ai_security import (
     TamperDetector,
@@ -1032,7 +1033,7 @@ def _audit(actor, action, target=None, detail=''):
     if target:
         record = chat_room.get_user(target) if isinstance(target, str) else target
         target_name = (record or {}).get('username', target if isinstance(target, str) else '')
-    stamp = datetime.utcnow().isoformat(timespec='seconds')
+    stamp = utcnow().isoformat(timespec='seconds')
     line = f"[audit] {stamp}Z actor={actor['username']} action={action}"
     if target_name:
         line += f" target={target_name}"
@@ -1979,7 +1980,7 @@ def handle_send_share(data):
         emit('image_error', {'error': str(exc)})
         return
 
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    timestamp = utcnow().strftime('%Y%m%d_%H%M%S')
     share1_filename = f'share1_{timestamp}_{secrets.token_urlsafe(12)}.png'
     share1_path = os.path.join(app.config['SHARES_FOLDER'], share1_filename)
 
