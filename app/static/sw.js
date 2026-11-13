@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v31-browser-split';
+const CACHE_NAME = 'revealx-cache-v32-chat-modules';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -22,7 +22,24 @@ const ASSETS_TO_CACHE = [
     '/static/vendor/inter/files/inter-latin-600-normal.woff2',
     '/static/vendor/inter/files/inter-latin-700-normal.woff2',
     '/static/js/sanitize.js',
-    '/static/js/chat.js',
+    '/static/js/chat/main.js',
+    '/static/js/chat/late.js',
+    '/static/js/chat/shared.js',
+    '/static/js/chat/core.js',
+    '/static/js/chat/basics.js',
+    '/static/js/chat/session.js',
+    '/static/js/chat/devices.js',
+    '/static/js/chat/keys.js',
+    '/static/js/chat/utils.js',
+    '/static/js/chat/auth.js',
+    '/static/js/chat/reactions.js',
+    '/static/js/chat/presence.js',
+    '/static/js/chat/render.js',
+    '/static/js/chat/messaging.js',
+    '/static/js/chat/images.js',
+    '/static/js/chat/reconstruction.js',
+    '/static/js/chat/settings.js',
+    '/static/js/chat/shell.js',
     '/static/js/crypto.js',
     '/static/js/e2ee.js',
     '/static/js/send-policy.js',

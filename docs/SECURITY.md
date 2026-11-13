@@ -88,7 +88,7 @@ any plaintext Share 2 field is refused outright, and
 `FORBIDDEN_EXTRA_KEYS = {'share2', 'share2_b64', 'share2_filename',
 'share2_live'}` remains a hard refusal in the storage layer.
 
-In the browser, a decrypted Share 2 is held in an in-memory `Map` in `chat.js`,
+In the browser, a decrypted Share 2 is held in an in-memory `Map` in `chat/core.js`,
 emptied on logout, forced sign-out, **Clear cache**, delete and revoke; it is
 never written to web storage. Because the envelope is stored, a reload no
 longer loses it: the recipient decrypts it again.
@@ -112,7 +112,7 @@ teaching tool with no recipient, and nothing it processes is stored.
 | Only *wrong passwords* count toward the throttle | `handlers/auth.py`, `handle_login` | `test_rate_limit.py` |
 | Unknown usernames and password-less (Google-only) accounts are rejected after an Argon2 verify against a dummy hash, so response time does not reveal which accounts exist (it was ~0.3 ms against ~50 ms) | `models.py`, `authenticate` | `test_auth.py` |
 | TOTP second factor (RFC 6238) | `auth/totp.py` | `test_auth.py` |
-| Secrets collected in a masked in-app dialog, never `window.prompt()` | `chat.js`, `askSecret` | `test_secret_prompts.py`, `tests/js/secret-prompt.test.mjs` |
+| Secrets collected in a masked in-app dialog, never `window.prompt()` | `chat/settings.js`, `askSecret` | `test_secret_prompts.py`, `tests/js/secret-prompt.test.mjs` |
 | Wrong TOTP codes counted against the **account and address**, not the socket | `handlers/auth.py`, `handle_verify_totp` | `test_auth.py` |
 | Re-authentication (`totp_disable`, `totp_confirm_enrol`, `delete_account`) draws on the **same** sign-in buckets; past the limit a correct secret is refused until the window passes | `handlers/common.py`, `_reserve_reauthentication` | `test_auth.py` |
 | Account requests capped at 5 per address per 10 minutes, checked **before** the hash | `handlers/common.py`, `_register_rate_limited` | `test_auth.py` |
@@ -219,7 +219,7 @@ localises damage and survives a re-encode. Either alone would be weaker.
   DOMPurify is unavailable (`sanitize.js`, `tests/js/sanitize.test.mjs`).
 - **Nothing the app cannot start without is loaded from another origin.**
   socket.io and DOMPurify are vendored under `app/static/vendor/`. Both used
-  to be blocking CDN scripts, and `chat.js` opens with `const socket = io()`
+  to be blocking CDN scripts, and the chat client (now `chat/core.js`) opens with `const socket = io()`
   with no fallback: a slow or blocked CDN left `io` undefined, threw at the
   top of the file, and left a page that rendered and responded to nothing.
   The DOMPurify URL was additionally wrong and had been returning 404 since

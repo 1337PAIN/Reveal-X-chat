@@ -10,6 +10,7 @@ These are rule tests over the shipped files rather than appearance tests: they
 read what is actually served and assert the property, so the regression they
 guard against is a prompt() call reappearing, not a pixel moving.
 """
+from chat_source import chat_source  # noqa: E402
 import re
 from pathlib import Path
 
@@ -57,7 +58,7 @@ def test_no_shipped_script_calls_prompt_to_collect_a_secret():
 
 
 def test_the_masked_prompt_helper_is_shipped():
-    chat = (STATIC / 'chat.js').read_text(encoding='utf-8')
+    chat = chat_source()
     assert 'function askSecret(' in chat, 'the replacement for prompt() is missing'
 
 
@@ -92,7 +93,7 @@ def test_the_secret_fields_are_masked_in_the_markup(field):
 def test_the_helper_clears_both_fields_when_it_closes():
     """A dismissed dialog must not leave a secret in the DOM for the next
     script that walks it."""
-    chat = (STATIC / 'chat.js').read_text(encoding='utf-8')
+    chat = chat_source()
     helper = chat[chat.index('function askSecret('):]
     helper = helper[:helper.index('\nfunction usesLocalPassword(')]
     cleanup = helper[helper.index('function cleanup()'):]
@@ -103,7 +104,7 @@ def test_the_helper_clears_both_fields_when_it_closes():
 
 def test_the_helper_does_not_fall_back_to_a_cleartext_dialog():
     """If the markup is absent the helper must refuse, not call prompt()."""
-    chat = (STATIC / 'chat.js').read_text(encoding='utf-8')
+    chat = chat_source()
     helper = chat[chat.index('function askSecret('):]
     helper = helper[:helper.index('\nfunction usesLocalPassword(')]
     assert 'Promise.resolve(null)' in helper
@@ -114,7 +115,7 @@ def test_the_admin_body_is_not_interpolated_as_markup():
     """The reset dialog puts a username in its body. askSecret assigns it with
     textContent; if that ever becomes innerHTML the username is an injection
     point into a dialog that then asks for a password."""
-    chat = (STATIC / 'chat.js').read_text(encoding='utf-8')
+    chat = chat_source()
     helper = chat[chat.index('function askSecret('):]
     helper = helper[:helper.index('\nfunction usesLocalPassword(')]
     assert 'bodyEl.textContent' in helper

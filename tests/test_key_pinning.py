@@ -12,7 +12,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-CHAT = (ROOT / 'app' / 'static' / 'js' / 'chat.js').read_text(encoding='utf-8')
+from chat_source import chat_source  # noqa: E402
+
+CHAT = chat_source()
 INDEX = (ROOT / 'app' / 'templates' / 'index.html').read_text(encoding='utf-8')
 
 

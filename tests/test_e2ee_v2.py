@@ -181,8 +181,8 @@ def test_chat_js_sends_the_envelope_and_decrypts_with_it():
     as v1 and fails closed, which looks like a broken key, not a bug."""
     import re
     from pathlib import Path
-    chat = (Path(__file__).resolve().parent.parent / 'app' / 'static' / 'js' / 'chat.js'
-            ).read_text(encoding='utf-8')
+    from chat_source import chat_source
+    chat = chat_source()
     decrypts = re.findall(r'revealxE2EE\.decrypt(?:Bytes)?\(([^;]*?)\)\s*(?:\n|:|;)', chat, re.S)
     assert decrypts, 'no decrypt calls found'
     for call in decrypts:

@@ -320,6 +320,12 @@ def add_security_headers(response):
     # an unchanged page still costs only a 304.
     if response.mimetype == 'text/html':
         response.headers['Cache-Control'] = 'no-cache'
+    # The chat modules import each other by plain relative URL, without the
+    # ?v= stamp asset() puts on the entry point, so a heuristically cached
+    # module could be paired with a newer one that expects different exports.
+    # Revalidating every time keeps the set consistent at the cost of a 304.
+    if request.path.startswith('/static/js/chat/') or request.path == '/static/js/admin.js':
+        response.headers['Cache-Control'] = 'no-cache'
 
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'

@@ -21,7 +21,7 @@ import re
 import pytest
 
 CSS_PATH = 'app/static/css/style.css'
-CHAT_JS_PATH = 'app/static/js/chat.js'
+CHAT_JS_PATH = 'app/static/js/chat/'  # ES modules; read through chat_source
 
 # Every interactive control is held to this by the touch-target rule. The
 # composer's text field is not a .btn, so it was never covered by it.
@@ -44,7 +44,8 @@ def css():
 
 @pytest.fixture(scope='module')
 def chat_js():
-    return read(CHAT_JS_PATH)
+    from chat_source import chat_source
+    return chat_source()
 
 
 def media_blocks(css, prelude):

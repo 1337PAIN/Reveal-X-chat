@@ -24,7 +24,8 @@ def shipped_scripts():
 
 
 def chat_js():
-    return (JS / 'chat.js').read_text(encoding='utf-8')
+    from chat_source import chat_source
+    return chat_source()
 
 
 @pytest.mark.parametrize('script', shipped_scripts(), ids=lambda p: p.name)

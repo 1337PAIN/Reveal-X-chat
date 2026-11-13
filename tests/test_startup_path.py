@@ -102,7 +102,8 @@ def test_the_dead_dompurify_url_is_gone(client):
 def test_chat_js_refuses_to_start_silently_without_socket_io():
     """`const socket = io()` with no guard is the line that turned a slow CDN
     into a page that responds to nothing."""
-    chat = (STATIC / 'js' / 'chat.js').read_text(encoding='utf-8')
+    # socket.io is created in the first chat module, core.js.
+    chat = (STATIC / 'js' / 'chat' / 'core.js').read_text(encoding='utf-8')
     guard = chat.index("typeof io === 'undefined'")
     use = chat.index('const socket = io();')
     assert guard < use, 'io is used before it is checked'
@@ -195,3 +196,13 @@ def test_there_is_one_csp_and_it_is_the_header():
     for template in templates():
         markup = template.read_text(encoding='utf-8')
         assert 'http-equiv="Content-Security-Policy"' not in markup, template.name
+
+
+@pytest.mark.parametrize('path', ['/static/js/chat/core.js', '/static/js/chat/main.js',
+                                  '/static/js/admin.js'])
+def test_chat_modules_are_always_revalidated(client, path):
+    """Modules import each other without the ?v= stamp, so a stale one could
+    be paired with a newer one that expects different exports."""
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.headers.get('Cache-Control') == 'no-cache'

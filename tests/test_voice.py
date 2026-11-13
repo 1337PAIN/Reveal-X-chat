@@ -299,13 +299,10 @@ def test_invalid_public_key_is_rejected(pair):
 # this suite cannot run.
 # ----------------------------------------------------------------------
 
-CHAT_JS = 'app/static/js/chat.js'
-
-
 @pytest.fixture
 def chat_js():
-    with open(CHAT_JS, encoding='utf-8') as handle:
-        return handle.read()
+    from chat_source import chat_source
+    return chat_source()
 
 
 @pytest.fixture

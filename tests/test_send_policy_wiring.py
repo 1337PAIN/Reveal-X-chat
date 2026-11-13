@@ -12,7 +12,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / 'app' / 'static'
-CHAT = (STATIC / 'js' / 'chat.js').read_text(encoding='utf-8')
+from chat_source import chat_source  # noqa: E402
+
+CHAT = chat_source()
 
 
 def body_of(signature):
@@ -50,5 +52,5 @@ def test_consent_is_per_conversation_and_asked_for():
 
 def test_the_policy_script_is_loaded_before_chat_js_and_precached():
     index = (ROOT / 'app' / 'templates' / 'index.html').read_text(encoding='utf-8')
-    assert index.index("js/send-policy.js") < index.index("js/chat.js")
+    assert index.index("js/send-policy.js") < index.index("js/chat/main.js")
     assert "'/static/js/send-policy.js'" in (STATIC / 'sw.js').read_text(encoding='utf-8')

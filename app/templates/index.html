@@ -674,8 +674,10 @@
     <!-- In-browser tamper detection. Registers window.revealxTamperML but does
          not download the ~11 MB wasm runtime until something asks for a verdict. -->
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>
-    <script src="{{ asset('js/chat.js') }}"></script>
-    <script src="{{ asset('js/admin.js') }}"></script>
+    <!-- The chat client is ES modules (app/static/js/chat/), loaded natively;
+         module scripts are deferred and run in document order. -->
+    <script type="module" src="{{ asset('js/chat/main.js') }}"></script>
+    <script type="module" src="{{ asset('js/admin.js') }}"></script>
     <script src="{{ asset('js/pwa.js') }}"></script>
 </body>
 </html>

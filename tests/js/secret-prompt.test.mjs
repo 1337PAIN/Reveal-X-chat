@@ -1,10 +1,10 @@
 /**
  * askSecret(), the masked replacement for window.prompt().
  *
- * The function text is lifted out of the shipped chat.js and executed against
- * a minimal DOM stub, so these tests exercise the file that is actually
- * served rather than a copy. chat.js as a whole cannot be imported here: it
- * calls io() at the top level and expects a live document.
+ * The function text is lifted out of the shipped chat/settings.js and executed
+ * against a minimal DOM stub, so these tests exercise the file that is
+ * actually served rather than a copy. The module as a whole cannot be imported
+ * here: the chat calls io() as it loads and expects a live document.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,11 +13,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CHAT = readFileSync(join(ROOT, 'app', 'static', 'js', 'chat.js'), 'utf8');
+const CHAT = readFileSync(join(ROOT, 'app', 'static', 'js', 'chat', 'settings.js'), 'utf8');
 
 const SOURCE = CHAT.slice(
     CHAT.indexOf('function askSecret('),
-    CHAT.indexOf('\nfunction usesLocalPassword('),
+    CHAT.search(/\n(export )?function usesLocalPassword\(/),
 );
 
 const IDS = [

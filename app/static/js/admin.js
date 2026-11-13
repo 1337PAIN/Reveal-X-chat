@@ -11,6 +11,13 @@
  * Loaded after chat.js, which owns `socket` and `state`.
  */
 
+// A module: it used `socket` and `askSecret` as globals that chat.js happened
+// to define. chat.js is now modules, which define no globals, so they are
+// imported -- from the same module instances the chat uses.
+import { socket } from './chat/core.js';
+import { askSecret } from './chat/settings.js';
+
+
 (function () {
     'use strict';
 

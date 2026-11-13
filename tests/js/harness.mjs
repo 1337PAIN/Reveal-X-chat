@@ -12,7 +12,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -125,4 +125,17 @@ export function makeIndexedDB() {
             databases.clear();
         },
     };
+}
+
+
+/**
+ * Import one of the chat client's ES modules (app/static/js/chat/) with the
+ * browser globals it expects installed on globalThis first. A module, unlike a
+ * classic script, resolves free names against the real global object, so the
+ * globals cannot be passed in as parameters the way loadBrowserScript does.
+ * Only modules that do not need a live document can be loaded this way.
+ */
+export async function importBrowserModule(file, globals = {}) {
+    Object.assign(globalThis, globals);
+    return import(pathToFileURL(file).href);
 }

@@ -254,8 +254,8 @@ def test_the_pre_auth_list_is_short_and_deliberate():
 
 def _chat_js():
     from pathlib import Path
-    return (Path(__file__).resolve().parent.parent / 'app' / 'static' / 'js' / 'chat.js'
-            ).read_text(encoding='utf-8')
+    from chat_source import chat_source
+    return chat_source()
 
 
 def test_the_client_keeps_the_token_in_memory_only():

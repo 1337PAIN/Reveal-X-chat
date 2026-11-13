@@ -1,0 +1,569 @@
+// Sending text and voice, typing, deleting, revoking.
+// Split out of chat.js; main.js loads the modules in order.
+
+import { late, registerLate } from './late.js';
+import { shared } from './shared.js';
+import {
+    MAX_MESSAGE_LENGTH,
+    MAX_VOICE_BYTES,
+    forgetShare2,
+    messageInput,
+    messagesContainer,
+    reconstructionPanel,
+    sendBtn,
+    socket,
+    state,
+    typingIndicator,
+} from './core.js';
+import {
+    announceToScreenReader,
+} from './basics.js';
+import {
+    checkPeerPin,
+    openSafetyChangeDialog,
+    peerPublicKey,
+} from './keys.js';
+import {
+    showTransientError,
+} from './reactions.js';
+import {
+    selectUser,
+    updateUsersList,
+} from './presence.js';
+import {
+    displayMessage,
+    e2eeContext,
+    scrollToBottom,
+} from './render.js';
+
+registerLate({ deleteMessage, requestChatHistory });
+
+// ==========================================
+// 11. Core Messaging, Typing Indicators & Files
+// ==========================================
+
+socket.on('new_message', (msg) => {
+    const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
+    const isSent = msg.sender_id === state.currentUser.id;
+
+    if (!isSent) {
+        // "Mentions only" needs the plaintext, so encrypted text is opened first.
+        // The notification body itself never carries ciphertext.
+        notifyForIncoming(msg);
+    }
+
+    if (!state.selectedRecipientId) {
+        selectUser(otherId);
+        return;
+    }
+
+    if (otherId !== state.selectedRecipientId) {
+        state.unreadCounts[otherId] = (state.unreadCounts[otherId] || 0) + 1;
+        updateUsersList(state.users);
+        return;
+    }
+
+    if (messagesContainer.querySelector('.welcome-message')) {
+        messagesContainer.innerHTML = '';
+    }
+
+    // Keep the cache in step so re-renders and share re-checks can find it.
+    state.chatHistoryCache.push(msg);
+    displayMessage(msg);
+    if (!isSent) {
+        markConversationRead(msg.sender_id);
+    }
+    scrollToBottom();
+    
+    // Announce to Screen Readers for accessibility
+    announceToScreenReader(`New message received from ${msg.username}`);
+});
+
+socket.on('messages_read', (data) => {
+    (data.message_ids || []).forEach(id => {
+        const node = messagesContainer.querySelector(`[data-message-id="${id}"]`);
+        if (!node) return;
+
+        node.dataset.read = 'true';
+        const status = node.querySelector('.message-status');
+        if (status) status.textContent = 'Read';
+    });
+});
+
+socket.on('message_deleted', (data) => {
+    forgetShare2(data && data.message_id);
+    const node = messagesContainer.querySelector(`[data-message-id="${data.message_id}"]`);
+    if (node) {
+        node.style.opacity = '0.4';
+        node.style.textDecoration = 'line-through';
+        setTimeout(() => node.remove(), 250);
+    }
+});
+
+socket.on('typing', (data) => {
+    if (!data || data.sender_id !== state.selectedRecipientId) return;
+
+    clearTimeout(shared.typingHideTimer);
+    
+    // Real-time debounced Typing Preview
+    typingIndicator.textContent = data.is_typing ? `${data.username} is typing...` : '';
+    if (data.is_typing) {
+        shared.typingHideTimer = setTimeout(() => {
+            typingIndicator.textContent = '';
+        }, 2500);
+    }
+});
+
+socket.on('share_revoked', (data) => {
+    forgetShare2(data && data.message_id);
+    alert('This encrypted share access has been revoked.');
+    if (reconstructionPanel) reconstructionPanel.classList.remove('active');
+    delete state.shareAnalysis[data.message_id];
+    delete state.localAnalysis[data.message_id];
+
+    // Refresh history
+    if (state.selectedRecipientId) {
+        requestChatHistory(state.selectedRecipientId);
+    }
+});
+
+sendBtn.addEventListener('click', sendMessage);
+messageInput.addEventListener('keypress', (event) => {
+    if (event.key === 'Enter') sendMessage();
+});
+
+messageInput.addEventListener('input', () => {
+    if (!state.selectedRecipientId) return;
+    // With typing indicators off, nothing is emitted at all - the peer never
+    // learns that this user is composing.
+    if (!late.getPref('typingIndicators')) return;
+
+    // Rate Limiting Throttling for typing events (max 3 per 5 seconds)
+    const now = Date.now();
+    if (now - state.lastTypingTime < 5000) {
+        state.typingCounter++;
+        if (state.typingCounter > 3) {
+            return; 
+        }
+    } else {
+        state.typingCounter = 1;
+        state.lastTypingTime = now;
+    }
+
+    socket.emit('typing', {
+        recipient_id: state.selectedRecipientId,
+        is_typing: true,
+    });
+
+    clearTimeout(shared.typingStopTimer);
+    shared.typingStopTimer = setTimeout(() => {
+        socket.emit('typing', {
+            recipient_id: state.selectedRecipientId,
+            is_typing: false,
+        });
+    }, 1000);
+});
+
+// Conversations in which the user agreed to send unencrypted, this tab only.
+// A reload or sign-out asks again.
+const plaintextConsent = new Set();
+
+/**
+ * Decide how a message to `recipientId` may be sent, asking the user when the
+ * policy needs consent. Returns 'encrypt', 'plaintext', or null for "do not
+ * send". The rules themselves are in send-policy.js.
+ *
+ * The pin is checked here, at send time, rather than from a cached flag: the
+ * key could have changed since the user list was last rendered.
+ */
+async function decideHowToSend(recipientId) {
+    const pin = await checkPeerPin(recipientId);
+    const decision = window.revealxSendPolicy.decideSend({
+        e2eeReady: window.revealxE2EE.isReady(),
+        peerHasKey: Boolean(peerPublicKey(recipientId)),
+        pinStatus: pin.status,
+        plaintextConfirmed: plaintextConsent.has(recipientId),
+    });
+
+    if (decision.action === 'blocked') {
+        openSafetyChangeDialog(recipientId);
+        return null;
+    }
+    if (decision.action === 'confirm-plaintext') {
+        const user = state.users.find(u => u.id === recipientId);
+        const why = decision.reason === 'peer-has-no-key'
+            ? `${user ? user.username : 'This contact'} has not set up encryption yet`
+            : 'This browser cannot encrypt messages (it needs HTTPS and Web Crypto)';
+        const agreed = confirm(
+            `${why}, so messages in this conversation would be sent unencrypted ` +
+            'and the server could read them.\n\nSend unencrypted messages here?');
+        if (!agreed) return null;
+        plaintextConsent.add(recipientId);
+        return 'plaintext';
+    }
+    return decision.action;
+}
+
+// While disconnected, socket.io buffers emits and flushes them on reconnect
+// -- before the resume token has been presented -- so they would reach a
+// socket with no session and be refused. Better to say so now.
+export function connectionReady() {
+    if (socket.connected && !state.resuming) return true;
+    showTransientError('Reconnecting. Try again in a moment.');
+    return false;
+}
+
+async function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || !state.selectedRecipientId) return;
+    if (!connectionReady()) return;
+
+    const mode = await decideHowToSend(state.selectedRecipientId);
+    if (!mode) return;
+
+    if (text.length > MAX_MESSAGE_LENGTH) {
+        alert(`Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`);
+        return;
+    }
+
+    // Enforce Send Cooldown Counter Rate Limit feedback
+    if (state.sendCooldownActive) {
+        announceToScreenReader('Rate limit cooldown active. Please wait.');
+        return;
+    }
+
+    state.sendCooldownActive = true;
+    sendBtn.disabled = true;
+    let cd = 2;
+    sendBtn.textContent = `${cd}s`;
+    
+    const cdInterval = setInterval(() => {
+        cd--;
+        if (cd <= 0) {
+            clearInterval(cdInterval);
+            state.sendCooldownActive = false;
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Send';
+        } else {
+            sendBtn.textContent = `${cd}s`;
+        }
+    }, 1000);
+
+    if (late.getPref('typingIndicators')) {
+        socket.emit('typing', {
+            recipient_id: state.selectedRecipientId,
+            is_typing: false,
+        });
+    }
+
+    const recipientId = state.selectedRecipientId;
+    messageInput.value = '';
+
+    let payload = { recipient_id: recipientId, message: text };
+
+    if (mode === 'encrypt') {
+        // This used to catch an encryption error, log it, and send the
+        // message in plaintext anyway. A failure here now stops the send and
+        // gives the text back; see send-policy.js.
+        let sealed;
+        try {
+            sealed = await window.revealxE2EE.encrypt(peerPublicKey(recipientId), text, { recipientId });
+        } catch (error) {
+            sealed = error;
+        }
+        if (window.revealxSendPolicy.afterEncrypt(sealed).action !== 'send') {
+            console.error('Encryption failed; the message was not sent', sealed);
+            messageInput.value = text;
+            showTransientError('The message could not be encrypted, so it was not sent.');
+            return;
+        }
+        payload = {
+            recipient_id: recipientId,
+            message: sealed.ciphertext,
+            iv: sealed.iv,
+            encrypted: true,
+            v: sealed.v,
+            msg_uuid: sealed.msg_uuid,
+        };
+    }
+
+    socket.emit('send_message', payload);
+}
+
+/**
+ * Delete a message.
+ *
+ * Scope depends on who you are: the sender owns what they sent and removes it
+ * from both sides; the recipient can only drop their own copy.
+ */
+function deleteMessage(messageId, isSent) {
+    const question = isSent
+        ? 'Delete this message for everyone? It will be removed from both sides.'
+        : 'Delete this message from your side? The sender keeps their copy.';
+    if (!confirm(question)) return;
+
+    socket.emit('delete_message', { message_id: messageId });
+}
+
+/**
+ * Ask for a conversation's history.
+ *
+ * Opening a chat marks it read server-side, so the read-receipt preference has
+ * to travel with the request - otherwise turning receipts off would still leak
+ * "Read" to the sender the moment the chat is opened.
+ */
+export function requestChatHistory(recipientId) {
+    if (!recipientId) return;
+    socket.emit('select_chat', {
+        recipient_id: recipientId,
+        send_read_receipts: late.getPref('readReceipts'),
+    });
+}
+
+function markConversationRead(senderId) {
+    // With read receipts off we simply never tell the server we read anything,
+    // so the sender keeps seeing "Sent".
+    if (!late.getPref('readReceipts')) return;
+    socket.emit('mark_read', { sender_id: senderId });
+}
+
+/** Decide and raise the alert for an incoming message. */
+async function notifyForIncoming(msg) {
+    let preview = 'Sent an encrypted share';
+    let searchable = '';
+
+    if (msg.type === 'voice') {
+        preview = 'Voice message';
+    } else if (msg.type === 'text') {
+        if (msg.encrypted) {
+            const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
+            const peerKey = peerPublicKey(otherId);
+            const plaintext = peerKey
+                ? await window.revealxE2EE.decrypt(
+                    peerKey, msg.content, msg.extra && msg.extra.iv, e2eeContext(msg))
+                : null;
+            searchable = plaintext || '';
+            preview = 'Encrypted message';
+        } else {
+            searchable = msg.content;
+            preview = msg.content;
+        }
+    }
+
+    if (!late.shouldNotifyFor(searchable)) return;
+
+    late.playNotificationSound();
+    late.showNotification(`New message from ${msg.username}`, {
+        body: preview,
+        icon: '/static/icon-192.png'
+    });
+}
+
+// ==========================================
+// 11b. Voice messages
+// ==========================================
+
+const MAX_VOICE_SECONDS = 60;
+let voiceRecorder = null;
+let voiceChunks = [];
+let voiceStopTimer = null;
+let voiceTicker = null;
+let voiceStartedAt = 0;
+let voiceCancelled = false;
+
+const voiceBtn = document.getElementById('voiceBtn');
+const voiceCancelBtn = document.getElementById('voiceCancelBtn');
+const voiceTimerEl = document.getElementById('voiceTimer');
+if (voiceBtn) voiceBtn.addEventListener('click', toggleVoiceRecording);
+if (voiceCancelBtn) voiceCancelBtn.addEventListener('click', cancelVoiceRecording);
+
+/**
+ * Container to record in.
+ *
+ * Left to itself, MediaRecorder picks per engine: Chrome gives WebM/Opus and
+ * Safari gives MP4/AAC. Each plays its own and may not play the other's, so a
+ * recording made on Android could arrive on an iPhone as a player that loads
+ * and produces nothing -- with no error anywhere to explain it.
+ *
+ * MP4/AAC is the one container both engines record *and* play, so it is tried
+ * first. The list is ordered by how widely the result can be played back, not
+ * by quality; the fallbacks only run on an engine that cannot do MP4.
+ */
+function pickRecorderMime() {
+    const candidates = [
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mp4',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+    ];
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+    return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function voiceRecordingActive() {
+    return Boolean(voiceRecorder && voiceRecorder.state === 'recording');
+}
+
+function formatVoiceClock(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function setVoiceButtonState(recording) {
+    if (voiceBtn) {
+        voiceBtn.classList.toggle('recording', recording);
+        voiceBtn.textContent = recording ? '⏹' : '🎤';
+        voiceBtn.setAttribute('aria-label', recording ? 'Stop and send recording' : 'Voice message');
+        // The composer carries the state so CSS can lay the row out for it: on
+        // a phone the clock and the discard button do not fit beside a text
+        // field, and the field is the one thing that is no use while recording.
+        const composer = voiceBtn.closest('.message-input');
+        if (composer) composer.classList.toggle('is-recording', recording);
+    }
+    if (voiceCancelBtn) voiceCancelBtn.classList.toggle('hidden', !recording);
+    if (voiceTimerEl) {
+        voiceTimerEl.classList.toggle('hidden', !recording);
+        if (!recording) voiceTimerEl.textContent = '';
+    }
+
+    clearInterval(voiceTicker);
+    voiceTicker = null;
+    if (!recording) return;
+
+    // A recording with no visible clock is one the user cannot judge against
+    // the 60-second cap until it cuts them off.
+    voiceStartedAt = Date.now();
+    const tick = () => {
+        const elapsed = (Date.now() - voiceStartedAt) / 1000;
+        const left = Math.max(0, MAX_VOICE_SECONDS - elapsed);
+        if (voiceTimerEl) {
+            voiceTimerEl.textContent = formatVoiceClock(elapsed);
+            voiceTimerEl.classList.toggle('ending', left <= 10);
+        }
+    };
+    tick();
+    voiceTicker = setInterval(tick, 250);
+}
+
+/** Stop recording and throw the audio away, rather than sending it. */
+function cancelVoiceRecording() {
+    if (!voiceRecordingActive()) return;
+    voiceCancelled = true;
+    voiceRecorder.stop();
+    announceToScreenReader('Recording discarded.');
+}
+
+async function toggleVoiceRecording() {
+    if (voiceRecordingActive()) {
+        voiceRecorder.stop();
+        return;
+    }
+
+    if (!state.selectedRecipientId) {
+        alert('Select an account first');
+        return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+        alert('Voice recording is not supported in this browser.');
+        return;
+    }
+
+    let stream;
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (error) {
+        alert('Microphone access was denied.');
+        return;
+    }
+
+    const recipientId = state.selectedRecipientId;
+    voiceChunks = [];
+    voiceCancelled = false;
+    const preferred = pickRecorderMime();
+    try {
+        voiceRecorder = preferred
+            ? new MediaRecorder(stream, { mimeType: preferred })
+            : new MediaRecorder(stream);
+    } catch (error) {
+        // isTypeSupported said yes and the constructor disagreed. Rather than
+        // lose the recording, fall back to whatever the engine prefers.
+        console.warn('Preferred recording type refused, using the default', error);
+        voiceRecorder = new MediaRecorder(stream);
+    }
+
+    voiceRecorder.addEventListener('dataavailable', (event) => {
+        if (event.data && event.data.size) voiceChunks.push(event.data);
+    });
+
+    voiceRecorder.addEventListener('stop', async () => {
+        clearTimeout(voiceStopTimer);
+        stream.getTracks().forEach(track => track.stop());
+        setVoiceButtonState(false);
+
+        const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || 'audio/webm' });
+        const discarded = voiceCancelled;
+        voiceRecorder = null;
+        voiceChunks = [];
+        voiceCancelled = false;
+
+        if (discarded) return;
+        if (blob.size) await sendVoiceMessage(blob, recipientId);
+    });
+
+    voiceRecorder.start();
+    setVoiceButtonState(true);
+    announceToScreenReader('Recording voice message. Click again to send.');
+
+    // Hard cap so a forgotten recording cannot exceed the server size limit.
+    voiceStopTimer = setTimeout(() => {
+        if (voiceRecordingActive()) voiceRecorder.stop();
+    }, MAX_VOICE_SECONDS * 1000);
+}
+
+async function sendVoiceMessage(blob, recipientId) {
+    if (blob.size > MAX_VOICE_BYTES) {
+        alert('Voice message is too long. Keep it under a minute.');
+        return;
+    }
+    if (!connectionReady()) return;
+
+    const mode = await decideHowToSend(recipientId);
+    if (!mode) return;
+
+    const mime = (blob.type || 'audio/webm').split(';')[0];
+
+    if (mode === 'encrypt') {
+        // As for text: a failure stops the send rather than falling back to
+        // an unencrypted recording, which is what this used to do.
+        let sealed;
+        try {
+            sealed = await window.revealxE2EE.encryptBytes(
+                peerPublicKey(recipientId), await blob.arrayBuffer(), { recipientId });
+        } catch (error) {
+            sealed = error;
+        }
+        if (window.revealxSendPolicy.afterEncrypt(sealed).action !== 'send') {
+            console.error('Voice encryption failed; the recording was not sent', sealed);
+            showTransientError('The voice message could not be encrypted, so it was not sent.');
+            return;
+        }
+        socket.emit('send_voice', {
+            recipient_id: recipientId,
+            audio: sealed.ciphertext,
+            iv: sealed.iv,
+            mime,
+            encrypted: true,
+            v: sealed.v,
+            msg_uuid: sealed.msg_uuid,
+        });
+        return;
+    }
+
+    socket.emit('send_voice', {
+        recipient_id: recipientId,
+        audio: await late.blobToDataUrl(blob),
+    });
+}
+

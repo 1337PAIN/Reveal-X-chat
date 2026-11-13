@@ -253,8 +253,8 @@ def test_the_server_split_is_gone(pair, store, monkeypatch):
 
 def _chat():
     from pathlib import Path
-    return (Path(__file__).resolve().parent.parent / 'app' / 'static' / 'js' / 'chat.js'
-            ).read_text(encoding='utf-8')
+    from chat_source import chat_source
+    return chat_source()
 
 
 def test_the_client_never_emits_the_image():
@@ -290,7 +290,7 @@ def test_vc_client_is_loaded_and_precached():
     from pathlib import Path
     root = Path(__file__).resolve().parent.parent / 'app'
     index = (root / 'templates' / 'index.html').read_text(encoding='utf-8')
-    assert index.index('js/vc-client.js') < index.index('js/chat.js')
+    assert index.index('js/vc-client.js') < index.index('js/chat/main.js')
     assert "'/static/js/vc-client.js'" in (root / 'static' / 'sw.js').read_text(encoding='utf-8')
 
 

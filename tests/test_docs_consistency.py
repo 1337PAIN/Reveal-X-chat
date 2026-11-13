@@ -126,3 +126,17 @@ def test_every_file_and_function_security_md_names_exists():
             rf'^\s*(?:async\s+)?(?:def|class)\s+{name}\b|^{name}\s*=|^\s*(?:from\s+\S+\s+)?import\b.*\b{name}\b',
             source, re.M)
         assert defined, f'SECURITY.md says {name} is in {filename}; it is not'
+
+
+def test_every_script_security_md_names_defines_the_function():
+    """The same check for the chat modules: `chat/x.js`, `name` pairs. The
+    client was one chat.js; when it became modules these all moved."""
+    pairs = re.findall(r'`(chat/[\w-]+\.js)`,\s+`(\w+)`', SECURITY)
+    assert pairs
+    js = ROOT / 'app' / 'static' / 'js'
+    for filename, name in pairs:
+        path = js / filename
+        assert path.is_file(), f'SECURITY.md names {filename}, which does not exist'
+        pattern = r'function\s+' + name + r'\b|(?:const|let)\s+' + name + r'\b'
+        assert re.search(pattern, path.read_text(encoding='utf-8')), \
+            f'SECURITY.md says {name} is in {filename}; it is not'
