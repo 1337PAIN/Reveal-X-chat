@@ -210,11 +210,18 @@ def test_read_receipts_off_suppresses_the_receipt_on_open(pair, store):
 
 def test_profile_photo_updates_and_broadcasts(pair, store):
     alice_client, bob_client, alice, _ = pair
-    png = 'data:image/png;base64,' + base64.b64encode(b'\x89PNG' + b'\x00' * 64).decode()
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new('RGB', (8, 8), (10, 120, 200)).save(buf, 'PNG')
+    sent = 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
 
-    alice_client.emit('update_profile', {'profile_image': png})
+    alice_client.emit('update_profile', {'profile_image': sent})
 
-    assert events(alice_client, 'profile_updated')[0]['args'][0]['profile_image'] == png
+    # The server stores a PNG it re-encoded itself (test_profile_image.py), so
+    # compare against what it reports rather than the bytes that were sent.
+    png = events(alice_client, 'profile_updated')[0]['args'][0]['profile_image']
+    assert png.startswith('data:image/png;base64,')
     assert store.get_user(alice['id'])['profile_image'] == png
     peers = events(bob_client, 'users_updated')[-1]['args'][0]['users']
     assert peers[0]['profile_image'] == png

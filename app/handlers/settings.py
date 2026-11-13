@@ -4,6 +4,10 @@ bio, status, two-factor enrolment, and deleting the account.
 
 from app.handlers.common import *  # noqa: F401,F403
 
+import io
+
+from PIL import Image
+
 
 @socketio.on('register_public_key')
 @session_required
@@ -33,6 +37,51 @@ def handle_register_public_key(data):
     emit_users()
 
 
+#: A profile photo, exactly: one of three types, base64 and nothing else. The
+#: old check read only the MIME type, so a header like
+#: `data:image/png;x"><a href=...>;base64,` passed, was stored, and was then
+#: interpolated into innerHTML in every contact's sidebar.
+_PROFILE_IMAGE_RE = re.compile(r'^data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$')
+MAX_PROFILE_IMAGE_PIXELS = 2048 * 2048
+
+
+def _normalise_profile_image(value):
+    """Return a PNG data URL the server encoded itself, or raise ValueError.
+
+    Decoding and re-encoding means what is stored is pixels, not whatever
+    bytes were sent: no metadata, no polyglot payload, and always the same
+    well-formed `data:image/png;base64,...` the client can safely assign to
+    an img's src.
+    """
+    match = _PROFILE_IMAGE_RE.fullmatch(value) if isinstance(value, str) else None
+    if not match:
+        raise ValueError('Invalid profile image')
+    try:
+        raw = base64.b64decode(match.group(2), validate=True)
+    except Exception:
+        raise ValueError('Invalid profile image') from None
+    if len(raw) > MAX_PROFILE_IMAGE_BYTES:
+        raise ValueError('Profile image is too large')
+    try:
+        with Image.open(io.BytesIO(raw)) as image:
+            # Checked from the header before any pixel is decoded.
+            if image.width * image.height > MAX_PROFILE_IMAGE_PIXELS:
+                raise ValueError('Profile image is too large')
+            if image.format not in ('PNG', 'JPEG', 'WEBP'):
+                raise ValueError('Invalid profile image')
+            image.load()
+            out = io.BytesIO()
+            image.convert('RGBA').save(out, 'PNG', optimize=True)
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError('Invalid profile image') from None
+    encoded = out.getvalue()
+    if len(encoded) > MAX_PROFILE_IMAGE_BYTES:
+        raise ValueError('Profile image is too large')
+    return 'data:image/png;base64,' + base64.b64encode(encoded).decode('ascii')
+
+
 @socketio.on('update_profile')
 @session_required
 def handle_update_profile(data):
@@ -43,20 +92,10 @@ def handle_update_profile(data):
     if not current_user:
         return
     if profile_image:
-        if not profile_image.startswith('data:image/') or ',' not in profile_image:
-            emit('auth_error', {'error': 'Invalid profile image'}, to=request.sid)
-            return
-        header, encoded = profile_image.split(',', 1)
-        if ';base64' not in header or header[5:].split(';', 1)[0].lower() not in ALLOWED_IMAGE_MIME_TYPES:
-            emit('auth_error', {'error': 'Invalid profile image'}, to=request.sid)
-            return
         try:
-            raw = base64.b64decode(encoded, validate=True)
-        except Exception:
-            emit('auth_error', {'error': 'Invalid profile image'}, to=request.sid)
-            return
-        if len(raw) > MAX_PROFILE_IMAGE_BYTES:
-            emit('auth_error', {'error': 'Profile image is too large'}, to=request.sid)
+            profile_image = _normalise_profile_image(profile_image)
+        except ValueError as exc:
+            emit('auth_error', {'error': str(exc)}, to=request.sid)
             return
 
     chat_room.update_profile_image(current_user['id'], profile_image)

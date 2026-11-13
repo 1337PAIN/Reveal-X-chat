@@ -115,10 +115,15 @@ claims; nothing the client asserts about itself is read. Accounts are matched on
 | Event | In | Out |
 | --- | --- | --- |
 | `register_public_key` | `public_key` (base64 SPKI) | `public_key_registered` |
-| `update_profile` | `profile_image` | `profile_updated` |
+| `update_profile` | `profile_image` (`data:image/png|jpeg|webp;base64,...` or empty to clear) | `profile_updated` |
 | `update_username` | `new_username` | `settings_saved`, `settings_error` |
 | `update_bio` | `bio` | — |
 | `update_status` | `status` | `users_updated` |
+
+`update_profile` accepts exactly `data:image/(png|jpeg|webp);base64,<base64>`
+and nothing else, up to 512 KB and 2048 × 2048 pixels. The server decodes it
+with Pillow and stores a PNG it encoded itself, so what other users receive is
+always a plain `data:image/png;base64,...`. Anything else answers `auth_error`.
 
 `register_public_key` publishes the ECDH P-256 public half. The private key never
 leaves the browser — it is generated non-extractable and kept in IndexedDB.

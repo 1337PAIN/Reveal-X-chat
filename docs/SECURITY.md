@@ -214,6 +214,15 @@ localises damage and survives a re-encode. Either alone would be weaker.
 - `Permissions-Policy: camera=(), microphone=(self), geolocation=()`. It was
   `microphone=()`, which disables the microphone for the app's own origin as
   well, so voice notes could not be recorded in browsers that enforce it.
+- Profile photos are re-encoded by the server: only a strict
+  `data:image/(png|jpeg|webp);base64,` value is accepted, decoded with Pillow
+  and stored as a fresh PNG, and the client builds the `<img>` with
+  `createElement` and `.src`. The old check read only the MIME type, so a
+  quote in the data-URL header was stored and then broke out of an
+  `innerHTML` attribute in every contact's sidebar
+  (`handlers/settings.py`, `_normalise_profile_image`;
+  `tests/test_profile_image.py`). The CSP adds `form-action 'self'`, so
+  injected markup cannot post a form elsewhere either.
 - Socket.IO origins default to same-origin only.
 - All interpolated text goes through `escapeHtml`, which fails **closed** when
   DOMPurify is unavailable (`sanitize.js`, `tests/js/sanitize.test.mjs`).

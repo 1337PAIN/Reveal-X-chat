@@ -75,22 +75,33 @@ export function updateUsersList(nextUsers) {
         li.className = user.id === state.selectedRecipientId ? 'active' : '';
         if (!user.online) li.classList.add('offline');
         
-        const initial = user.username.charAt(0).toUpperCase();
-        const avatar = user.profile_image 
-            ? `<img src="${user.profile_image}" alt="${escapeHtml(user.username)}" class="avatar-img">`
-            : `<div class="avatar-dot">${initial}</div>`;
+        // Built with createElement and .src, never interpolated: the photo is
+        // a data URL from another user, and it used to be spliced into
+        // innerHTML, where a quote in it ended the attribute and the rest
+        // became markup in everyone's sidebar.
+        let avatar;
+        if (user.profile_image) {
+            avatar = document.createElement('img');
+            avatar.className = 'avatar-img';
+            avatar.alt = user.username;
+            avatar.src = user.profile_image;
+        } else {
+            avatar = document.createElement('div');
+            avatar.className = 'avatar-dot';
+            avatar.textContent = user.username.charAt(0).toUpperCase();
+        }
         
         const status = user.status || (user.online ? 'online' : 'offline');
         li.dataset.status = status;
 
         li.innerHTML = `
-            ${avatar}
             <span class="user-meta">
                 <span class="user-name">${escapeHtml(user.username)}</span>
                 <span class="user-status-line">${escapeHtml(user.bio || STATUS_LABELS[status] || status)}</span>
             </span>
             ${count > 0 ? `<span class="unread-badge" aria-label="${count} unread messages">${count}</span>` : ''}
         `;
+        li.prepend(avatar);
         li.addEventListener('click', () => selectUser(user.id));
         usersList.appendChild(li);
     });

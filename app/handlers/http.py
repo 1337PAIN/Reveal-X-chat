@@ -361,6 +361,9 @@ def add_security_headers(response):
         "worker-src 'self' blob:; "
         "object-src 'none'; "
         "base-uri 'self'; "
+        # Nothing in the app submits a form anywhere; injected markup must not
+        # be able to post one to another origin either.
+        "form-action 'self'; "
         "frame-ancestors 'none'"
     )
     return response
