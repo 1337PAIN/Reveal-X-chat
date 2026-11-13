@@ -42,6 +42,10 @@ const state = {
     pendingImage: null,
     keys: { publicKey: '' },
     keyExchangeStatus: {}, // {userId: 'ready' | 'pending' | 'unavailable'}
+    // {userId: {previous, current}} for peers whose published key no longer
+    // matches the one pinned on this device. Sending to them is blocked until
+    // the change is accepted in the safety-number dialog.
+    keyChanges: new Map(),
     shareAnalysis: {},     // {messageId: integrity + ML result}
     localAnalysis: {},     // {messageId: verdict computed here in the browser}
     chatHistoryCache: [],
@@ -434,6 +438,9 @@ async function initE2EEKeys(options = {}) {
         socket.emit('register_public_key', { public_key: publicKey });
     }
     renderKeyManager();
+    // The user list can arrive before the key store is open; pins checked
+    // then would have been skipped.
+    refreshPeerPins();
     return publicKey;
 }
 
@@ -450,14 +457,84 @@ function keyExchangeState(userId) {
     return peerPublicKey(userId) ? 'ready' : 'pending';
 }
 
+/**
+ * Compare a peer's published key with the pin on this device.
+ *
+ * Returns the pin status from e2ee.js. A 'changed' result is recorded in
+ * state.keyChanges, which blocks sending to that peer until the user accepts
+ * the new key -- the server distributes keys, so a silent change is exactly
+ * what substituting one would look like.
+ */
+async function checkPeerPin(userId) {
+    const current = peerPublicKey(userId);
+    if (!current || !window.revealxE2EE.isReady()) return { status: 'none' };
+    const result = await window.revealxE2EE.checkPeerKey(userId, current);
+    if (result.status === 'changed') {
+        state.keyChanges.set(userId, { previous: result.previous, current });
+    } else {
+        state.keyChanges.delete(userId);
+    }
+    return result;
+}
+
+async function refreshPeerPins() {
+    for (const user of state.users) {
+        if (user.public_key) await checkPeerPin(user.id);
+    }
+    if (state.selectedRecipientId && state.keyChanges.has(state.selectedRecipientId)) {
+        openSafetyChangeDialog(state.selectedRecipientId);
+    }
+}
+
+async function openSafetyChangeDialog(userId) {
+    const modal = document.getElementById('safetyChangeModal');
+    const change = state.keyChanges.get(userId);
+    if (!modal || !change) return;
+    const user = state.users.find(u => u.id === userId);
+    const name = user ? user.username : 'This contact';
+
+    document.getElementById('safetyChangeText').textContent =
+        `${name}'s encryption key is different from the one this device saw before. ` +
+        'They may have reinstalled or used a new browser, or someone may be ' +
+        'intercepting the conversation. Messages to them are on hold until you ' +
+        'continue. Compare the new safety number with them in person or over a ' +
+        'call before trusting it.';
+    document.getElementById('safetyChangeNumber').textContent =
+        await window.revealxE2EE.safetyNumber(change.current);
+    modal.dataset.userId = userId;
+    modal.classList.remove('hidden');
+}
+
+const safetyChangeAccept = document.getElementById('safetyChangeAccept');
+if (safetyChangeAccept) {
+    safetyChangeAccept.addEventListener('click', async () => {
+        const modal = document.getElementById('safetyChangeModal');
+        const userId = modal && modal.dataset.userId;
+        const change = userId && state.keyChanges.get(userId);
+        if (change) {
+            await window.revealxE2EE.acceptPeerKey(userId, change.current);
+            state.keyChanges.delete(userId);
+        }
+        if (modal) modal.classList.add('hidden');
+        renderKeyManager();
+    });
+}
+
+const safetyChangeCancel = document.getElementById('safetyChangeCancel');
+if (safetyChangeCancel) {
+    safetyChangeCancel.addEventListener('click', () => {
+        const modal = document.getElementById('safetyChangeModal');
+        if (modal) modal.classList.add('hidden');
+    });
+}
+
 async function renderKeyManager() {
     const display = document.getElementById('publicKeyDisplay');
     if (display) {
         if (!window.revealxE2EE.available) {
             display.textContent = 'WebCrypto is unavailable in this browser. Messages are sent unencrypted.';
         } else if (state.keys.publicKey) {
-            const fingerprint = await window.revealxE2EE.fingerprint(state.keys.publicKey);
-            display.textContent = `Fingerprint: ${fingerprint}\n\n${state.keys.publicKey}`;
+            display.textContent = state.keys.publicKey;
         } else {
             display.textContent = 'Generating key pair...';
         }
@@ -494,10 +571,41 @@ async function renderKeyManager() {
         item.append(name, state_);
 
         if (status === 'ready') {
-            const fingerprint = document.createElement('small');
-            fingerprint.className = 'key-exchange-fingerprint';
-            fingerprint.textContent = await window.revealxE2EE.fingerprint(user.public_key);
-            item.appendChild(fingerprint);
+            const pin = await checkPeerPin(user.id);
+
+            const number = document.createElement('small');
+            number.className = 'key-exchange-fingerprint';
+            number.textContent = `Safety number: ${await window.revealxE2EE.safetyNumber(user.public_key)}`;
+            item.appendChild(number);
+
+            if (pin.status === 'changed') {
+                item.classList.add('changed');
+                state_.textContent = '⚠️ Key changed - review';
+                const review = document.createElement('button');
+                review.type = 'button';
+                review.className = 'btn btn-warning btn-sm';
+                review.textContent = 'Review change';
+                review.addEventListener('click', () => openSafetyChangeDialog(user.id));
+                item.appendChild(review);
+            } else {
+                // Verified means the two people compared this number out of
+                // band. It is recorded per pinned key, so a later key change
+                // clears it rather than carrying it over.
+                const label = document.createElement('label');
+                label.className = 'key-verified-toggle';
+                const box = document.createElement('input');
+                box.type = 'checkbox';
+                box.checked = Boolean(pin.verified);
+                box.addEventListener('change', async () => {
+                    const saved = await window.revealxE2EE.setPeerVerified(
+                        user.id, user.public_key, box.checked);
+                    if (!saved) box.checked = false;
+                    renderKeyManager();
+                });
+                label.append(box, document.createTextNode(' Mark as verified'));
+                item.appendChild(label);
+                if (pin.verified) state_.textContent = '✅ Verified';
+            }
         }
 
         exchangeList.appendChild(item);
@@ -952,6 +1060,7 @@ socket.on('logout_success', async () => {
 
 socket.on('users_updated', (data) => {
     updateUsersList(data.users);
+    refreshPeerPins();
 
     if (state.selectedRecipientId) {
         const selected = state.users.find(u => u.id === state.selectedRecipientId);
@@ -1786,6 +1895,13 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || !state.selectedRecipientId) return;
 
+    // Checked at send time, against the pin itself, not a cached flag: the
+    // key could have changed since the list was last rendered.
+    if ((await checkPeerPin(state.selectedRecipientId)).status === 'changed') {
+        openSafetyChangeDialog(state.selectedRecipientId);
+        return;
+    }
+
     if (text.length > MAX_MESSAGE_LENGTH) {
         alert(`Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`);
         return;
@@ -2086,6 +2202,11 @@ async function toggleVoiceRecording() {
 async function sendVoiceMessage(blob, recipientId) {
     if (blob.size > MAX_VOICE_BYTES) {
         alert('Voice message is too long. Keep it under a minute.');
+        return;
+    }
+
+    if ((await checkPeerPin(recipientId)).status === 'changed') {
+        openSafetyChangeDialog(recipientId);
         return;
     }
 

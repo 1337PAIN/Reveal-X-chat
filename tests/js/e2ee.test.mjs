@@ -211,17 +211,35 @@ test('decrypt returns null on a missing ciphertext or iv', async () => {
     assert.equal(await bob.session.decrypt(alice.publicKey, 'aaaa', '', c), null);
 });
 
-test('fingerprints identify a key and differ between keys', async () => {
+test('the safety number is 60 digits and both sides compute the same one', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
 
-    const mine = await alice.session.fingerprint();
-    const ofBob = await alice.session.fingerprint(bob.publicKey);
+    const fromAlice = await alice.session.safetyNumber(bob.publicKey);
+    const fromBob = await bob.session.safetyNumber(alice.publicKey);
 
-    assert.match(mine, /^[0-9A-F]{2}( [0-9A-F]{2}){7}$/, '8 bytes, hex, spaced');
-    assert.notEqual(mine, ofBob);
-    // Both sides must read the same value or out-of-band comparison is useless.
-    assert.equal(ofBob, await bob.session.fingerprint());
+    assert.match(fromAlice, /^\d{5}( \d{5}){11}$/, '12 groups of 5 digits');
+    // Out-of-band comparison is useless unless both screens show one number.
+    assert.equal(fromAlice, fromBob);
+});
+
+test('the safety number changes when either key changes', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const carol = await newSession('carol');
+
+    const before = await alice.session.safetyNumber(bob.publicKey);
+    assert.notEqual(await alice.session.safetyNumber(carol.publicKey), before);
+
+    const rotated = await bob.session.init('bob', { regenerate: true });
+    assert.notEqual(await alice.session.safetyNumber(rotated), before);
+});
+
+test('the 64-bit fingerprint is gone', async () => {
+    // Eight bytes of SHA-256 is a 2^32 birthday bound for a key an attacker
+    // gets to choose. The safety number replaces it.
+    const alice = await newSession('alice');
+    assert.equal(typeof alice.session.fingerprint, 'undefined');
 });
 
 test('forgetPeer drops the cached key so a rotated peer key is picked up', async () => {
@@ -331,4 +349,85 @@ test('a v1 client cannot read a v2 message, so nothing silently falls back', asy
     const sent = await send(alice, bob, 'new format');
     const oldBob = await newSession('bob', bobStore, E2EE_V1);
     assert.equal(await oldBob.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv), null);
+});
+
+
+// ----------------------------------------------------------------------
+// Key pinning: trust on first use, and a loud change after that
+// ----------------------------------------------------------------------
+
+test('a peer key is pinned the first time it is seen', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+
+    const first = await alice.session.checkPeerKey('bob', bob.publicKey);
+    assert.equal(first.status, 'new');
+    assert.equal(first.verified, false);
+
+    const again = await alice.session.checkPeerKey('bob', bob.publicKey);
+    assert.equal(again.status, 'match');
+});
+
+test('a different key for a pinned peer is reported as changed, not adopted', async () => {
+    // The server hands out public keys. Without a pin, swapping Bob's key
+    // for one the server holds is invisible: Alice encrypts to the server.
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const mallory = await newSession('mallory');
+
+    await alice.session.checkPeerKey('bob', bob.publicKey);
+    const swapped = await alice.session.checkPeerKey('bob', mallory.publicKey);
+    assert.equal(swapped.status, 'changed');
+    assert.equal(swapped.previous, bob.publicKey);
+
+    // Asking again does not quietly accept it.
+    assert.equal((await alice.session.checkPeerKey('bob', mallory.publicKey)).status, 'changed');
+    assert.equal((await alice.session.checkPeerKey('bob', bob.publicKey)).status, 'match');
+});
+
+test('accepting a changed key re-pins it and clears verification', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    await alice.session.checkPeerKey('bob', bob.publicKey);
+    assert.equal(await alice.session.setPeerVerified('bob', bob.publicKey, true), true);
+    assert.equal((await alice.session.checkPeerKey('bob', bob.publicKey)).verified, true);
+
+    const rotated = await bob.session.init('bob', { regenerate: true });
+    await alice.session.acceptPeerKey('bob', rotated);
+
+    const now = await alice.session.checkPeerKey('bob', rotated);
+    assert.equal(now.status, 'match');
+    assert.equal(now.verified, false, 'verification belonged to the old key');
+});
+
+test('verification can only be recorded for the pinned key', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const mallory = await newSession('mallory');
+    await alice.session.checkPeerKey('bob', bob.publicKey);
+
+    assert.equal(await alice.session.setPeerVerified('bob', mallory.publicKey, true), false);
+    assert.equal((await alice.session.checkPeerKey('bob', bob.publicKey)).verified, false);
+});
+
+test('pins survive a reload and belong to the local account', async () => {
+    const store = makeIndexedDB();
+    const alice = await newSession('alice', store);
+    const bob = await newSession('bob');
+    const mallory = await newSession('mallory');
+    await alice.session.checkPeerKey('bob', bob.publicKey);
+
+    const reloaded = await newSession('alice', store);
+    assert.equal((await reloaded.session.checkPeerKey('bob', mallory.publicKey)).status, 'changed');
+
+    // Another account signing in on the same browser has its own pins.
+    const other = await newSession('dave', store);
+    assert.equal((await other.session.checkPeerKey('bob', mallory.publicKey)).status, 'new');
+});
+
+test('a peer with no key is reported as such and nothing is pinned', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    assert.equal((await alice.session.checkPeerKey('bob', '')).status, 'none');
+    assert.equal((await alice.session.checkPeerKey('bob', bob.publicKey)).status, 'new');
 });

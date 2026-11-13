@@ -1770,6 +1770,19 @@ body::before {
 .key-exchange-row.ready .key-exchange-state { color: var(--success); }
 .key-exchange-row.pending .key-exchange-state { color: var(--accent); }
 .key-exchange-row.unavailable .key-exchange-state { color: var(--danger); }
+.key-exchange-row.changed .key-exchange-state { color: var(--danger); }
+
+.key-verified-toggle,
+.key-exchange-row .btn-sm {
+    grid-column: 1 / -1;
+    justify-self: start;
+    font-size: 12px;
+}
+
+#safetyChangeNumber {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    letter-spacing: .5px;
+}
 
 .key-exchange-fingerprint {
     grid-column: 1 / -1;

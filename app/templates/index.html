@@ -257,6 +257,24 @@
         </div>
     </div>
 
+    <!-- Shown when a peer's published key differs from the one pinned on this
+         device. Sending to them is blocked until this is accepted. -->
+    <div id="safetyChangeModal" class="modal hidden" role="alertdialog" aria-modal="true"
+         aria-labelledby="safetyChangeTitle" aria-describedby="safetyChangeText">
+        <div class="modal-content">
+            <div class="settings-header">
+                <h2 id="safetyChangeTitle">Safety number changed</h2>
+            </div>
+            <p id="safetyChangeText"></p>
+            <h3>New safety number</h3>
+            <div class="key-display" id="safetyChangeNumber"></div>
+            <div class="modal-actions">
+                <button id="safetyChangeCancel" class="btn btn-secondary" type="button">Not now</button>
+                <button id="safetyChangeAccept" class="btn btn-warning" type="button">Accept new key</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Settings Modal -->
     <div id="settingsModal" class="modal hidden">
         <div class="modal-content settings-content">

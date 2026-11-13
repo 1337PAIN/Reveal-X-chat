@@ -204,6 +204,18 @@ place. A replay of a message that has already expired, or that the client has
 not loaded in the same tab, is not caught. v1 had none of this: one key for
 both directions and no associated data.
 
+**Key substitution is caught after first contact, not before it.** The server
+distributes public keys, so it could hand Alice a key it holds instead of
+Bob's. Each browser pins the first key it sees per contact and blocks sending
+when a different one appears, until the user accepts it in the safety-number
+dialog (`checkPeerKey` / `acceptPeerKey` in `e2ee.js`,
+`tests/js/e2ee.test.mjs`, `tests/test_key_pinning.py`). This is trust on first
+use: a key swapped *before* the first contact is pinned as genuine, and only
+comparing the 60-digit safety number out of band (then ticking **Mark as
+verified**) detects that. Incoming messages are still shown while a change is
+pending review; only sending is blocked. Pins live in the browser, so a new
+browser or cleared site data starts from first use again.
+
 **No forward secrecy.** ECDH key pairs are long-lived. Compromising one
 participant's private key allows decryption of every past message in that
 conversation that an attacker captured. A ratchet (Double Ratchet or similar)

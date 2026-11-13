@@ -73,12 +73,26 @@ function base64ToBuffer(value) {
     return bytes.buffer;
 }
 
-function openKeyStore() {
+// Peers' public keys as first seen, per local account. A separate database
+// rather than a second store in RX_DB_NAME: adding a store means a version
+// upgrade of a database that already holds every user's private key, and a
+// failed upgrade there would be far worse than a missing pin.
+const RX_PIN_DB_NAME = 'revealx-e2ee-pins';
+const RX_PIN_STORE = 'pins';
+
+// Safety number derivation. Iterated so that grinding for a key whose number
+// collides with a victim's costs more per attempt; the digit layout follows
+// the scheme Signal popularised (30 digits per key, both halves sorted).
+const RX_SAFETY_VERSION = 'reveal-x-safety-number-v1';
+const RX_SAFETY_ITERATIONS = 5200;
+const safetyHalfCache = new Map(); // publicKeyB64 -> 30 digits
+
+function openStore(dbName, storeName) {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(RX_DB_NAME, 1);
+        const request = indexedDB.open(dbName, 1);
         request.onupgradeneeded = () => {
-            if (!request.result.objectStoreNames.contains(RX_STORE)) {
-                request.result.createObjectStore(RX_STORE);
+            if (!request.result.objectStoreNames.contains(storeName)) {
+                request.result.createObjectStore(storeName);
             }
         };
         request.onsuccess = () => resolve(request.result);
@@ -86,13 +100,49 @@ function openKeyStore() {
     });
 }
 
-function keyStoreRequest(mode, action) {
-    return openKeyStore().then((db) => new Promise((resolve, reject) => {
-        const tx = db.transaction(RX_STORE, mode);
-        const request = action(tx.objectStore(RX_STORE));
+function storeRequest(dbName, storeName, mode, action) {
+    return openStore(dbName, storeName).then((db) => new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, mode);
+        const request = action(tx.objectStore(storeName));
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error || new Error('Key store operation failed'));
     }));
+}
+
+function keyStoreRequest(mode, action) {
+    return storeRequest(RX_DB_NAME, RX_STORE, mode, action);
+}
+
+function pinStoreRequest(mode, action) {
+    return storeRequest(RX_PIN_DB_NAME, RX_PIN_STORE, mode, action);
+}
+
+/** 30 decimal digits identifying one public key. */
+async function safetyHalf(publicKeyB64) {
+    const cached = safetyHalfCache.get(publicKeyB64);
+    if (cached) return cached;
+
+    const key = new Uint8Array(base64ToBuffer(publicKeyB64));
+    const prefix = new TextEncoder().encode(`${RX_SAFETY_VERSION}|`);
+    let hash = new Uint8Array(prefix.length + key.length);
+    hash.set(prefix);
+    hash.set(key, prefix.length);
+    for (let i = 0; i < RX_SAFETY_ITERATIONS; i += 1) {
+        const input = new Uint8Array(hash.length + key.length);
+        input.set(hash);
+        input.set(key, hash.length);
+        hash = new Uint8Array(await window.crypto.subtle.digest('SHA-512', input));
+    }
+
+    let digits = '';
+    for (let chunk = 0; chunk < 6; chunk += 1) {
+        // Five bytes is 40 bits, well inside a double's exact integer range.
+        let value = 0;
+        for (let i = 0; i < 5; i += 1) value = value * 256 + hash[chunk * 5 + i];
+        digits += String(value % 100000).padStart(5, '0');
+    }
+    safetyHalfCache.set(publicKeyB64, digits);
+    return digits;
 }
 
 /**
@@ -149,16 +199,69 @@ class E2EESession {
         return Boolean(this.keyPair && this.publicKey);
     }
 
-    /** Short human-comparable fingerprint, for out-of-band verification. */
-    async fingerprint(publicKeyB64) {
-        const value = publicKeyB64 || this.publicKey;
-        if (!value || !this.available) return '';
-        const digest = await window.crypto.subtle.digest('SHA-256', base64ToBuffer(value));
-        return Array.from(new Uint8Array(digest))
-            .slice(0, 8)
-            .map((byte) => byte.toString(16).padStart(2, '0'))
-            .join(' ')
-            .toUpperCase();
+    /**
+     * The 60-digit safety number for this conversation, as 12 groups of 5.
+     *
+     * Replaces a fingerprint that was the first 8 bytes of SHA-256: 64 bits
+     * is a 2^32 birthday bound for an attacker who chooses their own key, and
+     * it covered one key, so two people had to compare two values each. The
+     * safety number covers both keys, sorted, so both screens show the same
+     * single number and either key changing changes it.
+     */
+    async safetyNumber(peerPublicKeyB64) {
+        if (!this.available || !this.publicKey || !peerPublicKeyB64) return '';
+        const halves = [await safetyHalf(this.publicKey), await safetyHalf(peerPublicKeyB64)].sort();
+        return halves.join('').match(/\d{5}/g).join(' ');
+    }
+
+    /**
+     * Compare a peer's published key with the one pinned for them.
+     *
+     * The server distributes public keys, so it is in a position to swap one:
+     * Alice would encrypt to a key the server holds and nothing would look
+     * different. The first key seen for a peer is pinned (trust on first
+     * use); any later difference is reported as 'changed' and is *not*
+     * adopted until acceptPeerKey is called. Returns
+     * {status: 'none'|'new'|'match'|'changed', verified, previous}.
+     */
+    async checkPeerKey(peerId, peerPublicKeyB64) {
+        if (!peerPublicKeyB64) return { status: 'none', verified: false };
+        if (!this.available || !this.userId) return { status: 'new', verified: false };
+
+        const pinId = `${this.userId}|${peerId}`;
+        const pin = await pinStoreRequest('readonly', (store) => store.get(pinId));
+        if (!pin) {
+            await pinStoreRequest('readwrite', (store) => store.put(
+                { publicKey: peerPublicKeyB64, verified: false, pinnedAt: Date.now() }, pinId));
+            return { status: 'new', verified: false };
+        }
+        if (pin.publicKey === peerPublicKeyB64) {
+            return { status: 'match', verified: Boolean(pin.verified) };
+        }
+        return { status: 'changed', verified: false, previous: pin.publicKey };
+    }
+
+    /** The user saw the change and chose to continue: pin the new key. */
+    async acceptPeerKey(peerId, peerPublicKeyB64) {
+        if (!this.available || !this.userId || !peerPublicKeyB64) return;
+        await pinStoreRequest('readwrite', (store) => store.put(
+            { publicKey: peerPublicKeyB64, verified: false, pinnedAt: Date.now() },
+            `${this.userId}|${peerId}`));
+    }
+
+    /**
+     * Record that the safety number was compared out of band. Only for the
+     * key currently pinned, so a verification can never be carried onto a
+     * key that was swapped in afterwards. Returns whether it was recorded.
+     */
+    async setPeerVerified(peerId, peerPublicKeyB64, verified) {
+        if (!this.available || !this.userId) return false;
+        const pinId = `${this.userId}|${peerId}`;
+        const pin = await pinStoreRequest('readonly', (store) => store.get(pinId));
+        if (!pin || pin.publicKey !== peerPublicKeyB64) return false;
+        await pinStoreRequest('readwrite', (store) => store.put(
+            { ...pin, verified: Boolean(verified) }, pinId));
+        return true;
     }
 
     /**
