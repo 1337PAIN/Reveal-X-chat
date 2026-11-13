@@ -18,6 +18,8 @@ import json
 import os
 import threading
 
+from app.log import log
+
 try:
     import firebase_admin
     from firebase_admin import auth as firebase_auth_sdk
@@ -56,8 +58,8 @@ def _clock_skew_seconds() -> int:
     try:
         value = int(raw)
     except ValueError:
-        print(f'FIREBASE_CLOCK_SKEW_SECONDS={raw!r} is not a number; '
-              f'using {DEFAULT_CLOCK_SKEW_SECONDS}')
+        log.warning('FIREBASE_CLOCK_SKEW_SECONDS=%r is not a number; using %s',
+                    raw, DEFAULT_CLOCK_SKEW_SECONDS)
         return DEFAULT_CLOCK_SKEW_SECONDS
     # The SDK rejects anything outside 0-60 outright, which would turn a typo
     # into "no Firebase sign-in at all".
@@ -104,7 +106,7 @@ def _get_app():
             except Exception:
                 _init_failed = True
         except Exception as exc:  # pragma: no cover - depends on local config
-            print(f'Firebase Admin init failed: {exc}')
+            log.error('Firebase Admin init failed: %s', exc)
             _init_failed = True
 
     return _app
@@ -164,7 +166,7 @@ def verify_id_token(id_token: str) -> dict:
         # business. But swallowing it entirely made a one-second clock
         # difference indistinguishable from a forged token, from the wrong
         # project, from an expired session. Say so in the log.
-        print(f'Firebase token rejected: {type(exc).__name__}: {exc}')
+        log.info('Firebase token rejected: %s: %s', type(exc).__name__, exc)
         raise FirebaseAuthError('Sign-in token was rejected') from exc
 
     if not claims.get('uid') and not claims.get('sub'):

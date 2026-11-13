@@ -176,10 +176,10 @@ def test_destructive_admin_actions_are_recorded(store, capsys, action, event, pa
         payload['password'] = 'a-new-password-1'
     sock.emit(event, payload)
 
-    logged = capsys.readouterr().out
-    assert '[audit]' in logged, f'{action} was not audited'
-    assert f'action={action}' in logged
-    assert 'actor=root' in logged
+    from test_logging import audit_entries
+    entries = audit_entries(capsys.readouterr().out)
+    assert entries, f'{action} was not audited'
+    assert any(e['action'] == action and e['actor'] == 'root' for e in entries)
     sock.disconnect()
 
 
@@ -205,7 +205,9 @@ def test_a_refused_action_is_not_audited_as_if_it_happened(store, capsys):
     victim, _ = store.create_user('subject', 'correct-horse-2')
     sock.emit('admin_delete_account', {'user_id': victim['id']})
 
-    assert 'action=delete_account' not in capsys.readouterr().out
+    from test_logging import audit_entries
+    entries = audit_entries(capsys.readouterr().out)
+    assert not [e for e in entries if e['action'] == 'delete_account']
     assert store.get_user(victim['id']) is not None
     sock.disconnect()
 

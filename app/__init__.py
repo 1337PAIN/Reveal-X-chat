@@ -8,6 +8,8 @@ import os
 import hashlib
 import secrets
 
+from app.log import log
+
 # Initialize Flask app
 app = Flask(__name__)
 _secret_key = os.environ.get('REVEAL_X_SECRET_KEY')
@@ -19,8 +21,8 @@ if not _secret_key:
     # that "everyone got logged out again" is a known cause rather than a
     # mystery.
     _secret_key = secrets.token_urlsafe(32)
-    print('REVEAL_X_SECRET_KEY is not set: using a random key for this run. '
-          'Sessions will not survive a restart. See docs/DEPLOYMENT.md.')
+    log.warning('REVEAL_X_SECRET_KEY is not set: using a random key for this run. '
+                'Sessions will not survive a restart. See docs/DEPLOYMENT.md.')
 app.config['SECRET_KEY'] = _secret_key
 
 # The share-integrity tags used to be keyed with SECRET_KEY itself, so one
@@ -93,18 +95,18 @@ def _bootstrap_admin():
 
     if not username:
         if chat_room.count_admins() == 0:
-            print('[admin] No administrator configured. Set REVEALX_ADMIN_USER and '
-                  'REVEALX_ADMIN_PASSWORD, then restart. Until then, account '
-                  'requests cannot be approved. See docs/ADMIN.md.')
+            log.warning('No administrator configured. Set REVEALX_ADMIN_USER and '
+                        'REVEALX_ADMIN_PASSWORD, then restart. Until then, account '
+                        'requests cannot be approved. See docs/ADMIN.md.')
         return
 
     user, created, error = chat_room.ensure_admin(username, password)
     if error:
-        print(f'[admin] Could not set up administrator "{username}": {error}')
+        log.error('Could not set up administrator "%s": %s', username, error)
     elif created:
-        print(f'[admin] Created administrator account "{username}".')
+        log.info('Created administrator account "%s".', username)
     else:
-        print(f'[admin] Administrator "{username}" is active.')
+        log.info('Administrator "%s" is active.', username)
 
 
 try:
@@ -112,4 +114,4 @@ try:
     _chat_room.init_db()
     _bootstrap_admin()
 except Exception as _exc:  # pragma: no cover - surfaced at startup
-    print(f'[admin] Startup admin check failed: {_exc}')
+    log.error('Startup admin check failed: %s', _exc)

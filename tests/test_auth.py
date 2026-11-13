@@ -476,7 +476,8 @@ def test_rejection_reason_is_logged_but_not_sent_to_the_client(monkeypatch, caps
 
     assert 'used too early' not in str(excinfo.value)
     assert str(excinfo.value) == 'Sign-in token was rejected'
-    assert 'used too early' in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert 'used too early' in captured.out + captured.err
 
 
 # ----------------------------------------------------------------------

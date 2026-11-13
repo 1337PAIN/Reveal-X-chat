@@ -20,6 +20,7 @@ import numpy as np
 from app import app, socketio
 from app.models import FORBIDDEN_EXTRA_KEYS, chat_room
 from app.timeutil import utcnow
+from app.log import audit as audit_log, log
 from app.vc_core import VisualCryptography, VCReconstructor
 from app.ai_security import (
     TamperDetector,
@@ -701,7 +702,7 @@ def process_ai_lab_image():
     except ValueError as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 400
     except Exception as exc:
-        print(f"AI lab processing failed: {exc}")
+        log.exception('AI lab processing failed: %s', exc)
         return jsonify({'ok': False, 'error': 'Processing failed on the server'}), 500
 
 
@@ -923,7 +924,7 @@ def handle_resume_session(data):
 
 @socketio.on('connect')
 def handle_connect():
-    print(f"User connected: {request.sid}")
+    log.debug('Socket connected: %s', request.sid)
 
 
 @socketio.on('disconnect')
@@ -935,7 +936,7 @@ def handle_disconnect():
     user = chat_room.remove_user(request.sid)
     if user:
         emit_users()
-        print(f"User disconnected: {user['username']}")
+        log.debug('User disconnected: %s', user['username'])
 
 
 def _establish_session(user, resume_token=None):
@@ -1027,19 +1028,15 @@ def _audit(actor, action, target=None, detail=''):
     or when. Writes to the log rather than the database on purpose -- an audit
     trail an admin can edit through the same panel is not much of one.
 
-    Deliberately records usernames and never passwords.
+    Deliberately records usernames and never passwords. Written as one JSON
+    object per line through app.log.audit; it was "[audit] key=value" text,
+    where a value with a space or a newline could read as a second entry.
     """
     target_name = ''
     if target:
         record = chat_room.get_user(target) if isinstance(target, str) else target
         target_name = (record or {}).get('username', target if isinstance(target, str) else '')
-    stamp = utcnow().isoformat(timespec='seconds')
-    line = f"[audit] {stamp}Z actor={actor['username']} action={action}"
-    if target_name:
-        line += f" target={target_name}"
-    if detail:
-        line += f" {detail}"
-    print(line, flush=True)
+    audit_log(actor=actor['username'], action=action, target=target_name, detail=detail)
 
 
 def _require_superadmin():
@@ -1295,7 +1292,7 @@ def handle_register(data):
             'message': 'Request submitted. An administrator will review it.',
         }, to=request.sid)
     except Exception as exc:
-        print(f"Register failed: {exc}")
+        log.exception('Register failed: %s', exc)
         emit('auth_error', {'error': 'Registration failed on the server'}, to=request.sid)
 
 
@@ -1335,7 +1332,7 @@ def handle_login(data):
         # still outstanding. _establish_session clears it once it really is.
         _complete_sign_in(user)
     except Exception as exc:
-        print(f"Login failed: {exc}")
+        log.exception('Login failed: %s', exc)
         emit('auth_error', {'error': 'Login failed on the server'}, to=request.sid)
 
 
@@ -1364,7 +1361,7 @@ def handle_firebase_login(data):
     except FirebaseAuthError as exc:
         emit('auth_error', {'error': str(exc)}, to=request.sid)
     except Exception as exc:
-        print(f"Firebase login failed: {exc}")
+        log.exception('Firebase login failed: %s', exc)
         emit('auth_error', {'error': 'Sign-in failed on the server'}, to=request.sid)
 
 
@@ -2019,7 +2016,7 @@ def handle_send_share(data):
         message = chat_room.add_message(current_user['id'], recipient_id, 'share', envelope, extra)
     except Exception as exc:
         discard()
-        print(f"Share upload failed: {exc}")
+        log.exception('Share upload failed: %s', exc)
         emit('image_error', {'error': 'Image could not be sent'})
         return
     if not message:
