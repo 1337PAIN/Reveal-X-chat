@@ -201,6 +201,7 @@ pip install -r requirements.lock
 | --- | --- |
 | `PORT` | Listen port (default 5000) |
 | `REVEAL_X_SECRET_KEY` | Flask session signing key, and the fallback the share-integrity key is derived from. **Set this.** Without it a fresh random key is generated per start, so sessions do not survive a restart — and neither do share HMAC tags, which makes every share stored before the restart report as *tampered* |
+| `REVEALX_SWEEPER` | `off` disables the background retention sweep (every 60 s). Leave it on: expiry otherwise happens only when someone uses the app |
 | `REVEALX_LOG_LEVEL` | App log level on stderr (`DEBUG`, `INFO`, `WARNING`, ...). Default `INFO`; `DEBUG` adds a line per socket connect and disconnect. The audit log (stdout, one JSON object per line) is not affected |
 | `REVEALX_DATA_KEY` | 32 random bytes, base64. Encrypts TOTP secrets at rest; existing ones are migrated on the next start. **Keep it**: once set, starting without it (or with a different one) is refused, because the stored secrets could no longer be read. Generate with `python -c "import secrets,base64;print(base64.b64encode(secrets.token_bytes(32)).decode())"` |
 | `REVEALX_SHARE_HMAC_KEY` | Key for the per-share integrity tag. Optional: derived one-way from `REVEAL_X_SECRET_KEY` when unset. Set it explicitly in production so the two secrets can be rotated independently |

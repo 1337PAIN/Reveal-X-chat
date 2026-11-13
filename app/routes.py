@@ -21,6 +21,7 @@ from app import app, socketio
 from app.models import FORBIDDEN_EXTRA_KEYS, chat_room
 from app.timeutil import utcnow
 from app.log import audit as audit_log, log
+from app import sweeper
 from app.vc_core import VisualCryptography, VCReconstructor
 from app.ai_security import (
     TamperDetector,
@@ -793,6 +794,12 @@ def _request_is_https():
 
 
 @app.before_request
+def start_retention_sweeper():
+    """Lazily, so importing the app (scripts, tools) starts no thread."""
+    sweeper.ensure_started(chat_room)
+
+
+@app.before_request
 def redirect_plain_http():
     """REVEAL_X_FORCE_HTTPS: send plain-HTTP requests to HTTPS.
 
@@ -924,6 +931,7 @@ def handle_resume_session(data):
 
 @socketio.on('connect')
 def handle_connect():
+    sweeper.ensure_started(chat_room)
     log.debug('Socket connected: %s', request.sid)
 
 

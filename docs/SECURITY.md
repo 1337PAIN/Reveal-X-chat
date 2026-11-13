@@ -231,7 +231,11 @@ localises damage and survives a re-encode. Either alone would be weaker.
 
 ### Data lifetime
 
-- Messages and shares expire after `MESSAGE_TTL_HOURS = 1`.
+- Messages and shares expire after `MESSAGE_TTL_HOURS = 1`. A background
+  sweeper removes expired messages, their Share 1 files and expired resume
+  tokens every 60 seconds (`app/sweeper.py`, `tests/test_sweeper.py`).
+  Before it, expiry ran only when someone sent a message or opened a
+  conversation, so an idle server kept expired data indefinitely.
 - A sender's delete removes the row *and* Share 1 from disk; a recipient's
   delete hides only their copy.
 - Deleting an account removes its messages without touching anyone else's.

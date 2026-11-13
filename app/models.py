@@ -394,7 +394,8 @@ class ChatRoom:
                 pass
 
     def cleanup_old_messages(self):
-        """Delete expired messages and the Share 1 files they own."""
+        """Delete expired messages and the Share 1 files they own. Returns how
+        many messages were removed."""
         now = utcnow().isoformat()
         cutoff = (utcnow() - timedelta(hours=MESSAGE_TTL_HOURS)).isoformat()
         with self._connect() as db:
@@ -405,8 +406,19 @@ class ChatRoom:
             for row in stale:
                 self._remove_share_file(row['extra'])
 
-            db.execute("DELETE FROM messages WHERE created_at < ?", (cutoff,))
-            db.execute("DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at < ?", (now,))
+            removed = db.execute("DELETE FROM messages WHERE created_at < ?", (cutoff,)).rowcount
+            removed += db.execute(
+                "DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at < ?", (now,)
+            ).rowcount
+        return max(removed, 0)
+
+    def purge_expired_resume_tokens(self):
+        """Delete resume tokens past their expiry. Returns how many."""
+        with self._connect() as db:
+            removed = db.execute(
+                "DELETE FROM resume_tokens WHERE expires_at < ?", (utcnow().isoformat(),)
+            ).rowcount
+        return max(removed, 0)
 
     # ------------------------------------------------------------------
     # Users

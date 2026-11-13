@@ -10,6 +10,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+# The background retention sweeper would otherwise start on the first request
+# and sweep whichever temporary database a later test is using.
+# tests/test_sweeper.py starts its own when it needs one.
+os.environ.setdefault('REVEALX_SWEEPER', 'off')
+
 from app import app as flask_app  # noqa: E402
 from app.models import chat_room  # noqa: E402
 
