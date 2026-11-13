@@ -267,10 +267,16 @@ in process, so here that covers it. Behind a proxy it keys on whatever
 `_client_address()` resolves to, so a misconfigured proxy would put every
 visitor in one bucket. An attacker with many addresses is unaffected.
 
-**Database at rest.** SQLite is a file with no encryption at rest. Anyone with
-filesystem access reads the hashes, the TOTP secrets and the message ciphertext.
-Password hashes are Argon2 and messages are E2EE, so this is less bad than it
-sounds — but TOTP secrets are stored recoverable.
+**Database at rest.** The database itself is not encrypted. Anyone with a copy
+reads the Argon2 hashes, the message ciphertext and the metadata. TOTP secrets
+are the exception, **if `REVEALX_DATA_KEY` is set**: each is AES-GCM encrypted
+under that key with the user id as associated data, existing plaintext secrets
+are migrated at startup, and the app refuses to start when encrypted secrets
+exist and the key is missing or wrong, rather than reading them as "2FA off"
+(`seal_secret` / `open_secret` in `models.py`, `tests/test_totp_at_rest.py`).
+Without the key they are stored as before, recoverably. The key lives in the
+environment next to the app, so this protects copies of the database (backups,
+dumps, snapshots), not a compromised server. There is no key rotation yet.
 
 **Denial of service generally.** There is no global rate limit, no request size
 throttling beyond `MAX_CONTENT_LENGTH = 8 MB`, and one worker process.

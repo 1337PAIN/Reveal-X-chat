@@ -11,12 +11,16 @@ from datetime import datetime, timedelta
 import json
 import os
 import re
+import base64
+import binascii
 import hashlib
 import secrets
 import sqlite3
 import threading
 import uuid
 
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from werkzeug.security import check_password_hash, generate_password_hash
 
 try:
@@ -59,6 +63,78 @@ FORBIDDEN_EXTRA_KEYS = {'share2', 'share2_b64', 'share2_filename', 'share2_live'
 # its cost) always match real hashes; see ChatRoom._dummy_password_hash.
 _DUMMY_PASSWORD_HASH = None
 _DUMMY_PASSWORD_LOCK = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Secrets at rest
+#
+# A TOTP secret cannot be hashed like a password -- the server has to read it
+# back to check a code -- so it was stored in the clear, and any copy of the
+# database (a backup, a dump, a hosting snapshot) could mint valid codes for
+# every account that had one. With REVEALX_DATA_KEY set, each secret is
+# AES-GCM encrypted with the user's id as associated data, so a ciphertext
+# copied onto another row does not open either.
+# ---------------------------------------------------------------------------
+
+SEALED_PREFIX = 'enc:v1:'
+
+
+def _data_key():
+    """The AESGCM for REVEALX_DATA_KEY, or None when it is not set.
+
+    Read on each call rather than once at import, so the setting can change
+    between tests and the error names the variable at the point of use.
+    """
+    raw = os.environ.get('REVEALX_DATA_KEY', '').strip()
+    if not raw:
+        return None
+    # Standard or URL-safe alphabet, padding optional.
+    normalised = raw.replace('-', '+').replace('_', '/')
+    try:
+        key = base64.b64decode(normalised + '=' * (-len(normalised) % 4), validate=True)
+    except (binascii.Error, ValueError):
+        key = b''
+    if len(key) != 32:
+        raise RuntimeError('REVEALX_DATA_KEY must be 32 random bytes, base64-encoded '
+                           '(for example: python -c "import secrets,base64;'
+                           'print(base64.b64encode(secrets.token_bytes(32)).decode())")')
+    return AESGCM(key)
+
+
+def _secret_aad(user_id):
+    return f'revealx-totp|{user_id}'.encode('utf-8')
+
+
+def seal_secret(user_id, secret):
+    """Encrypt a secret for storage, or return it unchanged without a key."""
+    if not secret:
+        return ''
+    box = _data_key()
+    if box is None:
+        return secret
+    nonce = secrets.token_bytes(12)
+    sealed = box.encrypt(nonce, secret.encode('utf-8'), _secret_aad(user_id))
+    return SEALED_PREFIX + base64.b64encode(nonce + sealed).decode('ascii')
+
+
+def open_secret(user_id, stored):
+    """Decrypt a stored secret. Raises RuntimeError when it cannot be read.
+
+    Never returns '' for an unreadable value: '' means "no second factor",
+    and a missing key turning every account's 2FA off is the failure this
+    exists to prevent.
+    """
+    if not stored or not stored.startswith(SEALED_PREFIX):
+        return stored or ''
+    box = _data_key()
+    if box is None:
+        raise RuntimeError('An encrypted TOTP secret was found but REVEALX_DATA_KEY is not set')
+    try:
+        blob = base64.b64decode(stored[len(SEALED_PREFIX):], validate=True)
+        return box.decrypt(blob[:12], blob[12:], _secret_aad(user_id)).decode('utf-8')
+    except (InvalidTag, binascii.Error, ValueError) as exc:
+        raise RuntimeError('A TOTP secret could not be decrypted: REVEALX_DATA_KEY is wrong, '
+                           'or the stored value was altered or moved') from exc
 
 
 def _load_deleted_by(row):
@@ -305,6 +381,7 @@ class ChatRoom:
             db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_msg_uuid ON messages(msg_uuid_key)")
 
             self._purge_stored_share2(db)
+            self._migrate_secrets_at_rest(db)
 
     # ------------------------------------------------------------------
     # Passwords
@@ -662,12 +739,44 @@ class ChatRoom:
     def get_totp_secret(self, user_id):
         with self._connect() as db:
             row = db.execute("SELECT totp_secret FROM users WHERE id = ?", (user_id,)).fetchone()
-        return (row['totp_secret'] or '') if row else ''
+        return open_secret(user_id, row['totp_secret'] or '') if row else ''
 
     def set_totp_secret(self, user_id, secret):
-        """Store (or clear, with None) the user's TOTP secret."""
+        """Store (or clear, with None) the user's TOTP secret, encrypted when
+        REVEALX_DATA_KEY is set."""
         with self._connect() as db:
-            db.execute("UPDATE users SET totp_secret = ? WHERE id = ?", (secret or '', user_id))
+            db.execute("UPDATE users SET totp_secret = ? WHERE id = ?",
+                       (seal_secret(user_id, secret or ''), user_id))
+
+    def _migrate_secrets_at_rest(self, db):
+        """Bring stored TOTP secrets in line with REVEALX_DATA_KEY, or refuse.
+
+        With a key: encrypt any plaintext secret, and prove the key opens the
+        ones already encrypted. Without one: refuse to start if any are
+        encrypted. Either failure raises, so a missing or wrong key stops the
+        app at startup instead of making every second factor unreadable.
+        """
+        box = _data_key()
+        rows = db.execute(
+            "SELECT id, totp_secret FROM users WHERE totp_secret IS NOT NULL AND totp_secret != ''"
+        ).fetchall()
+        sealed = [r for r in rows if (r['totp_secret'] or '').startswith(SEALED_PREFIX)]
+        if box is None:
+            if sealed:
+                raise RuntimeError(
+                    f'{len(sealed)} TOTP secret(s) are encrypted but REVEALX_DATA_KEY is not '
+                    'set. Set it to the key they were written with.')
+            return
+        if sealed:
+            # One is enough to show the key is the right one.
+            try:
+                open_secret(sealed[0]['id'], sealed[0]['totp_secret'])
+            except RuntimeError as exc:
+                raise RuntimeError('REVEALX_DATA_KEY does not open the stored TOTP secrets') from exc
+        for row in rows:
+            if not (row['totp_secret'] or '').startswith(SEALED_PREFIX):
+                db.execute("UPDATE users SET totp_secret = ? WHERE id = ?",
+                           (seal_secret(row['id'], row['totp_secret']), row['id']))
 
     def update_username(self, user_id, new_username):
         """Rename an account, enforcing the same rules as registration."""
