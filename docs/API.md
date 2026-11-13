@@ -144,7 +144,8 @@ check the code at all.
 | `select_chat` | `recipient_id`, `send_read_receipts` | `chat_history` |
 | `send_message` | `recipient_id`, `message`, `encrypted`, `iv`, `v`, `msg_uuid`, `reply_to` | `new_message`, `message_error` |
 | `send_voice` | `recipient_id`, `audio`, `mime`, `encrypted`, `iv`, `v`, `msg_uuid`, `reply_to` | `new_message`, `message_error` |
-| `send_image` | `recipient_id`, `image`, `reply_to` | `new_message`, `image_error` |
+| `send_share` | `recipient_id`, `share1_png`, `envelope`, `iv`, `encrypted`, `v`, `msg_uuid`, `reply_to` | `new_message`, `image_error` |
+| `send_image` | `recipient_id`, `image` | `image_error` (retired; see below) |
 | `forward_message` | `message_id`, `recipient_id` | `new_message`, `message_error` |
 | `react_message` | `message_id`, `emoji` | `message_reactions` |
 | `mark_read` | `sender_id` | `messages_read` |
@@ -154,7 +155,7 @@ check the code at all.
 
 Sends are rate limited per user: `send_message` and `group_send` share a
 bucket of 30 that refills at one a second, `send_voice` has 10 refilling every
-6 seconds, `send_image` 5 refilling every 15 seconds. An empty bucket answers
+6 seconds, `send_share` 5 refilling every 15 seconds. An empty bucket answers
 `message_error` / `image_error` / `group_error` with "You are sending too
 fast".
 
@@ -171,10 +172,19 @@ stored. Uniqueness lasts as long as the row: one hour.
 With `encrypted` false the server stores plaintext — kept so the project can
 demonstrate the difference side by side.
 
-`send_image` is the exception to end-to-end encryption: the server receives the
-**plaintext image**, splits it, stores Share 1 and sends Share 2 live. The
-recipient must be online. See the boundary section of
-[SECURITY.md](SECURITY.md).
+`send_share` carries an image the sender's browser has already split
+(`vc-client.js`). `share1_png` is Share 1, base64 of an 8-bit single-channel
+PNG between 8 and 1600 px a side and at most 3 MB; the server stores those
+bytes unchanged, records its HMAC and runs the detector on it, and refuses one
+whose histogram is far from uniform (it is not a share). `envelope` is the E2EE
+v2 ciphertext of `{share2_png_b64, share1_sha256, width, height}`, at most
+4.5 million characters, with the same `iv` / `v` / `msg_uuid` rules as a text
+message. It is stored as the message `content`, so the recipient does not have
+to be online. A payload that also carries `image` or any plaintext Share 2
+field is refused, not stripped.
+
+`send_image`, which uploaded the image itself for the server to split, answers
+`image_error` without decoding anything unless `REVEALX_LEGACY_SERVER_SPLIT=true`.
 
 `react_message` with an empty emoji clears the reaction. `delete_message` scope
 depends on who asks — a sender deletes for everyone and Share 1 leaves the disk;
@@ -230,9 +240,8 @@ id that is not one, so a crafted payload map cannot deliver to an outsider.
 Removal therefore needs no revocation: a removed member simply stops being a
 recipient.
 
-**Images are refused in groups.** `send_image` is one-to-one only. The visual
-cryptography split delivers Share 2 live to a single recipient and never
-stores it, which cannot be satisfied for a group whose members are offline.
+**Images are refused in groups.** Image shares are one-to-one only: Share 1
+carries one capability token and one-time access, for one recipient.
 
 **Membership notices are live only.** `group_notice` announces joins, removals
 and role changes to whoever is connected; it is deliberately not stored,

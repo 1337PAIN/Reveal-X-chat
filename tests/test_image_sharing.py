@@ -57,6 +57,14 @@ def sample_image(size=64, seed=7):
     return img
 
 
+@pytest.fixture(autouse=True)
+def _legacy_server_split(monkeypatch):
+    """These cover the server-side split, which is retired in favour of the
+    browser split (test_client_split.py) and kept behind a flag only until
+    that path is proven."""
+    monkeypatch.setenv('REVEALX_LEGACY_SERVER_SPLIT', 'true')
+
+
 @pytest.fixture
 def pair(store):
     """Two signed-in sockets, both online -- Share 2 is delivered live."""

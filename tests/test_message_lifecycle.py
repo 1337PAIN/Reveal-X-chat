@@ -76,9 +76,8 @@ def send_text(sender, recipient_id, text='hello'):
 
 
 def send_share(sender, recipient_id):
-    rng = np.random.default_rng(11)
-    image = rng.integers(0, 256, (48, 48), dtype=np.uint8)
-    sender.emit('send_image', {'recipient_id': recipient_id, 'image': png_data_url(image)})
+    from share_helpers import share_payload
+    sender.emit('send_share', share_payload(recipient_id))
     return last_message(sender)
 
 

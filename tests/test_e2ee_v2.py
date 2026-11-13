@@ -183,11 +183,11 @@ def test_chat_js_sends_the_envelope_and_decrypts_with_it():
     from pathlib import Path
     chat = (Path(__file__).resolve().parent.parent / 'app' / 'static' / 'js' / 'chat.js'
             ).read_text(encoding='utf-8')
-    decrypts = re.findall(r'revealxE2EE\.decrypt(?:Bytes)?\(([^;]*?)\)\s*(?:\n|:)', chat, re.S)
+    decrypts = re.findall(r'revealxE2EE\.decrypt(?:Bytes)?\(([^;]*?)\)\s*(?:\n|:|;)', chat, re.S)
     assert decrypts, 'no decrypt calls found'
     for call in decrypts:
         assert 'e2eeContext(msg)' in call, f'decrypt without context: {call!r}'
     assert len(decrypts) == chat.count('revealxE2EE.decrypt'), 'a decrypt call was missed'
-    # One each for send_message and send_voice.
-    assert chat.count('msg_uuid: sealed.msg_uuid') == 2
-    assert chat.count('v: sealed.v') == 2
+    # One each for send_message, send_voice and send_share.
+    assert chat.count('msg_uuid: sealed.msg_uuid') == 3
+    assert chat.count('v: sealed.v') == 3

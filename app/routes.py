@@ -18,7 +18,7 @@ from flask_socketio import emit
 import numpy as np
 
 from app import app, socketio
-from app.models import chat_room
+from app.models import FORBIDDEN_EXTRA_KEYS, chat_room
 from app.vc_core import VisualCryptography, VCReconstructor
 from app.ai_security import (
     TamperDetector,
@@ -52,6 +52,23 @@ MAX_TEXT_LENGTH = 2000
 # Base64 AES-GCM ciphertext runs roughly 1.4x the plaintext plus the tag.
 MAX_CIPHERTEXT_LENGTH = 4000
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
+
+#: Client-side split (send_share). Share 1 is random, so its PNG barely
+#: compresses: about one byte per pixel. The client downscales to 1200 px on
+#: the long side, so 1600 leaves headroom without inviting huge uploads.
+MAX_SHARE_SIDE = 1600
+MIN_SHARE_SIDE = 8
+MAX_SHARE1_BYTES = 3 * 1024 * 1024
+#: Share 2 as a PNG, base64'd into JSON, encrypted, base64'd again: ~1.8x its
+#: pixel count. Kept, with Share 1, under the 8 MB Socket.IO buffer.
+MAX_SHARE_ENVELOPE_LENGTH = 4_500_000
+#: Pearson chi-square bound on Share 1's histogram. A genuine share is uniform
+#: (df = 255, mean 255, sd ~22.6); this is ten standard deviations out, so a
+#: real share is essentially never refused, while any ordinary picture is
+#: off the scale. It catches a client that uploads the image by mistake. It
+#: is not a defence against a sender who wants to leak their own picture --
+#: nothing on the server could be.
+SHARE_CHI_SQUARE_LIMIT = 255 + 10 * (2 * 255) ** 0.5
 MAX_VOICE_BYTES = 2 * 1024 * 1024
 MAX_PROFILE_IMAGE_BYTES = 512 * 1024
 MAX_PUBLIC_KEY_LENGTH = 512
@@ -369,6 +386,45 @@ def parse_image_data_url(data_url):
         raise ValueError('Could not read image')
 
     return image
+
+
+def _validate_share1_png(encoded):
+    """Decode and check an uploaded Share 1. Returns (png_bytes, pixels).
+
+    Raises ValueError with a message for the sender. The bytes are what gets
+    stored -- unchanged, because the recipient checks their SHA-256 against
+    the one the sender put inside the encrypted envelope.
+    """
+    if not isinstance(encoded, str) or not encoded:
+        raise ValueError('Share 1 is missing')
+    if len(encoded) > (MAX_SHARE1_BYTES * 4) // 3 + 4:
+        raise ValueError('Share 1 is too large')
+    try:
+        png = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError):
+        raise ValueError('Share 1 is not valid base64') from None
+    if not png or len(png) > MAX_SHARE1_BYTES:
+        raise ValueError('Share 1 is too large')
+    # Read the header before handing anything to a decoder: the colour type
+    # and size decide whether this is worth decoding at all.
+    if png[:8] != b'\x89PNG\r\n\x1a\n' or png[12:16] != b'IHDR' or len(png) < 33:
+        raise ValueError('Share 1 must be a PNG')
+    width = int.from_bytes(png[16:20], 'big')
+    height = int.from_bytes(png[20:24], 'big')
+    depth, colour = png[24], png[25]
+    if depth != 8 or colour != 0:
+        raise ValueError('Share 1 must be an 8-bit single-channel PNG')
+    if not (MIN_SHARE_SIDE <= width <= MAX_SHARE_SIDE and MIN_SHARE_SIDE <= height <= MAX_SHARE_SIDE):
+        raise ValueError('Share 1 has unsupported dimensions')
+    pixels = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_UNCHANGED)
+    if pixels is None or pixels.ndim != 2 or pixels.dtype != np.uint8 \
+            or pixels.shape != (height, width):
+        raise ValueError('Share 1 could not be read')
+    counts = np.bincount(pixels.ravel(), minlength=256).astype(np.float64)
+    expected = pixels.size / 256.0
+    if float(((counts - expected) ** 2 / expected).sum()) > SHARE_CHI_SQUARE_LIMIT:
+        raise ValueError('That is not a share. Reload the page: images are split in your browser.')
+    return png, pixels
 
 
 def client_message(message, current_user_id=None):
@@ -1896,6 +1952,12 @@ def handle_image(data):
         if not current_user:
             emit('image_error', {'error': 'Log in first'})
             return
+        # The server-side split is retired in favour of send_share. It stays
+        # behind this flag only until the browser path has been exercised.
+        if os.environ.get('REVEALX_LEGACY_SERVER_SPLIT', '').lower() != 'true':
+            emit('image_error', {
+                'error': 'Images are now split in your browser. Reload the page to update.'})
+            return
         if not chat_room.is_active_user(recipient_id):
             emit('image_error', {'error': 'Select a user first'})
             return
@@ -1976,6 +2038,106 @@ def handle_image(data):
     except Exception as exc:
         print(f"Image share failed: {exc}")
         emit('image_error', {'error': 'Image could not be sent'})
+
+
+@socketio.on('send_share')
+@session_required
+def handle_send_share(data):
+    """Store a Share 1 the sender's browser made, plus Share 2 sealed for the
+    recipient.
+
+    The server never receives the image. vc-client.js splits it; Share 1
+    (random bytes) arrives here as a single-channel PNG and is stored as sent;
+    Share 2 travels inside `envelope`, an E2EE v2 ciphertext only the
+    recipient can open, which also carries the SHA-256 of Share 1's bytes.
+    Because the server cannot read Share 2 it may store it, so the recipient
+    no longer has to be online. HMAC and the detector run on Share 1 as they
+    always have.
+    """
+    data = data or {}
+    current_user = chat_room.get_session_user(request.sid)
+    recipient_id = data.get('recipient_id')
+    if not chat_room.is_active_user(recipient_id):
+        emit('image_error', {'error': 'Select a user first'})
+        return
+    if not _take_send_token(current_user['id'], 'image'):
+        emit('image_error', {'error': SEND_TOO_FAST})
+        return
+
+    # Anything that looks like a plaintext image or a plaintext Share 2 means
+    # a client that has not been updated, or one trying to put Share 2 where
+    # the server could read it. Refused outright, not stripped.
+    if 'image' in data or FORBIDDEN_EXTRA_KEYS & set(data):
+        emit('image_error', {'error': 'Share 2 must be sent encrypted. Reload the page.'})
+        return
+
+    envelope = data.get('envelope')
+    iv = data.get('iv') or ''
+    if not isinstance(envelope, str) or not envelope or len(envelope) > MAX_SHARE_ENVELOPE_LENGTH:
+        emit('image_error', {'error': 'The encrypted share is missing or too large'})
+        return
+    if not data.get('encrypted') or not iv or len(iv) > 64:
+        emit('image_error', {'error': 'Invalid encrypted payload'})
+        return
+    envelope_fields, error = _e2ee_envelope(data, current_user['id'], recipient_id)
+    if error:
+        emit('image_error', {'error': error})
+        return
+
+    try:
+        png, pixels = _validate_share1_png(data.get('share1_png'))
+    except ValueError as exc:
+        emit('image_error', {'error': str(exc)})
+        return
+
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    share1_filename = f'share1_{timestamp}_{secrets.token_urlsafe(12)}.png'
+    share1_path = os.path.join(app.config['SHARES_FOLDER'], share1_filename)
+
+    def discard():
+        try:
+            os.remove(share1_path)
+        except OSError:
+            pass
+
+    try:
+        with open(share1_path, 'wb') as handle:
+            handle.write(png)
+        # Tag what is on disk, as before: the bytes the recipient downloads.
+        stored = cv2.imread(share1_path, cv2.IMREAD_UNCHANGED)
+        if stored is None or not np.array_equal(stored, pixels):
+            discard()
+            emit('image_error', {'error': 'Could not verify stored Share 1'})
+            return
+
+        extra = {
+            'share1_filename': share1_filename,
+            'share1_token': secrets.token_urlsafe(32),
+            'share1_sha256': sha256_image(stored),
+            'share1_hmac': _share_hmac(stored),
+            'timestamp': timestamp,
+            'encrypted': True,
+            'iv': iv,
+            'client_split': True,
+        }
+        extra.update(envelope_fields)
+        reply_to_id = data.get('reply_to')
+        if reply_to_id:
+            extra['reply_to'] = reply_preview(
+                chat_room.get_message_for_user(reply_to_id, current_user['id']))
+
+        message = chat_room.add_message(current_user['id'], recipient_id, 'share', envelope, extra)
+    except Exception as exc:
+        discard()
+        print(f"Share upload failed: {exc}")
+        emit('image_error', {'error': 'Image could not be sent'})
+        return
+    if not message:
+        discard()
+        emit('image_error', {'error': DUPLICATE_MESSAGE_ERROR})
+        return
+
+    deliver_message(message, current_user['id'], recipient_id)
 
 
 @socketio.on('revoke_share')

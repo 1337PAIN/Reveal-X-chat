@@ -109,18 +109,16 @@ def test_voice_has_its_own_smaller_bucket(pair, store, clock):
 
 
 def test_images_are_refused_before_any_work_is_done(pair, store, clock, monkeypatch):
+    from share_helpers import share_payload
     a, b, alice, bob = pair
     burst = routes.SEND_LIMITS['image'][0]
     decoded = []
-    real = routes.parse_image_data_url
-    monkeypatch.setattr(routes, 'parse_image_data_url',
+    real = routes._validate_share1_png
+    monkeypatch.setattr(routes, '_validate_share1_png',
                         lambda value: decoded.append(1) or real(value))
-    image = np.random.default_rng(1).integers(0, 255, (32, 32), dtype=np.uint8)
-    ok, buf = cv2.imencode('.png', image)
-    url = 'data:image/png;base64,' + base64.b64encode(buf.tobytes()).decode()
-    for _ in range(burst + 3):
-        a.emit('send_image', {'recipient_id': bob['id'], 'image': url})
-    assert len(decoded) == burst, 'images past the limit were still decoded'
+    for i in range(burst + 3):
+        a.emit('send_share', share_payload(bob['id'], seed=i))
+    assert len(decoded) == burst, 'shares past the limit were still decoded'
     assert too_fast(a, 'image_error')
 
 

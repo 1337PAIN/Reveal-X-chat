@@ -48,6 +48,9 @@ const state = {
     keyChanges: new Map(),
     shareAnalysis: {},     // {messageId: integrity + ML result}
     localAnalysis: {},     // {messageId: verdict computed here in the browser}
+    // {messageId: {matches, expected, actual}}: SHA-256 of the Share 1 bytes
+    // that arrived, against the one the sender sealed into the envelope.
+    endToEndHash: {},
     chatHistoryCache: [],
     voiceObjectUrls: [],
     sessionTimeoutTimer: null,
@@ -135,6 +138,32 @@ const share2Memory = new Map();
 function forgetShare2(messageId) {
     if (messageId === undefined || messageId === null) return;
     share2Memory.delete(String(messageId));
+    // The opened envelope of a browser-split share holds Share 2 as well.
+    share2Memory.delete(`${messageId}#envelope`);
+}
+
+/** Is this a share the sender's browser split (Share 2 in an E2EE envelope)? */
+function isClientSplitShare(msg) {
+    return Boolean(msg && msg.type === 'share' && msg.extra && msg.extra.v === 2 && msg.content);
+}
+
+/**
+ * Decrypt and check the envelope of a browser-split share. Kept in
+ * share2Memory, like every other copy of Share 2, so logout, Clear cache,
+ * delete and revoke drop it. Returns the envelope or null.
+ */
+async function openShareEnvelope(msg) {
+    const key = `${msg.id}#envelope`;
+    if (share2Memory.has(key)) return share2Memory.get(key);
+    const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
+    const peerKey = peerPublicKey(otherId);
+    if (!peerKey) return null;
+    const text = await window.revealxE2EE.decrypt(peerKey, msg.content, msg.extra.iv, e2eeContext(msg));
+    if (text === null) return null;
+    const envelope = window.revealxVC.openEnvelope(text);
+    share2Memory.set(key, envelope);
+    share2Memory.set(String(msg.id), `data:image/png;base64,${envelope.share2_png_b64}`);
+    return envelope;
 }
 
 // A tab open across the upgrade still holds what the old build wrote.
@@ -1533,8 +1562,9 @@ function setShareActionsDisabled(panel, disabled) {
 
 function renderTamperPanel(panel, data, local) {
     local = local || state.localAnalysis[data.message_id];
+    const endToEnd = state.endToEndHash[data.message_id];
     const tampered = data.integrity.exact_tamper_detected || data.ml.tampered
-        || (local ? local.tampered : false);
+        || (local ? local.tampered : false) || (endToEnd ? !endToEnd.matches : false);
     panel.className = `tamper-panel ${tampered ? 'danger' : 'success'}`;
     panel.innerHTML = '';
 
@@ -1589,6 +1619,19 @@ function renderTamperPanel(panel, data, local) {
                 + 'Treat it as tampered.';
             rows.appendChild(conflict);
         }
+    }
+
+    // The only row that does not rely on the server at all: the sender's
+    // browser hashed Share 1 before uploading it and sealed the hash in the
+    // envelope, so a server that altered the share *and* its own HMAC record
+    // is still caught here.
+    if (endToEnd) {
+        const hashRow = document.createElement('div');
+        hashRow.className = `tamper-row ${endToEnd.matches ? 'ok' : 'bad'}`;
+        hashRow.textContent = endToEnd.matches
+            ? "End-to-end SHA-256: match (the sender's Share 1, unchanged)"
+            : 'End-to-end SHA-256: MISMATCH (not the Share 1 the sender made)';
+        rows.appendChild(hashRow);
     }
 
     panel.appendChild(rows);
@@ -1718,7 +1761,9 @@ function displayMessage(msg) {
 
     } else if (msg.type === 'share') {
         const hasShare1 = Boolean(msg.extra.share1_url);
-        const hasLiveShare2 = Boolean(msg.extra.share2_live);
+        // A browser-split share carries Share 2 sealed in the message itself,
+        // so it survives a reload and an offline recipient.
+        const hasLiveShare2 = Boolean(msg.extra.share2_live) || isClientSplitShare(msg);
 
         // Share expiry countdown, driven by the server's own expires_at.
         const createdTime = parseServerTime(msg.created_at) || new Date();
@@ -1731,7 +1776,9 @@ function displayMessage(msg) {
 
         const statusMessage = isSent
             ? 'You sent encrypted shares. The sender cannot reconstruct.'
-            : hasLiveShare2
+            : isClientSplitShare(msg)
+              ? 'Share 2 arrived end-to-end encrypted. Verify and reconstruct locally.'
+              : hasLiveShare2
               ? 'Live Share 2 received. Verify and reconstruct Share 1 locally.'
               : 'Share 1 available. Share 2 was only sent live. You cannot reconstruct.';
 
@@ -2400,15 +2447,65 @@ imageInput.addEventListener('change', (event) => {
 });
 
 cancelImageBtn.addEventListener('click', closeImagePreview);
-confirmImageBtn.addEventListener('click', () => {
+/**
+ * Split the image here, upload Share 1, and seal Share 2 for the recipient.
+ *
+ * The image itself used to be uploaded and split on the server, which then
+ * held every picture anyone sent. Now nothing that leaves this browser is the
+ * image: Share 1 is random, and Share 2 is inside an E2EE v2 message. That
+ * needs both sides to have keys -- there is no unencrypted way to send Share 2
+ * that would not hand the server the picture -- so without them this refuses.
+ */
+async function sendImageShare(recipientId, dataUrl) {
+    if (!connectionReady()) return false;
+    const pin = await checkPeerPin(recipientId);
+    if (pin.status === 'changed') {
+        openSafetyChangeDialog(recipientId);
+        return false;
+    }
+    const peerKey = peerPublicKey(recipientId);
+    if (!window.revealxE2EE.isReady() || !peerKey) {
+        showTransientError('Images are end-to-end encrypted, so both of you need encryption keys. '
+            + 'This contact has not set one up yet.');
+        return false;
+    }
+
+    const { gray, width, height } = await window.revealxVC.imageToGray(dataUrl);
+    const prepared = await window.revealxVC.prepareShare(gray, width, height);
+    let sealed;
+    try {
+        sealed = await window.revealxE2EE.encrypt(peerKey, prepared.envelope, { recipientId });
+    } catch (error) {
+        sealed = error;
+    }
+    if (window.revealxSendPolicy.afterEncrypt(sealed).action !== 'send') {
+        console.error('Share encryption failed; nothing was sent', sealed);
+        showTransientError('The image could not be encrypted, so it was not sent.');
+        return false;
+    }
+    socket.emit('send_share', {
+        recipient_id: recipientId,
+        share1_png: window.revealxVC.bytesToBase64(prepared.share1Png),
+        envelope: sealed.ciphertext,
+        iv: sealed.iv,
+        encrypted: true,
+        v: sealed.v,
+        msg_uuid: sealed.msg_uuid,
+    });
+    return true;
+}
+
+confirmImageBtn.addEventListener('click', async () => {
     if (!state.pendingImage || !state.selectedRecipientId) return;
 
     confirmImageBtn.disabled = true;
-    confirmImageBtn.textContent = 'Encrypting & Sending...';
-    socket.emit('send_image', {
-        recipient_id: state.selectedRecipientId,
-        image: state.pendingImage.dataUrl,
-    });
+    confirmImageBtn.textContent = 'Splitting & Encrypting...';
+    try {
+        await sendImageShare(state.selectedRecipientId, state.pendingImage.dataUrl);
+    } catch (error) {
+        console.error('Image share failed', error);
+        showTransientError('The image could not be prepared for sending.');
+    }
     closeImagePreview();
 });
 
@@ -2452,7 +2549,17 @@ function blobToDataUrl(blob) {
  */
 async function openReconstruction(msg) {
     const share1Url = msg && msg.extra ? msg.extra.share1_url : null;
-    const share2Live = msg && msg.extra ? msg.extra.share2_live : null;
+    let envelope = null;
+    if (isClientSplitShare(msg)) {
+        try {
+            envelope = await openShareEnvelope(msg);
+        } catch (error) {
+            console.error('Share envelope could not be opened', error);
+        }
+    }
+    const share2Live = envelope
+        ? `data:image/png;base64,${envelope.share2_png_b64}`
+        : (msg && msg.extra ? msg.extra.share2_live : null);
 
     const p1 = document.getElementById('share1Preview');
     const p2 = document.getElementById('share2Preview');
@@ -2464,9 +2571,18 @@ async function openReconstruction(msg) {
     if (recPrev) recPrev.src = '';
     downloadReconstructedBtn.disabled = true;
     downloadReconstructedBtn.dataset.image = '';
-    currentShares = { share1Url: null, share2Live };
+    currentShares = { share1Url: null, share2Live, envelope, share1Bytes: null };
 
     // Opened from a message: the shares arrive on their own, so no file pickers.
+    if (isClientSplitShare(msg) && !envelope) {
+        reconstructionPanel.classList.add('active');
+        reconstructBtn.disabled = true;
+        if (warning) {
+            warning.textContent = 'Share 2 could not be decrypted with the current keys, so this image cannot be reconstructed.';
+            warning.className = 'warning-text danger';
+        }
+        return;
+    }
     setReconstructionMode('message');
     setShareDownload(downloadShare1Btn, null);
     setShareDownload(downloadShare2Btn, share2Live);
@@ -2497,9 +2613,21 @@ async function openReconstruction(msg) {
         if (!response.ok) {
             throw new Error('Share 1 is no longer available. It may have been opened already, revoked, or expired.');
         }
-        const dataUrl = await blobToDataUrl(await response.blob());
+        const blob = await response.blob();
+        const dataUrl = await blobToDataUrl(blob);
         if (p1) p1.src = dataUrl;
         currentShares.share1Url = dataUrl;
+        if (envelope) {
+            // Hash the exact bytes that arrived, before anything decodes them.
+            const share1Bytes = new Uint8Array(await blob.arrayBuffer());
+            currentShares.share1Bytes = share1Bytes;
+            const actual = await window.revealxVC.sha256Hex(share1Bytes);
+            state.endToEndHash[msg.id] = {
+                matches: actual === envelope.share1_sha256,
+                expected: envelope.share1_sha256,
+                actual,
+            };
+        }
         setShareDownload(downloadShare1Btn, dataUrl);
         reconstructBtn.disabled = false;
 
@@ -2509,7 +2637,14 @@ async function openReconstruction(msg) {
         if (warning) warning.textContent = 'Share 1 loaded. Verifying in-browser...';
         const local = await runLocalShareVerification(msg.id, dataUrl, tamperPanelFor(msg.id));
 
-        if (warning) {
+        const endToEnd = state.endToEndHash[msg.id];
+        if (endToEnd && analysis) renderTamperPanel(tamperPanelFor(msg.id), analysis, local);
+        if (warning && endToEnd && !endToEnd.matches) {
+            warning.textContent = 'Share 1 is not the one the sender made: its SHA-256 does not '
+                + "match the hash sealed in the sender's encrypted message. "
+                + 'The reconstruction below will be wrong.';
+            warning.className = 'warning-text danger';
+        } else if (warning) {
             const localTampered = local ? local.tampered : false;
             if (!analysis && !local) {
                 warning.textContent = 'Share 1 loaded. Integrity could not be checked.';
@@ -2556,8 +2691,20 @@ reconstructBtn.addEventListener('click', async () => {
     if (spinner) spinner.classList.remove('hidden');
 
     try {
-        // Uses the modular reconstructSharesLocally from crypto.js
-        await window.reconstructSharesLocally(currentShares.share1Url, currentShares.share2Live);
+        if (currentShares.envelope && currentShares.share1Bytes) {
+            // Browser-split share: XOR the decoded bytes exactly, rather than
+            // whatever a canvas returns for them.
+            const result = await window.revealxVC.verifyAndReconstruct(
+                currentShares.share1Bytes, currentShares.envelope);
+            const image = await window.revealxVC.pngDataUrl(result.pixels, result.width, result.height);
+            const preview = document.getElementById('reconstructedPreview');
+            if (preview) preview.src = image;
+            downloadReconstructedBtn.disabled = false;
+            downloadReconstructedBtn.dataset.image = image;
+        } else {
+            // Manually supplied shares, and shares from the old server split.
+            await window.reconstructSharesLocally(currentShares.share1Url, currentShares.share2Live);
+        }
     } catch (e) {
         console.error(e);
     } finally {
