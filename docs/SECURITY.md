@@ -79,7 +79,7 @@ limitation rather than glossed over.
 | Control | Where | Held by |
 | --- | --- | --- |
 | Argon2id password hashing | `models.py`, `PasswordHasher` | `test_auth.py` |
-| Login throttling: 8 per account, 50 per address, 15-minute window | `routes.py`, `_login_blocked` | `test_rate_limit.py` |
+| Login throttling: 8 per account, 50 per address, 15-minute window; each attempt reserved under a lock *before* verification, so parallel guesses cannot outrun it | `routes.py`, `_reserve_login_attempt` | `test_rate_limit.py` |
 | Only *wrong passwords* count toward the throttle | `routes.py`, `handle_login` | `test_rate_limit.py` |
 | TOTP second factor (RFC 6238) | `auth/totp.py` | `test_auth.py` |
 | Secrets collected in a masked in-app dialog, never `window.prompt()` | `chat.js`, `askSecret` | `test_secret_prompts.py`, `tests/js/secret-prompt.test.mjs` |

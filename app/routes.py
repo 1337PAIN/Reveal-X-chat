@@ -7,6 +7,7 @@ from datetime import datetime
 import hmac
 import os
 import secrets
+import threading
 import time
 
 import cv2
@@ -73,6 +74,10 @@ PENDING_TOTP_ENROLMENT = {}
 # someone grinding one password list against one victim; per-address stops
 # spraying one common password across many accounts. Both are needed.
 FAILED_LOGINS = {}
+# The server runs 100 threads, so every read-modify-write of FAILED_LOGINS
+# happens under this lock. See _reserve_login_attempt for what went wrong
+# without it.
+FAILED_LOGINS_LOCK = threading.Lock()
 LOGIN_MAX_ATTEMPTS = 8           # per account, within the window
 # Per address, across all accounts. Deliberately much looser than the per
 # account limit: everyone behind one router, or one lab machine, shares an
@@ -170,25 +175,67 @@ def _register_rate_limited(address):
     return 0
 
 
-def _login_blocked(username, address):
-    """Is either bucket over its limit? Returns seconds to wait, or 0."""
-    now = time.time()
+def _prune_login_bucket(key, now):
+    hits = [t for t in FAILED_LOGINS.get(key, []) if now - t < LOGIN_WINDOW_SECONDS]
+    FAILED_LOGINS[key] = hits
+    return hits
+
+
+def _login_wait_locked(username, address, now):
+    """Seconds to wait, or 0. Caller holds FAILED_LOGINS_LOCK."""
     account_key, address_key = _login_keys(username, address)
     for key, limit in ((account_key, LOGIN_MAX_ATTEMPTS),
                        (address_key, LOGIN_IP_MAX_ATTEMPTS)):
-        hits = [t for t in FAILED_LOGINS.get(key, []) if now - t < LOGIN_WINDOW_SECONDS]
-        FAILED_LOGINS[key] = hits
+        hits = _prune_login_bucket(key, now)
         if len(hits) >= limit:
             return int(LOGIN_WINDOW_SECONDS - (now - hits[0])) + 1
     return 0
 
 
-def _record_failed_login(username, address):
+def _login_blocked(username, address):
+    """Is either bucket over its limit? Returns seconds to wait, or 0."""
+    with FAILED_LOGINS_LOCK:
+        return _login_wait_locked(username, address, time.time())
+
+
+def _reserve_login_attempt(username, address):
+    """Check the buckets and count this attempt, atomically, before verifying.
+
+    Returns (wait, reservation). A non-zero wait means refuse; otherwise the
+    attempt has already been counted as a failure, and the caller gives the
+    reservation back with _release_login_attempt if it turns out not to be one.
+
+    This used to be check, verify, then record. Argon2 takes ~100 ms by design
+    and the server has 100 threads, so every request arriving inside that
+    window read the same under-limit bucket and went on to verify: forty
+    parallel guesses all reached the password check against a limit of eight.
+    Reserving first means guesses in flight count, not only finished ones.
+    """
     now = time.time()
-    for key in _login_keys(username, address):
-        FAILED_LOGINS.setdefault(key, []).append(now)
-    # The dict is only ever appended to, so drop buckets that have aged out
-    # rather than growing it forever.
+    with FAILED_LOGINS_LOCK:
+        wait = _login_wait_locked(username, address, now)
+        if wait:
+            return wait, None
+        for key in _login_keys(username, address):
+            FAILED_LOGINS.setdefault(key, []).append(now)
+        _sweep_login_buckets(now)
+    return 0, now
+
+
+def _release_login_attempt(username, address, reservation):
+    """Hand back a reservation for an attempt that was not a wrong guess."""
+    if reservation is None:
+        return
+    with FAILED_LOGINS_LOCK:
+        for key in _login_keys(username, address):
+            hits = FAILED_LOGINS.get(key)
+            if hits and reservation in hits:
+                hits.remove(reservation)
+
+
+def _sweep_login_buckets(now):
+    """The dict is only ever appended to, so drop buckets that have aged out
+    rather than growing it forever. Caller holds FAILED_LOGINS_LOCK."""
     if len(FAILED_LOGINS) > 2048:
         for key in list(FAILED_LOGINS):
             FAILED_LOGINS[key] = [t for t in FAILED_LOGINS[key]
@@ -197,9 +244,18 @@ def _record_failed_login(username, address):
                 del FAILED_LOGINS[key]
 
 
+def _record_failed_login(username, address):
+    now = time.time()
+    with FAILED_LOGINS_LOCK:
+        for key in _login_keys(username, address):
+            FAILED_LOGINS.setdefault(key, []).append(now)
+        _sweep_login_buckets(now)
+
+
 def _clear_failed_logins(username, address):
-    for key in _login_keys(username, address):
-        FAILED_LOGINS.pop(key, None)
+    with FAILED_LOGINS_LOCK:
+        for key in _login_keys(username, address):
+            FAILED_LOGINS.pop(key, None)
 
 
 def parse_image_data_url(data_url):
@@ -1023,7 +1079,7 @@ def handle_login(data):
 
         address = _client_address()
 
-        wait = _login_blocked(username, address)
+        wait, reservation = _reserve_login_attempt(username, address)
         if wait:
             # Deliberately the same message whether or not the account exists,
             # so this does not become a way to test which usernames are real.
@@ -1033,14 +1089,16 @@ def handle_login(data):
             return
 
         user, error = chat_room.authenticate(username, data.get('password'))
+        # Only a wrong password counts toward the throttle, so the reservation
+        # is handed back for anything else. "Awaiting approval" and "disabled"
+        # are returned *after* the password has already verified, so they are
+        # not guesses -- counting them meant someone who kept trying while
+        # waiting for approval was locked out for 15 minutes the moment an
+        # admin approved them. An exception keeps the reservation: failing
+        # closed is the safe direction for a lockout.
+        if error != chat_room.ERROR_BAD_CREDENTIALS:
+            _release_login_attempt(username, address, reservation)
         if error:
-            # Only a wrong password counts toward the throttle. "Awaiting
-            # approval" and "disabled" are returned *after* the password has
-            # already verified, so they are not guesses -- counting them meant
-            # someone who kept trying while waiting for approval was locked out
-            # for 15 minutes the moment an admin approved them.
-            if error == chat_room.ERROR_BAD_CREDENTIALS:
-                _record_failed_login(username, address)
             emit('auth_error', {'error': error}, to=request.sid)
             return
 
@@ -1103,7 +1161,9 @@ def handle_verify_totp(data):
     # those outlive the socket.
     username, address = pending.get('username'), pending.get('address')
 
-    wait = _login_blocked(username, address)
+    # Reserved before the code is checked, for the same reason as a password:
+    # see _reserve_login_attempt.
+    wait, reservation = _reserve_login_attempt(username, address)
     if wait:
         PENDING_TOTP.pop(request.sid, None)
         emit('auth_error', {
@@ -1113,13 +1173,14 @@ def handle_verify_totp(data):
 
     pending['attempts'] += 1
     if pending['attempts'] > MAX_TOTP_ATTEMPTS:
+        _release_login_attempt(username, address, reservation)
         PENDING_TOTP.pop(request.sid, None)
         emit('auth_error', {'error': 'Too many incorrect codes. Please sign in again.'}, to=request.sid)
         return
 
     secret = chat_room.get_totp_secret(pending['user_id'])
     if not verify_totp_code(secret, data.get('code'), pending['user_id']):
-        _record_failed_login(username, address)
+        # Already counted by the reservation.
         remaining = MAX_TOTP_ATTEMPTS - pending['attempts']
         emit('totp_error', {
             'error': 'Incorrect code',
@@ -1127,6 +1188,7 @@ def handle_verify_totp(data):
         }, to=request.sid)
         return
 
+    _release_login_attempt(username, address, reservation)
     PENDING_TOTP.pop(request.sid, None)
     user = chat_room.get_auth_user(pending['user_id'])
     if not user:

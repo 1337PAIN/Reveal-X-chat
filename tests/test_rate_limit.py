@@ -364,3 +364,53 @@ def test_the_limit_is_per_address(client):
     other = client.post('/api/lab/process', json=body,
                         environ_overrides={'REMOTE_ADDR': '10.0.0.2'})
     assert other.status_code == 200
+
+
+def test_parallel_guesses_cannot_outrun_the_account_limit(store, monkeypatch):
+    """The limit is enforced on the attempts that reach the password check.
+
+    handle_login checked the bucket, verified the password, and only then
+    recorded the failure. Argon2 takes ~100 ms on purpose, and the server runs
+    100 threads, so every request that arrived inside that window saw the same
+    under-limit bucket: forty parallel guesses all reached the password check
+    against a limit of eight. Scripting the socket to send in parallel was all
+    it took to multiply the limit by the thread count.
+
+    The attempt is now checked and reserved under one lock *before* the
+    password is verified, so the bucket counts guesses in flight as well as
+    guesses that have finished.
+    """
+    import threading
+    import time as _time
+
+    store.create_user('victim', 'the-real-password-1')
+    calls, calls_lock = [], threading.Lock()
+
+    def slow_wrong_password(username, password):
+        with calls_lock:
+            calls.append(username)
+        _time.sleep(0.05)  # stands in for Argon2's deliberate cost
+        return None, store.ERROR_BAD_CREDENTIALS
+
+    monkeypatch.setattr(store, 'authenticate', slow_wrong_password)
+
+    clients = [socketio.test_client(flask_app) for _ in range(40)]
+    barrier = threading.Barrier(len(clients))
+
+    def guess(sock, i):
+        barrier.wait()
+        sock.emit('login', {'username': 'victim', 'password': f'parallel-{i}'})
+
+    threads = [threading.Thread(target=guess, args=(sock, i))
+               for i, sock in enumerate(clients)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    for sock in clients:
+        sock.disconnect()
+
+    assert len(calls) <= routes.LOGIN_MAX_ATTEMPTS, (
+        f'{len(calls)} parallel guesses reached the password check; the limit '
+        f'is {routes.LOGIN_MAX_ATTEMPTS}'
+    )

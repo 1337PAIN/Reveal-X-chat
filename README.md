@@ -184,6 +184,11 @@ not become a way to test which usernames are real, and a successful sign-in
 clears the counter so a few typos leave nothing behind. Locking one account does
 not lock others.
 
+Each attempt is counted **before** the password is checked, under a lock. It
+used to be counted after, and Argon2 is slow on purpose, so forty guesses sent
+in parallel all saw an under-limit bucket and all reached the password check.
+Now at most eight do.
+
 Administrative actions are written to an audit line -- who did what, to whom,
 when. Passwords never appear in it, and a **refused** action is not recorded as
 though it happened, which would be worse than no trail at all.
@@ -478,7 +483,7 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 481 server tests
+pytest                          # 482 server tests
 node --test "tests/js/*.test.mjs"   # 71 browser tests
 ```
 
@@ -488,7 +493,7 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**481 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+**482 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
 
 **71 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
