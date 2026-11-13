@@ -1632,7 +1632,7 @@ def handle_message(data):
         emit('message_error', {'error': 'Message is too long'})
         return
 
-    if not current_user or not message or not chat_room.get_user(recipient_id):
+    if not current_user or not message or not chat_room.is_active_user(recipient_id):
         return
 
     extra = {}
@@ -1678,7 +1678,7 @@ def handle_voice(data):
     iv = data.get('iv') or ''
     mime = (data.get('mime') or '').lower().split(';', 1)[0].strip()
 
-    if not current_user or not chat_room.get_user(recipient_id):
+    if not current_user or not chat_room.is_active_user(recipient_id):
         return
 
     extra = {}
@@ -1775,7 +1775,7 @@ def handle_forward(data):
     message_id = data.get('message_id')
     recipient_id = data.get('recipient_id')
 
-    if not current_user or not chat_room.get_user(recipient_id):
+    if not current_user or not chat_room.is_active_user(recipient_id):
         return
 
     source = chat_room.get_message_for_user(message_id, current_user['id'])
@@ -1825,7 +1825,7 @@ def handle_typing(data):
     recipient_id = data.get('recipient_id')
     is_typing = bool(data.get('is_typing'))
 
-    if not current_user or not chat_room.get_user(recipient_id):
+    if not current_user or not chat_room.is_active_user(recipient_id):
         return
 
     payload = {
@@ -1850,7 +1850,7 @@ def handle_image(data):
         if not current_user:
             emit('image_error', {'error': 'Log in first'})
             return
-        if not chat_room.get_user(recipient_id):
+        if not chat_room.is_active_user(recipient_id):
             emit('image_error', {'error': 'Select a user first'})
             return
 

@@ -135,6 +135,13 @@ is the entire point of having it.
 - Roles are ranked `user < admin < superadmin`, and an action requires a
   **strictly greater** rank than its target — so admins cannot act on each
   other, and nobody can act on themselves (`models.py`, `can_manage`).
+- Messages, voice notes, image shares, forwards, typing notices and group
+  invitations reach **active** accounts only (`is_active_user`, checked in the
+  handlers and again in `add_message`). Pending and disabled accounts were
+  hidden from the roster but could still be written to by anyone holding the
+  id. A member disabled after joining a group stays a member and gets nothing
+  until reinstated. An inactive id is refused exactly as an unknown one is
+  (`test_active_targets.py`).
 - Every message read goes through `get_message_for_user`, which filters on
   `sender_id OR recipient_id`. Knowing a message id is not access.
 - Revoking, deleting and reading are each tested from the perspective of an

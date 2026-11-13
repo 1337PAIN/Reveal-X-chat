@@ -600,6 +600,23 @@ class ChatRoom:
             ).fetchone()
         return dict(row) if row else None
 
+    def is_active_user(self, user_id):
+        """Does this id belong to an account that may receive anything?
+
+        The roster already hides pending and disabled accounts, but every send
+        path checked only that the recipient existed, so an unapproved or
+        disabled account could still be written to by anyone holding its id.
+        """
+        if not user_id:
+            return False
+        with self._connect() as db:
+            row = db.execute("SELECT account_state FROM users WHERE id = ?", (user_id,)).fetchone()
+        return bool(row) and (row['account_state'] or 'active') == 'active'
+
+    def active_user_ids(self, user_ids):
+        """The subset of `user_ids` that are active accounts."""
+        return {uid for uid in (user_ids or ()) if self.is_active_user(uid)}
+
     def get_users_list(self, current_user_id=None):
         """The chat roster for one signed-in account.
 
@@ -899,6 +916,10 @@ class ChatRoom:
         sender = self.get_user(sender_id)
         recipient = self.get_user(recipient_id)
         if not sender or not recipient:
+            return None
+        # Checked here as well as in the handlers, so a future send path that
+        # forgets cannot write a row for an account that is not active.
+        if not self.is_active_user(recipient_id):
             return None
 
         created_at = datetime.utcnow().isoformat()
@@ -1472,7 +1493,9 @@ class ChatRoom:
         wanted = []
         for user_id in member_ids or ():
             if user_id and user_id != creator_id and user_id not in wanted:
-                if self.get_user(user_id):
+                # Active only: pending and disabled accounts are not
+                # contacts, and must not be pulled into a group either.
+                if self.is_active_user(user_id):
                     wanted.append(user_id)
         if len(wanted) + 1 > self.MAX_GROUP_MEMBERS:
             return None, f'A group holds at most {self.MAX_GROUP_MEMBERS} members'
@@ -1606,7 +1629,7 @@ class ChatRoom:
             return [], f'A group holds at most {self.MAX_GROUP_MEMBERS} members'
         with self._connect() as db:
             for user_id in user_ids or ():
-                if user_id in existing or not self.get_user(user_id):
+                if user_id in existing or not self.is_active_user(user_id):
                     continue
                 if len(existing) + len(added) >= self.MAX_GROUP_MEMBERS:
                     break
@@ -1748,6 +1771,9 @@ class ChatRoom:
         members = set(self.get_group_member_ids(group_id))
         if sender_id not in members:
             return None
+        # A member disabled after joining stays in the group (reinstating them
+        # restores it) but receives nothing while disabled.
+        members = self.active_user_ids(members) | {sender_id}
 
         created_at = datetime.utcnow().isoformat()
         expires_at = (datetime.fromisoformat(created_at)
