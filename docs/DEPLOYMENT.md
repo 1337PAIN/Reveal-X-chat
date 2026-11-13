@@ -207,7 +207,7 @@ pip install -r requirements.lock
 | `REVEALX_TRUST_PROXY` | `true` only when behind a reverse proxy you control, so forwarded headers are believed for throttling |
 | `REVEALX_PROXY_HOPS` | With trust on: how many trusted proxies append to `X-Forwarded-For`. The address used is that many entries **from the right**. Default `1` |
 | `REVEALX_CLIENT_IP_HEADER` | With trust on: a single-value header your edge *overwrites* with the client address (e.g. `True-Client-IP`, `CF-Connecting-IP`). Used in preference to `X-Forwarded-For` when present |
-| `REVEAL_X_FORCE_HTTPS` | `true` to 301-redirect plain HTTP to HTTPS. HSTS is sent whenever `X-Forwarded-Proto: https` arrives, independently of this |
+| `REVEAL_X_FORCE_HTTPS` | `true` to redirect plain HTTP to HTTPS (301 for GET/HEAD, 308 otherwise), before the request is handled. Behind a proxy this needs `REVEALX_TRUST_PROXY=true`, or every request looks like plain HTTP and is redirected for ever |
 | `REVEALX_ADMIN_USER` / `REVEALX_ADMIN_PASSWORD` | Bootstraps the superadmin on first start |
 | `DATABASE_URL` | PostgreSQL DSN. Unset uses SQLite |
 | `FIREBASE_*` | Google sign-in — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md) |
@@ -241,8 +241,11 @@ Terminate TLS at a reverse proxy (nginx, Caddy, your host's load balancer) and
 forward to gunicorn. Google sign-in requires `https` or `localhost` — a popup on
 a plain-`http` LAN address opens and closes with no result.
 
-Set `REVEAL_X_FORCE_HTTPS=true` to redirect plain HTTP. HSTS is sent whenever the
-proxy passes `X-Forwarded-Proto: https`, so make sure it does.
+Set `REVEAL_X_FORCE_HTTPS=true` to redirect plain HTTP. HSTS is sent on HTTPS
+requests only. Behind a proxy the app learns that from `X-Forwarded-Proto`, which
+it believes **only** with `REVEALX_TRUST_PROXY=true`: otherwise any client could
+claim HTTPS. So behind a proxy, set both, and make sure the proxy sends
+`X-Forwarded-Proto` (nginx: `proxy_set_header X-Forwarded-Proto $scheme;`).
 
 `REVEAL_X_ADHOC_SSL=true` makes `run.py` generate a throwaway certificate. That
 is for testing the HTTPS path locally; browsers will warn, and it is not a

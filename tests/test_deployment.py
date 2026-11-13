@@ -196,3 +196,65 @@ def test_render_health_check_hits_an_endpoint_that_always_answers():
     # "/" renders a template; /api/auth/config is a plain JSON 200 whether or
     # not Firebase is configured, which is what a health check wants.
     assert path.group(1) == '/api/auth/config'
+
+
+# ----------------------------------------------------------------------
+# HSTS and the HTTPS redirect believe X-Forwarded-Proto only from a proxy
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def https_env(monkeypatch):
+    def configure(trust=None, force=None):
+        for key, value in (('REVEALX_TRUST_PROXY', trust), ('REVEAL_X_FORCE_HTTPS', force)):
+            if value is None:
+                monkeypatch.delenv(key, raising=False)
+            else:
+                monkeypatch.setenv(key, value)
+    return configure
+
+
+def test_a_client_cannot_claim_https_without_a_trusted_proxy(client, https_env):
+    """X-Forwarded-Proto was read from any request. A client could set it on a
+    plain-HTTP connection and be sent HSTS -- and with REVEAL_X_FORCE_HTTPS
+    on, behind a TLS-terminating proxy that the app did not trust, every
+    request looked like http:// and was redirected for ever."""
+    https_env(trust=None)
+    response = client.get('/', headers={'X-Forwarded-Proto': 'https'})
+    assert 'Strict-Transport-Security' not in response.headers
+
+
+def test_behind_a_trusted_proxy_hsts_follows_the_proxy(client, https_env):
+    https_env(trust='true')
+    secure = client.get('/', headers={'X-Forwarded-Proto': 'https'})
+    assert 'max-age=' in secure.headers.get('Strict-Transport-Security', '')
+    plain = client.get('/', headers={'X-Forwarded-Proto': 'http'})
+    assert 'Strict-Transport-Security' not in plain.headers
+
+
+def test_force_https_redirects_plain_requests_from_the_proxy(client, https_env):
+    https_env(trust='true', force='true')
+    response = client.get('/lab', headers={'X-Forwarded-Proto': 'http'})
+    assert response.status_code == 301
+    assert response.headers['Location'].startswith('https://')
+    # And does not loop once the proxy reports https.
+    assert client.get('/lab', headers={'X-Forwarded-Proto': 'https'}).status_code == 200
+
+
+def test_force_https_without_trust_ignores_the_header(client, https_env):
+    """Without trust the header is the client's word, so it cannot be used to
+    skip the redirect either."""
+    https_env(trust=None, force='true')
+    response = client.get('/lab', headers={'X-Forwarded-Proto': 'https'})
+    assert response.status_code == 301
+
+
+def test_the_redirect_happens_before_the_request_is_handled(client, https_env, monkeypatch):
+    """It ran in after_request, so a plain-HTTP POST was fully processed --
+    lab inference, a share upload -- and only then answered with a 301."""
+    from app import routes
+    https_env(trust='true', force='true')
+    called = []
+    monkeypatch.setattr(routes, '_lab_rate_limited', lambda address: called.append(1) or 0)
+    response = client.post('/api/lab/features', json={}, headers={'X-Forwarded-Proto': 'http'})
+    assert response.status_code in (301, 308)
+    assert not called, 'the handler ran before the redirect'

@@ -700,14 +700,46 @@ def get_share1(message_id):
     return send_file(share_path, mimetype='image/png', max_age=0)
 
 
+def _request_is_https():
+    """Did this request arrive over HTTPS?
+
+    X-Forwarded-Proto is believed only with REVEALX_TRUST_PROXY, for the same
+    reason X-Forwarded-For is: without a proxy that sets it, it is whatever the
+    client sent. It used to be read unconditionally, so a client on plain HTTP
+    could claim HTTPS and be sent HSTS -- and behind a TLS-terminating proxy
+    the app was not told to trust, REVEAL_X_FORCE_HTTPS saw every request as
+    http:// and redirected for ever.
+    """
+    if request.is_secure:
+        return True
+    if os.environ.get('REVEALX_TRUST_PROXY', '').lower() == 'true':
+        proto = request.headers.get('X-Forwarded-Proto', '').split(',')[0].strip().lower()
+        return proto == 'https'
+    return False
+
+
+@app.before_request
+def redirect_plain_http():
+    """REVEAL_X_FORCE_HTTPS: send plain-HTTP requests to HTTPS.
+
+    Before the request is handled, not after. This used to run in
+    after_request, so a plain-HTTP POST was processed in full -- lab
+    inference, a share upload -- and only then answered with a redirect.
+    308 for anything but GET/HEAD, so a client that follows it re-sends the
+    same method and body rather than turning a POST into a GET.
+    """
+    if os.environ.get('REVEAL_X_FORCE_HTTPS', '').lower() != 'true' or _request_is_https():
+        return None
+    code = 301 if request.method in ('GET', 'HEAD') else 308
+    return redirect(request.url.replace('http://', 'https://', 1), code=code)
+
+
 @app.after_request
 def add_security_headers(response):
-    # HSTS/HTTPS redirect are enabled only in production to keep localhost easy to run.
-    force_https = os.environ.get('REVEAL_X_FORCE_HTTPS', '').lower() == 'true'
-    if request.headers.get('X-Forwarded-Proto', 'http') == 'https':
+    # HSTS only over HTTPS: browsers ignore it on plain HTTP, and localhost
+    # stays easy to run.
+    if _request_is_https():
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    elif force_https and request.url.startswith('http://'):
-        return redirect(request.url.replace('http://', 'https://'), code=301)
 
     # HTML carries no cache headers of its own, so browsers fall back to
     # heuristic caching and may serve the page from cache without asking. The
