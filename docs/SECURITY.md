@@ -59,6 +59,13 @@ the entire database has random noise.
 'share2_live'}` exists to keep it that way: it is a hard refusal in the storage
 layer, so a future change cannot casually start persisting Share 2.
 
+The browser follows the same rule. Share 2 is held in an in-memory `Map` in
+`chat.js`, emptied on logout, forced sign-out, **Clear cache**, delete and
+revoke. It used to be copied into `sessionStorage`, which any script on the
+origin can read and which outlives logout while the tab stays open. The
+consequence is stated plainly: reloading the page loses Share 2, so a recipient
+who reloads before opening a share can no longer reconstruct it.
+
 Closing this gap properly would mean splitting the image in the browser and
 uploading only Share 1 — a real design change, recorded here as a known
 limitation rather than glossed over.

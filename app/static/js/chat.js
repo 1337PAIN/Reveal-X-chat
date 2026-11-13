@@ -109,6 +109,32 @@ const profileImageInput = document.getElementById('profileImageInput');
 const profilePicker = document.querySelector('.profile-picker');
 
 let currentShares = null;
+
+// Share 2, keyed by message id, held in memory and nowhere else.
+//
+// It used to be written to sessionStorage as `revealx_share2_<id>` so it would
+// survive a reload. sessionStorage is readable by any script on the origin and
+// outlives logout for as long as the tab stays open, so the next person at the
+// keyboard could read Share 2 back out of the console -- the one secret the
+// server is forbidden from storing (FORBIDDEN_EXTRA_KEYS), kept by the client
+// instead. The cost of memory is that a reload drops Share 2; that is the
+// same guarantee the server gives, applied to the browser as well.
+const share2Memory = new Map();
+
+function forgetShare2(messageId) {
+    if (messageId === undefined || messageId === null) return;
+    share2Memory.delete(String(messageId));
+}
+
+// A tab open across the upgrade still holds what the old build wrote.
+try {
+    for (let i = sessionStorage.length - 1; i >= 0; i -= 1) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith('revealx_share2_')) sessionStorage.removeItem(key);
+    }
+} catch (error) {
+    // Storage can be blocked outright; then there is nothing to purge.
+}
 let typingStopTimer = null;
 let typingHideTimer = null;
 const STATUS_LABELS = {
@@ -299,6 +325,7 @@ function extendSession() {
 }
 
 function logoutUser() {
+    share2Memory.clear();
     clearTimeout(state.sessionTimeoutTimer);
     clearTimeout(state.sessionWarningTimer);
     if (state.countdownInterval) clearInterval(state.countdownInterval);
@@ -778,6 +805,7 @@ socket.on('registration_submitted', (data) => {
 });
 
 socket.on('force_signed_out', (data) => {
+    share2Memory.clear();
     // An admin disabled, deleted, or reset the password on this account. The
     // server has already dropped the session; this only explains why.
     localStorage.removeItem('revealx_username');
@@ -912,6 +940,7 @@ socket.on('message_error', (data) => {
 });
 
 socket.on('logout_success', async () => {
+    share2Memory.clear();
     localStorage.removeItem('revealx_username');
     await window.revealxFirebase.signOut();
     window.location.reload();
@@ -1392,14 +1421,14 @@ function displayMessage(msg) {
     const messageDiv = document.createElement('div');
     messageDiv.dataset.messageId = msg.id;
 
-    // Cache or restore live Share 2 from client-side sessionStorage
+    // Remember or restore live Share 2, in memory only (see share2Memory).
     if (msg.type === 'share') {
         if (msg.extra && msg.extra.share2_live) {
-            sessionStorage.setItem(`revealx_share2_${msg.id}`, msg.extra.share2_live);
+            share2Memory.set(String(msg.id), msg.extra.share2_live);
         } else if (msg.extra) {
-            const cachedShare2 = sessionStorage.getItem(`revealx_share2_${msg.id}`);
-            if (cachedShare2) {
-                msg.extra.share2_live = cachedShare2;
+            const remembered = share2Memory.get(String(msg.id));
+            if (remembered) {
+                msg.extra.share2_live = remembered;
             }
         }
     }
@@ -1624,6 +1653,7 @@ socket.on('messages_read', (data) => {
 });
 
 socket.on('message_deleted', (data) => {
+    forgetShare2(data && data.message_id);
     const node = messagesContainer.querySelector(`[data-message-id="${data.message_id}"]`);
     if (node) {
         node.style.opacity = '0.4';
@@ -1647,6 +1677,7 @@ socket.on('typing', (data) => {
 });
 
 socket.on('share_revoked', (data) => {
+    forgetShare2(data && data.message_id);
     alert('This encrypted share access has been revoked.');
     if (reconstructionPanel) reconstructionPanel.classList.remove('active');
     delete state.shareAnalysis[data.message_id];
@@ -2786,10 +2817,10 @@ if (exportDataBtn) {
 
 // Clear cached data.
 //
-// This used to call sessionStorage.clear() and report success. Nothing in the
-// app ever writes to sessionStorage, so the button emptied something that was
-// always empty and said it had worked -- the worst kind of privacy control,
-// one the user trusts and that does nothing.
+// This used to call sessionStorage.clear() and report success, and nothing
+// else. At the time Share 2 was the only thing written there; it now lives in
+// share2Memory, which is what this has to empty. sessionStorage.clear() stays
+// for anything an older build left behind in this tab.
 //
 // What it must NOT clear is the IndexedDB keypair. The private half is
 // generated non-extractable and never leaves the browser, so destroying it
@@ -2802,6 +2833,10 @@ if (clearCacheBtn) {
         const cleared = [];
 
         sessionStorage.clear();
+        if (share2Memory.size) {
+            cleared.push('received image shares');
+            share2Memory.clear();
+        }
 
         if (state.chatHistoryCache && state.chatHistoryCache.length) {
             cleared.push('the loaded conversation');

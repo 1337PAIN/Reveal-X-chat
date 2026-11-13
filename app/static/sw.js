@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v24-vendored-critical-path';
+const CACHE_NAME = 'revealx-cache-v25-share2-in-memory';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
