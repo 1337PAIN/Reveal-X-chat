@@ -129,7 +129,10 @@ is the entire point of having it.
 - Compared with `hmac.compare_digest`, not `==`.
 - **One-time access.** Share 1 is served only against an unguessable
   `secrets.token_urlsafe(32)` capability, and fetching it burns the access
-  (`routes.py`, `get_share1`).
+  (`routes.py`, `get_share1`). The burn is a conditional `UPDATE ... WHERE
+  share1_accessed` is unset, and only the request whose UPDATE changed the row
+  is served. It was a SELECT followed by an UPDATE, which let eight concurrent
+  requests all receive the same one-time share.
 - **ML tamper detection** as a second, independent signal: a RandomForest over
   13 statistical features, runnable on the server and in the browser.
 

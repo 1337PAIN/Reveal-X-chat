@@ -65,6 +65,45 @@ def test_inspection_without_consume_does_not_burn_access(store, users):
     assert store.get_share_message_by_token(message['id'], 'tok-abc', consume=True) is not None
 
 
+def test_concurrent_consumers_get_exactly_one_share(store, users):
+    """The one-time guarantee has to hold when requests race, not only in turn.
+
+    The lookup used to SELECT the row, check share1_accessed in Python, then
+    UPDATE it. SQLite does not open a transaction for a SELECT, so two requests
+    could both read "not yet accessed" before either wrote, and both were
+    handed Share 1 -- a one-time link that worked twice. The barrier lines the
+    threads up on that window deliberately.
+    """
+    import threading
+
+    alice, bob = users
+    for trial in range(30):
+        message, _ = make_share(store, alice, bob, token=f'tok-{trial}')
+        barrier = threading.Barrier(8)
+        results, errors = [], []
+
+        def consume():
+            barrier.wait()
+            try:
+                results.append(store.get_share_message_by_token(
+                    message['id'], f'tok-{trial}', consume=True))
+            except Exception as exc:  # a lock timeout is a failure too
+                errors.append(exc)
+
+        threads = [threading.Thread(target=consume) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert not errors, f'trial {trial}: {errors!r}'
+        granted = [r for r in results if r is not None]
+        assert len(granted) == 1, (
+            f'trial {trial}: {len(granted)} of 8 racing requests were given '
+            f'the one-time share'
+        )
+
+
 def test_reading_a_message_never_consumes_share_access(store, users):
     """Replies, reactions and forwards all read messages; none may burn a share."""
     alice, bob = users

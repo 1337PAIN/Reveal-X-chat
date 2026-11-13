@@ -836,8 +836,15 @@ class ChatRoom:
     def get_share_message_by_token(self, message_id, token, consume=False):
         """Look up a share by its unguessable token.
 
-        `consume=True` marks the share accessed inside the same transaction, so
-        the one-time guarantee still holds when two requests race.
+        `consume=True` claims the share with a conditional UPDATE and returns it
+        only to the request whose UPDATE changed the row.
+
+        This used to SELECT, check share1_accessed in Python, then UPDATE. The
+        docstring claimed that was one transaction; on SQLite it was not, since
+        a plain SELECT opens none, so racing requests all read "not accessed"
+        before any of them wrote and every one was handed Share 1. Measured: 8
+        of 8 concurrent requests succeeded. The database now decides who wins,
+        and exactly one UPDATE can match the unaccessed row.
         """
         with self._connect() as db:
             row = db.execute(
@@ -860,7 +867,14 @@ class ChatRoom:
                 return None
 
             if consume:
-                db.execute("UPDATE messages SET share1_accessed = ? WHERE id = ?", (True, message_id))
+                claimed = db.execute(
+                    "UPDATE messages SET share1_accessed = ? "
+                    "WHERE id = ? AND type = ? "
+                    "AND (share1_accessed IS NULL OR share1_accessed = ?)",
+                    (True, message_id, 'share', False)
+                )
+                if claimed.rowcount != 1:
+                    return None
 
             return {
                 'id': row['id'],
