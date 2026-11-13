@@ -731,10 +731,15 @@ def add_security_headers(response):
         # 'wasm-unsafe-eval' lets onnxruntime-web compile the tamper-detection
         # model. It permits WebAssembly compilation only -- unlike
         # 'unsafe-eval' it does not re-enable eval() or new Function().
-        "script-src 'self' 'wasm-unsafe-eval' https://cdn.socket.io https://cdn.jsdelivr.net "
+        # socket.io, DOMPurify, Font Awesome and Inter are all served from
+        # /static/vendor now, so their CDNs are no longer allowed: an origin in
+        # the policy that nothing loads from is an origin an injected tag can.
+        "script-src 'self' 'wasm-unsafe-eval' "
         "https://www.gstatic.com https://apis.google.com; "
-        "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'; "
-        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        # Inline *styles* remain: the markup and the scripts set style
+        # attributes throughout. Inline *scripts* are not allowed.
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self'; "
         "img-src 'self' data: blob: https://*.googleusercontent.com; "
         "media-src 'self' data: blob:; "
         "connect-src 'self' blob: ws: wss: "

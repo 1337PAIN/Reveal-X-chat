@@ -141,3 +141,57 @@ def test_no_origin_is_cacheable_that_the_page_does_not_use():
     block = block[:block.index('];')]
     for gone in ('cdn.socket.io', 'cdn.jsdelivr.net'):
         assert gone not in block, f'{gone} is still trusted but nothing loads from it'
+
+
+# ----------------------------------------------------------------------
+# Stylesheets and fonts, and the policy that allows them
+# ----------------------------------------------------------------------
+
+@pytest.mark.parametrize('template', templates(), ids=lambda p: p.name)
+def test_no_page_loads_a_stylesheet_from_another_origin(template):
+    """Font Awesome came from cdnjs and Inter from Google Fonts. A stylesheet
+    request to Google on every page load tells Google who opened the app and
+    when, which is not something a privacy-focused chat should do by default."""
+    markup = template.read_text(encoding='utf-8')
+    external = re.findall(r'<link[^>]*\shref=["\'](?:https?:)?//[^"\']+', markup)
+    assert not external, f'{template.name} loads from another origin: {external}'
+
+
+@pytest.mark.parametrize('path', [
+    'vendor/fontawesome/css/all.min.css',
+    'vendor/fontawesome/webfonts/fa-solid-900.woff2',
+    'vendor/fontawesome/webfonts/fa-regular-400.woff2',
+    'vendor/inter/inter.css',
+    'vendor/inter/files/inter-latin-400-normal.woff2',
+    'vendor/inter/files/inter-latin-700-normal.woff2',
+])
+def test_the_fonts_are_vendored_and_served(client, path):
+    assert (STATIC / path).is_file(), f'{path} is not vendored'
+    assert client.get(f'/static/{path}').status_code == 200
+
+
+def test_every_font_the_vendored_css_names_is_present():
+    for css in ('vendor/fontawesome/css/all.min.css', 'vendor/inter/inter.css'):
+        text = (STATIC / css).read_text(encoding='utf-8')
+        for ref in re.findall(r'url\(([^)]+\.woff2)\)', text):
+            target = (STATIC / css).parent / ref.strip('\'"')
+            assert target.resolve().is_file(), f'{css} names {ref}, which is missing'
+
+
+def test_the_csp_header_allows_no_cdn_the_app_no_longer_uses(client):
+    policy = client.get('/').headers['Content-Security-Policy']
+    for origin in ('cdn.socket.io', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com',
+                   'fonts.googleapis.com', 'fonts.gstatic.com'):
+        assert origin not in policy, f'{origin} is still allowed'
+    script_src = re.search(r"script-src ([^;]*)", policy).group(1)
+    assert "'unsafe-inline'" not in script_src
+
+
+def test_there_is_one_csp_and_it_is_the_header():
+    """index.html carried a second policy in a meta tag. Both are enforced, so
+    it only ever made things stricter -- but it listed 'unsafe-inline' for
+    scripts and three CDNs, so anyone reading it believed those were allowed,
+    and keeping two policies in step had already failed once."""
+    for template in templates():
+        markup = template.read_text(encoding='utf-8')
+        assert 'http-equiv="Content-Security-Policy"' not in markup, template.name

@@ -165,8 +165,14 @@ localises damage and survives a re-encode. Either alone would be weaker.
 
 ### Transport and browser
 
-- CSP with `object-src 'none'`, `base-uri 'self'`, and an explicit allowlist per
-  directive (`templates/index.html`).
+- CSP sent as a response header (`routes.py`, `add_security_headers`), with
+  `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, no
+  `'unsafe-inline'` for scripts, and no CDN at all: socket.io, DOMPurify, Font
+  Awesome and Inter are vendored, so the only third-party origins left are
+  Google's, for Firebase sign-in. Inline *styles* are still allowed. A second
+  copy of the policy used to sit in a `<meta>` tag in `index.html`, listing
+  `'unsafe-inline'` scripts and three CDNs; both were enforced, so it changed
+  nothing but misled anyone reading it, and it has been removed.
 - `HttpOnly`, `SameSite=Lax`, and `Secure` when `REVEAL_X_COOKIE_SECURE=true`.
 - HSTS when the proxy reports HTTPS; optional HTTP→HTTPS redirect.
 - Socket.IO origins default to same-origin only.
@@ -180,8 +186,9 @@ localises damage and survives a re-encode. Either alone would be weaker.
   The DOMPurify URL was additionally wrong and had been returning 404 since
   it was written, so the client-side sanitiser was never once loaded in
   production; `cleanHTML()` fails closed, which is why nothing looked broken.
-  `tests/test_startup_path.py` fails the build if a third-party script
-  reappears in any template.
+  `tests/test_startup_path.py` fails the build if a third-party script or
+  stylesheet reappears in any template. Fonts used to come from Google Fonts
+  and cdnjs, which told both who opened the app and when.
 
 ### Data lifetime
 

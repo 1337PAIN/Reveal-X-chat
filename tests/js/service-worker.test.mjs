@@ -54,12 +54,17 @@ test('same-origin app assets are cached', () => {
     assert.equal(get('http://localhost:5000/static/Xlogo.png'), true);
 });
 
-test('the allowlisted CDNs are cached', () => {
-    // What is left is fonts and an icon set: a stylesheet that fails degrades
-    // the look and nothing more.
-    assert.equal(get('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'), true);
-    assert.equal(get('https://fonts.googleapis.com/css2?family=Inter'), true);
-    assert.equal(get('https://fonts.gstatic.com/s/inter/v1/font.woff2'), true);
+test('no CDN is handled any more, fonts included', () => {
+    // Font Awesome and Inter were the last things loaded from another origin.
+    // They are vendored now, so the worker has no cross-origin business.
+    assert.equal(get('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'), false);
+    assert.equal(get('https://fonts.googleapis.com/css2?family=Inter'), false);
+    assert.equal(get('https://fonts.gstatic.com/s/inter/v1/font.woff2'), false);
+});
+
+test('the vendored fonts are cached from our own origin', () => {
+    assert.equal(get('http://localhost:5000/static/vendor/fontawesome/css/all.min.css'), true);
+    assert.equal(get('http://localhost:5000/static/vendor/inter/files/inter-latin-400-normal.woff2'), true);
 });
 
 test('the script CDNs are no longer trusted, because nothing loads from them', () => {

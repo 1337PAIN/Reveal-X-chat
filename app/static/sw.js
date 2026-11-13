@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v29-session-resume';
+const CACHE_NAME = 'revealx-cache-v30-vendored-fonts';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -13,6 +13,14 @@ const ASSETS_TO_CACHE = [
     // the app from starting.
     '/static/vendor/socketio/socket.io.min.js',
     '/static/vendor/dompurify/purify.min.js',
+    '/static/vendor/fontawesome/css/all.min.css',
+    '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
+    '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
+    '/static/vendor/inter/inter.css',
+    '/static/vendor/inter/files/inter-latin-400-normal.woff2',
+    '/static/vendor/inter/files/inter-latin-500-normal.woff2',
+    '/static/vendor/inter/files/inter-latin-600-normal.woff2',
+    '/static/vendor/inter/files/inter-latin-700-normal.woff2',
     '/static/js/sanitize.js',
     '/static/js/chat.js',
     '/static/js/crypto.js',
@@ -41,10 +49,9 @@ const ASSETS_TO_CACHE = [
 // would reject the whole install and leave the app with no offline cache at all
 // -- silently, because nothing else breaks. Offline support that evaporates the
 // moment a CDN is blocked is not offline support.
-const OPTIONAL_ASSETS = [
-    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-];
+// Nothing optional is fetched from another origin any more: the fonts and
+// icons that used to be are vendored and precached with everything else.
+const OPTIONAL_ASSETS = [];
 
 // Install Event
 self.addEventListener('install', (event) => {
@@ -89,11 +96,9 @@ self.addEventListener('activate', (event) => {
 // Fetch Event (Network First, Cache Fallback)
 /* Third-party origins whose assets are worth keeping offline. Anything else
    cross-origin is left completely alone. */
-const CACHEABLE_ORIGINS = [
-    'https://fonts.googleapis.com',
-    'https://fonts.gstatic.com',
-    'https://cdnjs.cloudflare.com',
-];
+// Empty: every asset the page uses is same-origin. Kept as a list so adding
+// an origin is a deliberate, visible change that the tests will catch.
+const CACHEABLE_ORIGINS = [];
 
 /**
  * Should this worker take over the request at all?
