@@ -749,3 +749,104 @@ def test_an_account_without_a_password_is_rejected_at_the_same_cost(store):
     known = best('realperson')
     passwordless = best('googler')
     assert max(known, passwordless) / min(known, passwordless) < 3
+
+
+# ----------------------------------------------------------------------
+# Re-authentication shares the sign-in throttle
+# ----------------------------------------------------------------------
+
+def _settings_errors(sock):
+    return [e['args'][0]['error'] for e in events(sock, 'settings_error')]
+
+
+def _let_the_window_pass():
+    from app.routes import FAILED_LOGINS, LOGIN_WINDOW_SECONDS
+    for key in list(FAILED_LOGINS):
+        FAILED_LOGINS[key] = [t - LOGIN_WINDOW_SECONDS - 1 for t in FAILED_LOGINS[key]]
+
+
+def test_turning_off_two_factor_is_throttled_like_sign_in(store):
+    """totp_disable checked the code and nothing else, with no limit at all.
+
+    The second factor exists for the case where a session is borrowed, and
+    that is exactly who calls totp_disable. Six digits with a one-step
+    tolerance falls to about 333,000 guesses: a scripted socket could remove
+    the second factor in minutes, and the sign-in throttle never saw it.
+    """
+    from app.routes import FAILED_LOGINS, LOGIN_MAX_ATTEMPTS
+
+    sock = socketio.test_client(flask_app)
+    user = signed_in(store, sock)
+    secret = generate_totp_secret()
+    store.set_totp_secret(user['id'], secret)
+    FAILED_LOGINS.clear()
+
+    for _ in range(LOGIN_MAX_ATTEMPTS):
+        sock.emit('totp_disable', {'code': '000000'})
+    sock.emit('totp_disable', {'code': code_for(secret)})
+
+    assert store.get_totp_secret(user['id']) == secret, (
+        'the correct code was accepted after the limit was reached'
+    )
+    assert any('Too many failed attempts' in e for e in _settings_errors(sock))
+
+    _let_the_window_pass()
+    sock.emit('totp_disable', {'code': code_for(secret)})
+    assert not store.get_totp_secret(user['id']), 'the owner is still locked out after the window'
+    sock.disconnect()
+    FAILED_LOGINS.clear()
+
+
+def test_confirming_two_factor_enrolment_is_throttled_like_sign_in(store):
+    from app.routes import FAILED_LOGINS, LOGIN_MAX_ATTEMPTS
+
+    sock = socketio.test_client(flask_app)
+    user = signed_in(store, sock)
+    FAILED_LOGINS.clear()
+    sock.emit('totp_begin_enrol', {})
+    secret = events(sock, 'totp_enrolment')[0]['args'][0]['secret']
+
+    for _ in range(LOGIN_MAX_ATTEMPTS):
+        sock.emit('totp_confirm_enrol', {'code': '000000'})
+    sock.emit('totp_confirm_enrol', {'code': code_for(secret)})
+
+    assert not store.get_totp_secret(user['id'])
+    assert any('Too many failed attempts' in e for e in _settings_errors(sock))
+    sock.disconnect()
+    FAILED_LOGINS.clear()
+
+
+def test_deleting_the_account_is_throttled_like_sign_in(store):
+    """_confirm_identity asks for the password, and could be asked forever."""
+    from app.routes import FAILED_LOGINS, LOGIN_MAX_ATTEMPTS
+
+    sock = socketio.test_client(flask_app)
+    user = signed_in(store, sock)
+    FAILED_LOGINS.clear()
+
+    for i in range(LOGIN_MAX_ATTEMPTS):
+        sock.emit('delete_account', {'password': f'wrong-{i}'})
+    sock.emit('delete_account', {'password': 'correct-horse-1'})
+
+    assert store.get_user(user['id']), 'the account was deleted past the limit'
+    assert any('Too many failed attempts' in e for e in _settings_errors(sock))
+    sock.disconnect()
+    FAILED_LOGINS.clear()
+
+
+def test_reauthentication_failures_count_toward_sign_in(store):
+    """One bucket, so splitting guesses between the two doors buys nothing."""
+    from app.routes import FAILED_LOGINS, LOGIN_MAX_ATTEMPTS
+
+    sock = socketio.test_client(flask_app)
+    signed_in(store, sock)
+    FAILED_LOGINS.clear()
+    for i in range(LOGIN_MAX_ATTEMPTS):
+        sock.emit('delete_account', {'password': f'wrong-{i}'})
+
+    other = socketio.test_client(flask_app)
+    other.emit('login', {'username': 'alice', 'password': 'correct-horse-1'})
+    assert not events(other, 'auth_success')
+    other.disconnect()
+    sock.disconnect()
+    FAILED_LOGINS.clear()

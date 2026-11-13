@@ -116,7 +116,10 @@ leaves the browser — it is generated non-extractable and kept in IndexedDB.
 | `totp_disable` | `code` | `totp_state`, `settings_saved` |
 
 Disabling requires a **current valid code**, so someone with a borrowed session
-cannot quietly remove the second factor.
+cannot quietly remove the second factor. Confirming enrolment and disabling
+both draw on the sign-in throttle (8 per account, 50 per address, 15 minutes);
+past it they answer `settings_error` with "Too many failed attempts" and do not
+check the code at all.
 
 ### Messaging
 
@@ -156,6 +159,8 @@ would leak that it was read.
 Irreversible, so it **re-authenticates**: the password where the account has
 one, a current code where two-factor is on, and — for a Firebase account,
 which has no local password — the account's own username typed back. It also
+draws on the same sign-in throttle as `login`, so a wrong password here and a
+wrong password at sign-in count toward one limit. It also
 refuses when the caller is the last active administrator, because an
 unadministered server cannot approve a registration or reinstate anyone
 without being restarted with `REVEALX_ADMIN_USER` set.

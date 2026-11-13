@@ -274,12 +274,29 @@ def _sweep_login_buckets(now):
                 del FAILED_LOGINS[key]
 
 
-def _record_failed_login(username, address):
-    now = time.time()
-    with FAILED_LOGINS_LOCK:
-        for key in _login_keys(username, address):
-            FAILED_LOGINS.setdefault(key, []).append(now)
-        _sweep_login_buckets(now)
+def _reserve_reauthentication(current_user, field):
+    """Reserve an attempt in the sign-in buckets for a signed-in re-check.
+
+    totp_disable, totp_confirm_enrol and delete_account each ask for a secret
+    again, and none of them was limited. They are the doors a borrowed
+    session uses, and the second factor exists precisely for that case: six
+    digits fall to ~333,000 guesses, which a scripted socket gets through in
+    minutes when nothing counts them. They now draw on the same account and
+    address buckets as sign-in, so guesses split between the doors still add
+    up to one limit.
+
+    Returns a context to pass to _release_login_attempt on success, or None
+    after telling the client to wait.
+    """
+    username, address = current_user.get('username'), _client_address()
+    wait, reservation = _reserve_login_attempt(username, address)
+    if wait:
+        emit('settings_error', {
+            'field': field,
+            'error': f'Too many failed attempts. Try again in {max(wait // 60, 1)} minute(s).',
+        }, to=request.sid)
+        return None
+    return username, address, reservation
 
 
 def _clear_failed_logins(username, address):
@@ -1333,9 +1350,13 @@ def handle_totp_confirm_enrol(data):
         emit('settings_error', {'field': 'totp', 'error': 'Setup timed out. Start again.'}, to=request.sid)
         return
 
+    attempt = _reserve_reauthentication(current_user, 'totp')
+    if attempt is None:
+        return
     if not verify_totp_code(pending['secret'], data.get('code'), current_user['id']):
         emit('settings_error', {'field': 'totp', 'error': 'That code did not match. Check your authenticator.'}, to=request.sid)
         return
+    _release_login_attempt(*attempt)
 
     chat_room.set_totp_secret(current_user['id'], pending['secret'])
     PENDING_TOTP_ENROLMENT.pop(request.sid, None)
@@ -1356,9 +1377,13 @@ def handle_totp_disable(data):
         emit('totp_state', {'enabled': False}, to=request.sid)
         return
 
+    attempt = _reserve_reauthentication(current_user, 'totp')
+    if attempt is None:
+        return
     if not verify_totp_code(secret, data.get('code'), current_user['id']):
         emit('settings_error', {'field': 'totp', 'error': 'Enter a current code to turn two-factor off.'}, to=request.sid)
         return
+    _release_login_attempt(*attempt)
 
     chat_room.set_totp_secret(current_user['id'], '')
     emit('totp_state', {'enabled': False}, to=request.sid)
@@ -2133,10 +2158,14 @@ def handle_delete_account(data):
 
     user_id = current_user['id']
 
+    attempt = _reserve_reauthentication(current_user, 'delete_account')
+    if attempt is None:
+        return
     ok, error = _confirm_identity(current_user, data)
     if not ok:
         emit('settings_error', {'field': 'delete_account', 'error': error}, to=request.sid)
         return
+    _release_login_attempt(*attempt)
 
     # count_admins(exclude_user_id=...) has existed since the admin panel was
     # built and was never called anywhere. The rank rules stop an admin being

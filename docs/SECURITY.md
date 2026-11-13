@@ -85,6 +85,7 @@ limitation rather than glossed over.
 | TOTP second factor (RFC 6238) | `auth/totp.py` | `test_auth.py` |
 | Secrets collected in a masked in-app dialog, never `window.prompt()` | `chat.js`, `askSecret` | `test_secret_prompts.py`, `tests/js/secret-prompt.test.mjs` |
 | Wrong TOTP codes counted against the **account and address**, not the socket | `routes.py`, `handle_verify_totp` | `test_auth.py` |
+| Re-authentication (`totp_disable`, `totp_confirm_enrol`, `delete_account`) draws on the **same** sign-in buckets; past the limit a correct secret is refused until the window passes | `routes.py`, `_reserve_reauthentication` | `test_auth.py` |
 | Account requests capped at 5 per address per 10 minutes, checked **before** the hash | `routes.py`, `_register_rate_limited` | `test_auth.py` |
 | Firebase ID tokens verified by the Admin SDK | `auth/firebase_auth.py` | `test_auth.py` |
 | Firebase accounts keyed on **UID only, never email** | `claims_to_identity` | `test_firebase_account_never_matched_on_email_alone` |
