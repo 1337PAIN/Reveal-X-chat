@@ -285,8 +285,13 @@ Without the key they are stored as before, recoverably. The key lives in the
 environment next to the app, so this protects copies of the database (backups,
 dumps, snapshots), not a compromised server. There is no key rotation yet.
 
-**Denial of service generally.** There is no global rate limit, no request size
-throttling beyond `MAX_CONTENT_LENGTH = 8 MB`, and one worker process.
+**Denial of service generally.** Sending is limited per user by token buckets
+(`SEND_LIMITS` in `routes.py`): text and group posts 30 at once then one a
+second, voice 10 then one every 6 s, images 5 then one every 15 s, checked
+before an image is decoded (`tests/test_send_limits.py`). Before this, one
+signed-in socket could loop sends without limit. Beyond that there is no global
+rate limit, no request size throttling beyond `MAX_CONTENT_LENGTH = 8 MB`, and
+one worker process; like the other limits, the buckets are in-process.
 
 **A malicious administrator.** An admin can reset passwords and disable
 accounts. They cannot read messages — those are E2EE and the keys never leave

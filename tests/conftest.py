@@ -14,6 +14,15 @@ from app import app as flask_app  # noqa: E402
 from app.models import chat_room  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _fresh_send_buckets():
+    """The send limiter is per process; start every test with full buckets."""
+    from app import routes
+    routes.SEND_BUCKETS.clear()
+    yield
+    routes.SEND_BUCKETS.clear()
+
+
 @pytest.fixture
 def store(tmp_path):
     """Point the singleton ChatRoom at a throwaway database and share folder."""

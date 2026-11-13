@@ -152,6 +152,12 @@ check the code at all.
 | `delete_message` | `message_id` | `message_deleted` |
 | `revoke_share` | `message_id` | `share_revoked` |
 
+Sends are rate limited per user: `send_message` and `group_send` share a
+bucket of 30 that refills at one a second, `send_voice` has 10 refilling every
+6 seconds, `send_image` 5 refilling every 15 seconds. An empty bucket answers
+`message_error` / `image_error` / `group_error` with "You are sending too
+fast".
+
 `encrypted` + `iv` mean the body is AES-GCM ciphertext the server cannot read.
 An encrypted send must also carry `v: 2` and `msg_uuid`, a lowercase RFC 4122
 UUID. Both are stored and handed back in `extra` unchanged, because the

@@ -141,6 +141,46 @@ def _client_address():
     return request.remote_addr or 'unknown'
 
 
+#: Per-user token buckets for the send paths: (burst, tokens per second).
+#:
+#: Sign-in, registration and the lab were limited and sending was not, so one
+#: signed-in socket could loop send_message and fill the database and every
+#: recipient's screen. send_image is worse -- each one decodes, splits, writes
+#: a file and runs the detector, on a server with one worker. A bucket allows
+#: a burst for ordinary use and refills steadily, so a person never notices it
+#: and a loop runs dry within seconds. In-process, like the other limits.
+SEND_LIMITS = {
+    'message': (30, 1.0),       # 30 at once, then one a second
+    'voice': (10, 1 / 6),       # 10 at once, then one every 6 s
+    'image': (5, 1 / 15),       # 5 at once, then one every 15 s
+}
+SEND_BUCKETS = {}               # (user_id, kind) -> (tokens, last refill)
+SEND_BUCKETS_LOCK = threading.Lock()
+SEND_TOO_FAST = 'You are sending too fast. Wait a moment and try again.'
+_send_clock = time.monotonic
+
+
+def _take_send_token(user_id, kind):
+    """Spend one token from this user's bucket. False when it is empty."""
+    capacity, rate = SEND_LIMITS[kind]
+    now = _send_clock()
+    key = (user_id, kind)
+    with SEND_BUCKETS_LOCK:
+        tokens, last = SEND_BUCKETS.get(key, (float(capacity), now))
+        tokens = min(float(capacity), tokens + (now - last) * rate)
+        if tokens < 1:
+            SEND_BUCKETS[key] = (tokens, now)
+            return False
+        SEND_BUCKETS[key] = (tokens - 1, now)
+        # A full bucket carries no information, so drop those rather than
+        # let the dict grow with every user who ever sent anything.
+        if len(SEND_BUCKETS) > 4096:
+            for stale in [k for k, (n, t) in SEND_BUCKETS.items()
+                          if n + (now - t) * SEND_LIMITS[k[1]][1] >= SEND_LIMITS[k[1]][0]]:
+                del SEND_BUCKETS[stale]
+        return True
+
+
 def _login_keys(username, address):
     return ('account', (username or '').strip().lower()), ('address', address or 'unknown')
 
@@ -1634,6 +1674,9 @@ def handle_message(data):
 
     if not current_user or not message or not chat_room.is_active_user(recipient_id):
         return
+    if not _take_send_token(current_user['id'], 'message'):
+        emit('message_error', {'error': SEND_TOO_FAST})
+        return
 
     extra = {}
     if encrypted:
@@ -1679,6 +1722,9 @@ def handle_voice(data):
     mime = (data.get('mime') or '').lower().split(';', 1)[0].strip()
 
     if not current_user or not chat_room.is_active_user(recipient_id):
+        return
+    if not _take_send_token(current_user['id'], 'voice'):
+        emit('message_error', {'error': SEND_TOO_FAST})
         return
 
     extra = {}
@@ -1852,6 +1898,10 @@ def handle_image(data):
             return
         if not chat_room.is_active_user(recipient_id):
             emit('image_error', {'error': 'Select a user first'})
+            return
+        # Before any decoding: this is the expensive path.
+        if not _take_send_token(current_user['id'], 'image'):
+            emit('image_error', {'error': SEND_TOO_FAST})
             return
 
         recipient_sessions = chat_room.get_sessions_for_user(recipient_id)
@@ -2135,6 +2185,10 @@ def handle_group_send(data):
         return
     if not chat_room.may_post_to_group(group_id, user['id']):
         emit('group_error', {'error': 'Only group admins can post here'}, to=request.sid)
+        return
+    # One group post is one text send, however many members it fans out to.
+    if not _take_send_token(user['id'], 'message'):
+        emit('group_error', {'error': SEND_TOO_FAST}, to=request.sid)
         return
 
     payloads = data.get('payloads')
