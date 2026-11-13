@@ -6,6 +6,11 @@ ENV/
 # Python
 __pycache__/
 .pytest_cache/
+# Coverage output. .coverage was committed once and then rewritten by every
+# local run, so it showed up as a change in every diff.
+.coverage
+.coverage.*
+htmlcov/
 *.py[cod]
 *$py.class
 *.so

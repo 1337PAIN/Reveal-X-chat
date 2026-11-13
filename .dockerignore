@@ -38,6 +38,8 @@ scripts
 !README.md
 Reveal-X_FYP*.pdf
 *.pptx
+# The FYP report and deck sources: tens of megabytes the server never reads.
+*.docx
 .vscode
 .idea
 .DS_Store
