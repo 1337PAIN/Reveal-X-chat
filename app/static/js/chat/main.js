@@ -9,7 +9,6 @@
 import './core.js';
 import './basics.js';
 import './session.js';
-import './devices.js';
 import './keys.js';
 import './utils.js';
 import './auth.js';

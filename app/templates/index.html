@@ -215,22 +215,11 @@
         </div>
     </div>
 
-    <!-- Session List Modal -->
-    <div id="sessionListModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="sessionListTitle">
-        <div class="modal-content">
-            <div class="settings-header">
-                <h2 id="sessionListTitle">Active Sessions</h2>
-                <button id="closeSessionListBtn" class="btn-close" type="button">×</button>
-            </div>
-            <div id="sessionsList" class="sessions-list">
-                <!-- Sessions will be populated here -->
-            </div>
-            <div class="modal-actions">
-                <button id="logoutAllDevicesBtn" class="btn btn-danger">Logout All Devices</button>
-                <button id="closeSessionListBtn2" class="btn btn-secondary">Close</button>
-            </div>
-        </div>
-    </div>
+    <!-- There was an "Active Sessions" dialog here. It listed one hard-coded
+         entry and its "Logout All Devices" button did nothing, so it was
+         removed. Rebuild it from real data: the resume-token table
+         (models.issue_resume_token / bump_session_epoch) knows each signed-in
+         device, and bumping the epoch already signs them all out. -->
 
     <!-- Key Management Modal -->
     <div id="keyManagerModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="keyManagerTitle">

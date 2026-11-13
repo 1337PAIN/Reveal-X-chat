@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v32-chat-modules';
+const CACHE_NAME = 'revealx-cache-v33-no-fake-sessions';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -28,7 +28,6 @@ const ASSETS_TO_CACHE = [
     '/static/js/chat/core.js',
     '/static/js/chat/basics.js',
     '/static/js/chat/session.js',
-    '/static/js/chat/devices.js',
     '/static/js/chat/keys.js',
     '/static/js/chat/utils.js',
     '/static/js/chat/auth.js',

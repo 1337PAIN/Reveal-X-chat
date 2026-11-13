@@ -22,9 +22,6 @@ import {
     logoutUser,
 } from './session.js';
 import {
-    openActiveDevicesModal,
-} from './devices.js';
-import {
     openKeyManagerModal,
 } from './keys.js';
 import {
@@ -243,14 +240,9 @@ if (reconstructPanelBtn) {
     });
 }
 
-// Manual E2EE modals links inside sidebar or footer
-const devicesBtn = document.createElement('button');
-devicesBtn.className = 'icon-btn';
-devicesBtn.title = 'Active Devices';
-devicesBtn.innerHTML = '📱';
-devicesBtn.style.marginRight = '8px';
-devicesBtn.addEventListener('click', openActiveDevicesModal);
-
+// Key manager link in the sidebar footer. (A phone button beside it opened a
+// fake "active devices" list; it is gone until it can show real sessions --
+// see the comment in index.html where its dialog used to be.)
 const keysBtn = document.createElement('button');
 keysBtn.className = 'icon-btn';
 keysBtn.title = 'E2EE Keys';
@@ -260,7 +252,6 @@ keysBtn.addEventListener('click', openKeyManagerModal);
 
 const sidebarFooter = document.querySelector('.sidebar-footer');
 if (sidebarFooter) {
-    sidebarFooter.insertBefore(devicesBtn, sidebarFooter.firstChild);
     sidebarFooter.insertBefore(keysBtn, sidebarFooter.firstChild);
 }
 

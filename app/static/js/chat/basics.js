@@ -105,7 +105,6 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
         late.closeSettings();
         late.closeImagePreview();
-        late.closeActiveDevicesModal();
         late.closeKeyManagerModal();
         const timeoutModal = document.getElementById('sessionTimeoutModal');
         if (timeoutModal) timeoutModal.classList.add('hidden');
