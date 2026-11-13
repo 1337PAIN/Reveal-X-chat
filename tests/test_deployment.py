@@ -173,6 +173,12 @@ def test_render_trusts_the_proxy_for_throttling():
     assert re.search(r'key: REVEALX_TRUST_PROXY\s+value: "true"', read(RENDER))
 
 
+def test_render_names_the_header_its_edge_overwrites():
+    """Render appends to X-Forwarded-For, so trusting it without saying which
+    entry is how a forged left-most value reset every limit."""
+    assert re.search(r'key: REVEALX_CLIENT_IP_HEADER\s+value: "True-Client-IP"', read(RENDER))
+
+
 def test_render_blueprint_carries_no_secrets():
     """Credentials must be `sync: false` (set in the dashboard), never values."""
     render = read(RENDER)

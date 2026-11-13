@@ -414,3 +414,84 @@ def test_parallel_guesses_cannot_outrun_the_account_limit(store, monkeypatch):
         f'{len(calls)} parallel guesses reached the password check; the limit '
         f'is {routes.LOGIN_MAX_ATTEMPTS}'
     )
+
+
+# ----------------------------------------------------------------------
+# Which address is believed behind a proxy
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def lab_clean():
+    routes.LAB_RATE.clear()
+    yield
+    routes.LAB_RATE.clear()
+
+
+def _lab_hit(client, forwarded=None, **headers):
+    if forwarded is not None:
+        headers['X-Forwarded-For'] = forwarded
+    return client.post('/api/lab/features', json={}, headers=headers)
+
+
+def test_rotating_the_left_most_forwarded_entry_does_not_reset_the_limit(
+        client, lab_clean, monkeypatch):
+    """The left-most X-Forwarded-For entry is whatever the client sent.
+
+    Proxies append to the header rather than replacing it, so a client that
+    sends `X-Forwarded-For: 1.2.3.4` arrives as `1.2.3.4, <real address>`.
+    _client_address took the left-most entry, so changing it on every request
+    gave every request a fresh bucket: the lab limit, the login limit and the
+    registration limit all became unlimited for anyone who set one header.
+    """
+    monkeypatch.setenv('REVEALX_TRUST_PROXY', 'true')
+    monkeypatch.delenv('REVEALX_PROXY_HOPS', raising=False)
+    monkeypatch.delenv('REVEALX_CLIENT_IP_HEADER', raising=False)
+
+    statuses = [
+        _lab_hit(client, f'10.66.{i // 250}.{i % 250}, 203.0.113.9').status_code
+        for i in range(routes.LAB_MAX_REQUESTS + 1)
+    ]
+    assert 429 not in statuses[:-1]
+    assert statuses[-1] == 429, 'a forged left-most entry bought a fresh bucket'
+
+
+def test_proxy_hops_selects_the_entry_the_outermost_trusted_proxy_wrote(
+        client, lab_clean, monkeypatch):
+    monkeypatch.setenv('REVEALX_TRUST_PROXY', 'true')
+    monkeypatch.setenv('REVEALX_PROXY_HOPS', '2')
+    monkeypatch.delenv('REVEALX_CLIENT_IP_HEADER', raising=False)
+    with flask_app.test_request_context(
+            headers={'X-Forwarded-For': 'forged, 198.51.100.7, 10.0.0.2'}):
+        assert routes._client_address() == '198.51.100.7'
+    # Fewer entries than hops means the request skipped a proxy we expect;
+    # the header is then not believed at all.
+    with flask_app.test_request_context(
+            headers={'X-Forwarded-For': '198.51.100.7'},
+            environ_base={'REMOTE_ADDR': '192.0.2.1'}):
+        assert routes._client_address() == '192.0.2.1'
+
+
+def test_a_named_client_ip_header_wins_over_forwarded_for(
+        client, lab_clean, monkeypatch):
+    monkeypatch.setenv('REVEALX_TRUST_PROXY', 'true')
+    monkeypatch.setenv('REVEALX_CLIENT_IP_HEADER', 'True-Client-IP')
+    with flask_app.test_request_context(headers={
+            'X-Forwarded-For': 'forged, 203.0.113.9',
+            'True-Client-IP': '198.51.100.20'}):
+        assert routes._client_address() == '198.51.100.20'
+
+    statuses = [
+        _lab_hit(client, f'forged-{i}, 203.0.113.{i % 200}',
+                 **{'True-Client-IP': '198.51.100.20'}).status_code
+        for i in range(routes.LAB_MAX_REQUESTS + 1)
+    ]
+    assert statuses[-1] == 429
+
+
+def test_forwarded_headers_are_ignored_without_trust(client, lab_clean, monkeypatch):
+    monkeypatch.delenv('REVEALX_TRUST_PROXY', raising=False)
+    monkeypatch.setenv('REVEALX_CLIENT_IP_HEADER', 'True-Client-IP')
+    with flask_app.test_request_context(
+            headers={'X-Forwarded-For': '198.51.100.7', 'True-Client-IP': '198.51.100.8'},
+            environ_base={'REMOTE_ADDR': '192.0.2.1'}):
+        assert routes._client_address() == '192.0.2.1'

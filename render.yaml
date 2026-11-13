@@ -38,6 +38,15 @@ services:
       - key: REVEALX_TRUST_PROXY
         value: "true"
 
+      # Which header to believe. Render appends to an incoming X-Forwarded-For
+      # instead of replacing it, so its left-most entry is whatever the client
+      # sent. Cloudflare sits in front of Render and *sets* True-Client-IP,
+      # which a client cannot forge through it. This follows Render support's
+      # recommendation rather than Render's published docs; if Render changes
+      # its edge, check this header still arrives before relying on it.
+      - key: REVEALX_CLIENT_IP_HEADER
+        value: "True-Client-IP"
+
       # The container filesystem is wiped on every deploy. On SQLite that means
       # every account disappears when you push -- a bad surprise mid-demo -- so
       # the database is a managed Postgres instead.

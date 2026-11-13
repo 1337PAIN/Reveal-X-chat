@@ -204,7 +204,9 @@ pip install -r requirements.lock
 | `REVEALX_SHARE_HMAC_KEY` | Key for the per-share integrity tag. Optional: derived one-way from `REVEAL_X_SECRET_KEY` when unset. Set it explicitly in production so the two secrets can be rotated independently |
 | `REVEAL_X_COOKIE_SECURE` | `true` to mark session cookies Secure. Set it whenever you serve over HTTPS |
 | `REVEAL_X_ALLOWED_ORIGINS` | Comma-separated Socket.IO origins. Unset means same-origin only, which is what you want unless the front end is served from elsewhere |
-| `REVEALX_TRUST_PROXY` | `true` only when behind a reverse proxy you control, so `X-Forwarded-For` is believed for login throttling |
+| `REVEALX_TRUST_PROXY` | `true` only when behind a reverse proxy you control, so forwarded headers are believed for throttling |
+| `REVEALX_PROXY_HOPS` | With trust on: how many trusted proxies append to `X-Forwarded-For`. The address used is that many entries **from the right**. Default `1` |
+| `REVEALX_CLIENT_IP_HEADER` | With trust on: a single-value header your edge *overwrites* with the client address (e.g. `True-Client-IP`, `CF-Connecting-IP`). Used in preference to `X-Forwarded-For` when present |
 | `REVEAL_X_FORCE_HTTPS` | `true` to 301-redirect plain HTTP to HTTPS. HSTS is sent whenever `X-Forwarded-Proto: https` arrives, independently of this |
 | `REVEALX_ADMIN_USER` / `REVEALX_ADMIN_PASSWORD` | Bootstraps the superadmin on first start |
 | `DATABASE_URL` | PostgreSQL DSN. Unset uses SQLite |
@@ -214,9 +216,24 @@ pip install -r requirements.lock
 
 Login throttling buckets by client address. Behind a proxy every request appears
 to come from the proxy, so one person failing a password would throttle
-everyone. `REVEALX_TRUST_PROXY=true` makes the app read `X-Forwarded-For`
+everyone. `REVEALX_TRUST_PROXY=true` makes the app read forwarded headers
 instead — but only set it when a proxy you control is in front, because
-otherwise a client can spoof that header and bypass its own throttle.
+otherwise a client can spoof them and bypass its own throttle.
+
+Proxies **append** to `X-Forwarded-For`; they do not replace it. A client that
+sends `X-Forwarded-For: 1.2.3.4` through one proxy arrives as
+`1.2.3.4, <real address>`, so the left-most entry is attacker-chosen. The app
+used to read that entry, which let anyone reset every limit by changing one
+header. It now counts `REVEALX_PROXY_HOPS` entries in from the right:
+
+| In front of the app | Setting |
+| --- | --- |
+| One nginx/Caddy you run | `REVEALX_PROXY_HOPS=1` (default) |
+| Cloudflare → your nginx | `REVEALX_CLIENT_IP_HEADER=CF-Connecting-IP`, or `REVEALX_PROXY_HOPS=2` |
+| Render | `REVEALX_CLIENT_IP_HEADER=True-Client-IP` (set in `render.yaml`) |
+
+If the header has fewer entries than the hop count, the request did not come
+through the proxies you described, and `remote_addr` is used instead.
 
 ## HTTPS
 

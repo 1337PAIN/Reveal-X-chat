@@ -86,9 +86,10 @@ LOGIN_MAX_ATTEMPTS = 8           # per account, within the window
 # of an hour is clearly not a person mistyping -- and the per-account limit is
 # what actually protects an individual account.
 #
-# Note this reads request.remote_addr. Behind a reverse proxy that is the
-# proxy, so every user would share one bucket; trusting X-Forwarded-For is a
-# deployment decision and is deliberately not assumed here.
+# Note this reads request.remote_addr unless REVEALX_TRUST_PROXY is set.
+# Behind a reverse proxy that is the proxy, so every user would share one
+# bucket; trusting forwarded headers is a deployment decision and is
+# deliberately not assumed here. See _client_address.
 LOGIN_IP_MAX_ATTEMPTS = 50
 LOGIN_WINDOW_SECONDS = 15 * 60
 
@@ -97,15 +98,44 @@ def _client_address():
     """The address to throttle against.
 
     request.remote_addr is the proxy when one is in front, which would put
-    every user in a single bucket. X-Forwarded-For fixes that but is trivially
-    spoofable by the client, so trusting it is opt-in: set REVEALX_TRUST_PROXY
-    only when a proxy you control actually sets that header.
+    every user in a single bucket. Trusting forwarded headers fixes that but
+    only behind a proxy you control, so it is opt-in: REVEALX_TRUST_PROXY.
+
+    With trust on, the address comes from, in order:
+
+    1. REVEALX_CLIENT_IP_HEADER, if set and present -- a single-value header
+       the edge *overwrites*, such as True-Client-IP from Cloudflare.
+    2. X-Forwarded-For, counting REVEALX_PROXY_HOPS entries (default 1) in
+       from the right. Each trusted proxy appends the address it received the
+       connection from, so the Nth entry from the right is the one written by
+       the outermost of N trusted proxies.
+
+    This used to take the *left-most* entry, on the reasoning that it is "the
+    original client". It is whatever the client chose to send: proxies append
+    to an incoming X-Forwarded-For rather than replacing it, so a client
+    sending `X-Forwarded-For: 1.2.3.4` arrives as `1.2.3.4, <real address>`.
+    Rotating that value gave every request a fresh bucket, which made the
+    login, registration and lab limits unlimited for anyone setting a header.
     """
-    if os.environ.get('REVEALX_TRUST_PROXY', '').lower() == 'true':
-        forwarded = request.headers.get('X-Forwarded-For', '')
-        if forwarded:
-            # Left-most entry is the original client; the rest are proxies.
-            return forwarded.split(',')[0].strip()
+    if os.environ.get('REVEALX_TRUST_PROXY', '').lower() != 'true':
+        return request.remote_addr or 'unknown'
+
+    named = os.environ.get('REVEALX_CLIENT_IP_HEADER', '').strip()
+    if named:
+        value = request.headers.get(named, '').strip()
+        if value:
+            return value
+
+    try:
+        hops = max(int(os.environ.get('REVEALX_PROXY_HOPS', '1')), 1)
+    except ValueError:
+        hops = 1
+    entries = [e.strip() for e in request.headers.get('X-Forwarded-For', '').split(',')
+               if e.strip()]
+    # Fewer entries than trusted hops means the request did not pass through
+    # the proxies we expect, so nothing in the header can be believed.
+    if len(entries) >= hops:
+        return entries[-hops]
     return request.remote_addr or 'unknown'
 
 
