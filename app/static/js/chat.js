@@ -1891,16 +1891,52 @@ messageInput.addEventListener('input', () => {
     }, 1000);
 });
 
+// Conversations in which the user agreed to send unencrypted, this tab only.
+// A reload or sign-out asks again.
+const plaintextConsent = new Set();
+
+/**
+ * Decide how a message to `recipientId` may be sent, asking the user when the
+ * policy needs consent. Returns 'encrypt', 'plaintext', or null for "do not
+ * send". The rules themselves are in send-policy.js.
+ *
+ * The pin is checked here, at send time, rather than from a cached flag: the
+ * key could have changed since the user list was last rendered.
+ */
+async function decideHowToSend(recipientId) {
+    const pin = await checkPeerPin(recipientId);
+    const decision = window.revealxSendPolicy.decideSend({
+        e2eeReady: window.revealxE2EE.isReady(),
+        peerHasKey: Boolean(peerPublicKey(recipientId)),
+        pinStatus: pin.status,
+        plaintextConfirmed: plaintextConsent.has(recipientId),
+    });
+
+    if (decision.action === 'blocked') {
+        openSafetyChangeDialog(recipientId);
+        return null;
+    }
+    if (decision.action === 'confirm-plaintext') {
+        const user = state.users.find(u => u.id === recipientId);
+        const why = decision.reason === 'peer-has-no-key'
+            ? `${user ? user.username : 'This contact'} has not set up encryption yet`
+            : 'This browser cannot encrypt messages (it needs HTTPS and Web Crypto)';
+        const agreed = confirm(
+            `${why}, so messages in this conversation would be sent unencrypted ` +
+            'and the server could read them.\n\nSend unencrypted messages here?');
+        if (!agreed) return null;
+        plaintextConsent.add(recipientId);
+        return 'plaintext';
+    }
+    return decision.action;
+}
+
 async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || !state.selectedRecipientId) return;
 
-    // Checked at send time, against the pin itself, not a cached flag: the
-    // key could have changed since the list was last rendered.
-    if ((await checkPeerPin(state.selectedRecipientId)).status === 'changed') {
-        openSafetyChangeDialog(state.selectedRecipientId);
-        return;
-    }
+    const mode = await decideHowToSend(state.selectedRecipientId);
+    if (!mode) return;
 
     if (text.length > MAX_MESSAGE_LENGTH) {
         alert(`Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`);
@@ -1940,28 +1976,32 @@ async function sendMessage() {
     const recipientId = state.selectedRecipientId;
     messageInput.value = '';
 
-    // Encrypt whenever the peer has published a key. If they have not, the
-    // message goes out in plaintext and is labelled as such rather than
-    // pretending to be protected.
-    const peerKey = peerPublicKey(recipientId);
     let payload = { recipient_id: recipientId, message: text };
 
-    if (peerKey) {
+    if (mode === 'encrypt') {
+        // This used to catch an encryption error, log it, and send the
+        // message in plaintext anyway. A failure here now stops the send and
+        // gives the text back; see send-policy.js.
+        let sealed;
         try {
-            const sealed = await window.revealxE2EE.encrypt(peerKey, text, { recipientId });
-            if (sealed) {
-                payload = {
-                    recipient_id: recipientId,
-                    message: sealed.ciphertext,
-                    iv: sealed.iv,
-                    encrypted: true,
-                    v: sealed.v,
-                    msg_uuid: sealed.msg_uuid,
-                };
-            }
+            sealed = await window.revealxE2EE.encrypt(peerPublicKey(recipientId), text, { recipientId });
         } catch (error) {
-            console.error('Encryption failed, sending in plaintext', error);
+            sealed = error;
         }
+        if (window.revealxSendPolicy.afterEncrypt(sealed).action !== 'send') {
+            console.error('Encryption failed; the message was not sent', sealed);
+            messageInput.value = text;
+            showTransientError('The message could not be encrypted, so it was not sent.');
+            return;
+        }
+        payload = {
+            recipient_id: recipientId,
+            message: sealed.ciphertext,
+            iv: sealed.iv,
+            encrypted: true,
+            v: sealed.v,
+            msg_uuid: sealed.msg_uuid,
+        };
     }
 
     socket.emit('send_message', payload);
@@ -2205,34 +2245,36 @@ async function sendVoiceMessage(blob, recipientId) {
         return;
     }
 
-    if ((await checkPeerPin(recipientId)).status === 'changed') {
-        openSafetyChangeDialog(recipientId);
-        return;
-    }
+    const mode = await decideHowToSend(recipientId);
+    if (!mode) return;
 
-    // Encrypt to the same derived key as text when the peer has published one.
-    const peerKey = peerPublicKey(recipientId);
     const mime = (blob.type || 'audio/webm').split(';')[0];
 
-    if (peerKey) {
+    if (mode === 'encrypt') {
+        // As for text: a failure stops the send rather than falling back to
+        // an unencrypted recording, which is what this used to do.
+        let sealed;
         try {
-            const sealed = await window.revealxE2EE.encryptBytes(
-                peerKey, await blob.arrayBuffer(), { recipientId });
-            if (sealed) {
-                socket.emit('send_voice', {
-                    recipient_id: recipientId,
-                    audio: sealed.ciphertext,
-                    iv: sealed.iv,
-                    mime,
-                    encrypted: true,
-                    v: sealed.v,
-                    msg_uuid: sealed.msg_uuid,
-                });
-                return;
-            }
+            sealed = await window.revealxE2EE.encryptBytes(
+                peerPublicKey(recipientId), await blob.arrayBuffer(), { recipientId });
         } catch (error) {
-            console.error('Voice encryption failed, sending in plaintext', error);
+            sealed = error;
         }
+        if (window.revealxSendPolicy.afterEncrypt(sealed).action !== 'send') {
+            console.error('Voice encryption failed; the recording was not sent', sealed);
+            showTransientError('The voice message could not be encrypted, so it was not sent.');
+            return;
+        }
+        socket.emit('send_voice', {
+            recipient_id: recipientId,
+            audio: sealed.ciphertext,
+            iv: sealed.iv,
+            mime,
+            encrypted: true,
+            v: sealed.v,
+            msg_uuid: sealed.msg_uuid,
+        });
+        return;
     }
 
     socket.emit('send_voice', {

@@ -208,7 +208,7 @@ Text messages and voice notes are encrypted in the browser before they reach the
 - Every message carries `v: 2` and a random `msg_uuid`. Because the sender, recipient and uuid are authenticated, the server cannot hand Alice's own message back to her as though Bob wrote it (one key per direction stops that), attribute it to another conversation, or deliver it twice unnoticed: it refuses a reused `msg_uuid`, and the client refuses to show a second row carrying one. Version 1 rows (one key for both directions, no additional data) still decrypt until they expire; new v1 sends are refused.
 - The server stores ciphertext and the IV. It cannot read message contents, so reply previews and notifications show `Encrypted message` / `Voice message` rather than the body.
 - Voice notes take the same path: the recording is encrypted as raw bytes, and the server stores base64 ciphertext plus the IV and the container type (`audio/webm`, `audio/wav`, …). The recipient decrypts to a `Blob` and plays it from an object URL — the audio never exists in the clear on the server.
-- If a peer has not published a key yet, the message is sent in plaintext and is **labelled `[not encrypted]`** in the UI. The padlock badge appears only on messages that were genuinely encrypted.
+- **No silent plaintext.** If encryption fails, the message is not sent and the text is given back; it used to be logged and sent in plaintext. If a peer has not published a key yet (or this browser cannot encrypt), the app asks once per conversation before sending unencrypted, and such messages are **labelled `[not encrypted]`**. The padlock badge appears only on messages that were genuinely encrypted. The rules are one pure function, `send-policy.js`, tested on its own.
 - **Key pinning and safety numbers.** The first public key seen for each contact is pinned in IndexedDB. If the server later hands out a different one, sending to that contact stops and a **Safety number changed** dialog asks for an explicit decision; nothing is adopted silently. The key manager shows a 60-digit safety number per contact, computed from both keys so both people see the same number, with a **Mark as verified** toggle that is cleared if the key ever changes. It replaces an 8-byte fingerprint of one key.
 
 **Limitation:** the private key is per-browser. Signing in from a different browser generates a new key pair, and messages encrypted to the previous key cannot be opened. Since messages expire after an hour, the practical impact is bounded.
@@ -484,8 +484,8 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 512 server tests
-node --test "tests/js/*.test.mjs"   # 87 browser tests
+pytest                          # 519 server tests
+node --test "tests/js/*.test.mjs"   # 95 browser tests
 ```
 
 Both run on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
@@ -494,11 +494,11 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**512 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
+**519 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image-sharing handler itself -- that Share 1 XOR Share 2 returns the original bit for bit, that neither share alone correlates with it, that the sender never receives Share 2 or the capability token, and that the recorded HMAC covers the bytes on disk rather than the array in memory.
 
-**87 browser tests** run the shipped `app/static/js` files verbatim on Node's
+**95 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
-They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v2 reflection, associated-data and downgrade cases; key pinning and the safety number; and the shipped v1 client as a fixture, so old rows are proven to still decrypt), the escaping layer, and the service worker's request scoping.
+They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v2 reflection, associated-data and downgrade cases; key pinning and the safety number; the send policy that decides when plaintext is allowed; and the shipped v1 client as a fixture, so old rows are proven to still decrypt), the escaping layer, and the service worker's request scoping.
 
 ### Feature parity (M2)
 

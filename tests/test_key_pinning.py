@@ -28,10 +28,14 @@ def body_of(signature):
 ])
 def test_sending_checks_the_pin_before_encrypting(signature, encrypt_call):
     body = body_of(signature)
-    check = body.index("checkPeerPin(")
-    assert "=== 'changed'" in body[check:check + 200]
-    assert 'openSafetyChangeDialog(' in body[check:check + 300]
-    assert check < body.index(encrypt_call), 'the pin is checked after encrypting'
+    decide = body.index('await decideHowToSend(')
+    assert 'if (!mode) return;' in body[decide:decide + 120]
+    assert decide < body.index(encrypt_call), 'the pin is checked after encrypting'
+
+    helper = body_of('async function decideHowToSend(')
+    assert 'checkPeerPin(' in helper and 'pinStatus: pin.status' in helper
+    blocked = helper.index("decision.action === 'blocked'")
+    assert 'openSafetyChangeDialog(' in helper[blocked:blocked + 120]
 
 
 def test_the_change_dialog_exists_and_needs_an_explicit_choice():

@@ -204,6 +204,14 @@ place. A replay of a message that has already expired, or that the client has
 not loaded in the same tab, is not caught. v1 had none of this: one key for
 both directions and no associated data.
 
+**Plaintext is never a fallback.** Both send paths used to catch an encryption
+error, log it, and send the message unencrypted. A failure now stops the send;
+a peer with no key, or a browser without Web Crypto, needs the user's explicit
+consent for that conversation before anything is sent in the clear
+(`send-policy.js`, `tests/js/send-policy.test.mjs`,
+`tests/test_send_policy_wiring.py`). Consent lasts for the tab, so a reload
+asks again. It cannot stop the user agreeing; it stops it happening unseen.
+
 **Key substitution is caught after first contact, not before it.** The server
 distributes public keys, so it could hand Alice a key it holds instead of
 Bob's. Each browser pins the first key it sees per contact and blocks sending
