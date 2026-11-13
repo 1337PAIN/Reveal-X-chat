@@ -23,6 +23,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from app import state
 from app.timeutil import utcnow
 
 try:
@@ -190,8 +191,6 @@ class ChatRoom:
         )
 
         self._setup_connection_pool()
-        self.sessions = {}  # {session_id: user dict}
-        self.user_sessions = {}  # {user_id: set(session_id)}
         self._db_dir_ready = False
         self.init_db()
 
@@ -523,28 +522,52 @@ class ChatRoom:
             'last_seen': row['last_seen'],
         }, None
 
+    # ------------------------------------------------------------------
+    # Live sessions: which socket belongs to which signed-in user. Held in
+    # app.state, so with REVEALX_REDIS_URL every worker sees every session.
+    # ------------------------------------------------------------------
+
+    @property
+    def sessions(self):
+        """{sid: user} -- the live table in memory mode, a snapshot otherwise."""
+        store = state.store()
+        return store.sessions if store.kind == 'memory' else dict(store.all_sessions())
+
+    @sessions.setter
+    def sessions(self, value):
+        store = state.store()
+        if store.kind == 'memory':
+            store.sessions = value
+        elif not value:
+            store.sessions_reset()
+
+    @property
+    def user_sessions(self):
+        store = state.store()
+        if store.kind == 'memory':
+            return store.user_sessions
+        return {uid: set(store.user_sids(uid)) for uid in store.online_user_ids()}
+
+    @user_sessions.setter
+    def user_sessions(self, value):
+        store = state.store()
+        if store.kind == 'memory':
+            store.user_sessions = value
+
+    def all_sessions(self):
+        return state.store().all_sessions()
+
     def add_user(self, session_id, user):
-        if session_id in self.sessions:
-            self.remove_user(session_id)
-        self.sessions[session_id] = user
-        self.user_sessions.setdefault(user['id'], set()).add(session_id)
+        state.store().session_add(session_id, user)
 
     def remove_user(self, session_id):
-        user = self.sessions.pop(session_id, None)
-        if not user:
-            return None
-
-        sessions = self.user_sessions.get(user['id'])
-        if sessions:
-            sessions.discard(session_id)
-            if not sessions:
-                self.update_last_seen(user['id'])
-                del self.user_sessions[user['id']]
-
+        user, last = state.store().session_remove(session_id)
+        if user and last:
+            self.update_last_seen(user['id'])
         return user
 
     def get_session_user(self, session_id):
-        return self.sessions.get(session_id)
+        return state.store().session_get(session_id)
 
     def get_user(self, user_id):
         with self._connect() as db:
@@ -594,13 +617,14 @@ class ChatRoom:
                 FROM users WHERE account_state = 'active' ORDER BY LOWER(username)
             """).fetchall()
 
+        online_ids = state.store().online_user_ids()
         users = []
         for row in rows:
             if row['id'] == current_user_id:
                 continue
             if not viewer_is_admin and self.role_rank(row['role']) >= 1:
                 continue
-            online = row['id'] in self.user_sessions
+            online = row['id'] in online_ids
             users.append({
                 'id': row['id'],
                 'username': row['username'],
@@ -778,9 +802,7 @@ class ChatRoom:
 
         # Keep any live sessions in step so the header and outgoing messages
         # do not keep showing the old name until reload.
-        for session_user in self.sessions.values():
-            if session_user['id'] == user_id:
-                session_user['username'] = new_username
+        state.store().session_update_user(user_id, username=new_username)
 
         return self.get_user(user_id), None
 
@@ -797,9 +819,7 @@ class ChatRoom:
             status = 'online'
         with self._connect() as db:
             db.execute("UPDATE users SET status = ? WHERE id = ?", (status, user_id))
-        for session_user in self.sessions.values():
-            if session_user['id'] == user_id:
-                session_user['status'] = status
+        state.store().session_update_user(user_id, status=status)
         return status
 
     def update_profile_image(self, user_id, profile_image):
@@ -1068,7 +1088,7 @@ class ChatRoom:
             )
 
     def get_sessions_for_user(self, user_id):
-        return list(self.user_sessions.get(user_id, set()))
+        return state.store().user_sids(user_id)
 
     # ------------------------------------------------------------------
     # Deletion
@@ -1342,6 +1362,7 @@ class ChatRoom:
                     LOWER(username)
             """).fetchall()
 
+        online_ids = state.store().online_user_ids()
         accounts = []
         for row in rows:
             accounts.append({
@@ -1353,7 +1374,7 @@ class ChatRoom:
                 'auth_provider': row['auth_provider'] or 'password',
                 'totp_enabled': bool(row['totp_secret']),
                 'profile_image': row['profile_image'] or '',
-                'online': row['id'] in self.user_sessions,
+                'online': row['id'] in online_ids,
                 'last_seen': row['last_seen'],
                 'created_at': row['created_at'],
             })

@@ -167,18 +167,35 @@ that connects and then silently drops messages, intermittently, under load only.
 Concurrency therefore comes from threads, not processes. `--threads 100` on one
 worker handles far more concurrent chat clients than this project will see.
 
-To genuinely scale past one process you need a message queue so the workers
-share state:
+### Running more than one worker
 
-```bash
-pip install redis
-# app/__init__.py
-socketio = SocketIO(app, message_queue='redis://localhost:6379/0', ...)
-```
+One worker is still the default and still enough for an FYP demo or a
+class-sized deployment. To run more, three things have to hold at once:
 
-That is a real change with real failure modes, and it is not needed for an FYP
-demo or a class-sized deployment. It is written down here so the single-worker
-constraint reads as a decision rather than an oversight.
+1. **Shared state.** Set `REVEALX_REDIS_URL` (for example
+   `redis://localhost:6379/0`). The login, registration, lab and send limits,
+   the TOTP replay cache, and the table of which socket belongs to which user
+   then live in Redis (`app/state.py`, `RedisStore`). Without it each worker
+   keeps its own: N workers allow N times the login attempts, a TOTP code can
+   be used once per worker, and a user is "online" only on the worker their
+   socket landed on.
+2. **A shared message queue.** The same setting passes `message_queue` to
+   Flask-SocketIO, so an emit to a socket held by another worker reaches it.
+3. **Sticky sessions.** Socket.IO's polling transport sends a client's
+   requests one after another, and every one must reach the worker that holds
+   that socket. Configure the load balancer for sticky sessions (nginx
+   `ip_hash`, or a cookie), or restrict clients to the WebSocket transport.
+
+Then raise `--workers` in the Procfile command. Two limits remain, stated
+plainly:
+- Half-finished TOTP sign-ins and enrolments stay per process. With sticky
+  sessions that is correct, since only that worker can see the socket.
+- If a worker dies, its sessions stay listed in Redis until those users sign
+  out or reconnect, so they can appear online for a while.
+
+`tests/test_state.py` holds the Redis store to the same contract as the
+in-memory one (against fakeredis), including 30 parallel login attempts
+against a limit of 8.
 
 ## Transports
 
@@ -201,6 +218,7 @@ pip install -r requirements.lock
 | --- | --- |
 | `PORT` | Listen port (default 5000) |
 | `REVEAL_X_SECRET_KEY` | Flask session signing key, and the fallback the share-integrity key is derived from. **Set this.** Without it a fresh random key is generated per start, so sessions do not survive a restart — and neither do share HMAC tags, which makes every share stored before the restart report as *tampered* |
+| `REVEALX_REDIS_URL` | Unset (default): limits, the TOTP replay cache and the session table are kept in memory, which is right for one worker. Set it to a Redis URL to share them between workers and turn on the Socket.IO message queue; see *Running more than one worker* |
 | `REVEALX_SWEEPER` | `off` disables the background retention sweep (every 60 s). Leave it on: expiry otherwise happens only when someone uses the app |
 | `REVEALX_LOG_LEVEL` | App log level on stderr (`DEBUG`, `INFO`, `WARNING`, ...). Default `INFO`; `DEBUG` adds a line per socket connect and disconnect. The audit log (stdout, one JSON object per line) is not affected |
 | `REVEALX_DATA_KEY` | 32 random bytes, base64. Encrypts TOTP secrets at rest; existing ones are migrated on the next start. **Keep it**: once set, starting without it (or with a different one) is refused, because the stored secrets could no longer be read. Generate with `python -c "import secrets,base64;print(base64.b64encode(secrets.token_bytes(32)).decode())"` |

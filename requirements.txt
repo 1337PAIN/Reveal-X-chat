@@ -37,6 +37,10 @@ Pillow==13.0.0
 gunicorn==26.2.0
 argon2-cffi==25.1.0
 psycopg2-binary==2.9.13
+# Shared state and the Socket.IO message queue for running more than one
+# worker (REVEALX_REDIS_URL, see app/state.py). Imported only when that is set,
+# but pinned here so the lock and the audit cover it.
+redis==5.2.1
 # 42.0.5 carried seven advisories; 50.0.0 was the first release clear of all
 # of them. Re-checked with `python -m pip_audit -r requirements.txt`.
 cryptography==50.0.2

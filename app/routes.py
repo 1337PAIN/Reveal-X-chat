@@ -21,7 +21,7 @@ from app import app, socketio
 from app.models import FORBIDDEN_EXTRA_KEYS, chat_room
 from app.timeutil import utcnow
 from app.log import audit as audit_log, log
-from app import sweeper
+from app import state, sweeper
 from app.vc_core import VisualCryptography, VCReconstructor
 from app.ai_security import (
     TamperDetector,
@@ -95,11 +95,11 @@ PENDING_TOTP_ENROLMENT = {}
 # Two buckets, because either alone is easy to sidestep. Per-account stops
 # someone grinding one password list against one victim; per-address stops
 # spraying one common password across many accounts. Both are needed.
-FAILED_LOGINS = {}
-# The server runs 100 threads, so every read-modify-write of FAILED_LOGINS
-# happens under this lock. See _reserve_login_attempt for what went wrong
-# without it.
-FAILED_LOGINS_LOCK = threading.Lock()
+#
+# Held in app.state (shared between workers when REVEALX_REDIS_URL is set);
+# every check-and-count there is one atomic step. FAILED_LOGINS is the
+# in-memory table itself, kept addressable for the tests.
+FAILED_LOGINS = state.store().window('login') if state.store().kind == 'memory' else {}
 LOGIN_MAX_ATTEMPTS = 8           # per account, within the window
 # Per address, across all accounts. Deliberately much looser than the per
 # account limit: everyone behind one router, or one lab machine, shares an
@@ -174,8 +174,8 @@ SEND_LIMITS = {
     'voice': (10, 1 / 6),       # 10 at once, then one every 6 s
     'image': (5, 1 / 15),       # 5 at once, then one every 15 s
 }
-SEND_BUCKETS = {}               # (user_id, kind) -> (tokens, last refill)
-SEND_BUCKETS_LOCK = threading.Lock()
+# The in-memory buckets themselves, kept addressable for the tests.
+SEND_BUCKETS = state.store().buckets if state.store().kind == 'memory' else {}
 SEND_TOO_FAST = 'You are sending too fast. Wait a moment and try again.'
 _send_clock = time.monotonic
 
@@ -183,22 +183,7 @@ _send_clock = time.monotonic
 def _take_send_token(user_id, kind):
     """Spend one token from this user's bucket. False when it is empty."""
     capacity, rate = SEND_LIMITS[kind]
-    now = _send_clock()
-    key = (user_id, kind)
-    with SEND_BUCKETS_LOCK:
-        tokens, last = SEND_BUCKETS.get(key, (float(capacity), now))
-        tokens = min(float(capacity), tokens + (now - last) * rate)
-        if tokens < 1:
-            SEND_BUCKETS[key] = (tokens, now)
-            return False
-        SEND_BUCKETS[key] = (tokens - 1, now)
-        # A full bucket carries no information, so drop those rather than
-        # let the dict grow with every user who ever sent anything.
-        if len(SEND_BUCKETS) > 4096:
-            for stale in [k for k, (n, t) in SEND_BUCKETS.items()
-                          if n + (now - t) * SEND_LIMITS[k[1]][1] >= SEND_LIMITS[k[1]][0]]:
-                del SEND_BUCKETS[stale]
-        return True
+    return state.store().take_token((user_id, kind), capacity, rate, _send_clock())
 
 
 def _login_keys(username, address):
@@ -216,27 +201,15 @@ def _login_keys(username, address):
 #: and in-process, so it does not survive a restart and does not coordinate
 #: across workers. The project runs one worker (Socket.IO keeps sessions in
 #: process), so in this deployment that is the whole of it.
-LAB_RATE = {}
+LAB_RATE = state.store().window('lab') if state.store().kind == 'memory' else {}
 LAB_MAX_REQUESTS = 20            # per address, within the window
 LAB_WINDOW_SECONDS = 60
 
 
 def _lab_rate_limited(address):
     """Seconds to wait before this address may call a lab endpoint, or 0."""
-    now = time.time()
-    hits = [t for t in LAB_RATE.get(address, []) if now - t < LAB_WINDOW_SECONDS]
-    LAB_RATE[address] = hits
-    if len(hits) >= LAB_MAX_REQUESTS:
-        return int(LAB_WINDOW_SECONDS - (now - hits[0])) + 1
-    hits.append(now)
-    # Same housekeeping as the login buckets: this dict is only appended to,
-    # so age out dead entries rather than letting it grow without bound.
-    if len(LAB_RATE) > 2048:
-        for key in list(LAB_RATE):
-            LAB_RATE[key] = [t for t in LAB_RATE[key] if now - t < LAB_WINDOW_SECONDS]
-            if not LAB_RATE[key]:
-                del LAB_RATE[key]
-    return 0
+    return state.store().window_reserve('lab', [(address, LAB_MAX_REQUESTS)],
+                                        LAB_WINDOW_SECONDS, time.time())
 
 
 #: Registration is unauthenticated and the first thing it does is hash a
@@ -245,49 +218,26 @@ def _lab_rate_limited(address):
 #: trigger in a loop. The project runs one worker, so a few requests a second
 #: is enough to occupy it completely. This caps the rate; it is not an
 #: authentication control.
-REGISTER_RATE = {}
+REGISTER_RATE = state.store().window('register') if state.store().kind == 'memory' else {}
 REGISTER_MAX_REQUESTS = 5        # per address, within the window
 REGISTER_WINDOW_SECONDS = 600
 
 
 def _register_rate_limited(address):
     """Seconds to wait before this address may request another account, or 0."""
-    now = time.time()
-    hits = [t for t in REGISTER_RATE.get(address, []) if now - t < REGISTER_WINDOW_SECONDS]
-    REGISTER_RATE[address] = hits
-    if len(hits) >= REGISTER_MAX_REQUESTS:
-        return int(REGISTER_WINDOW_SECONDS - (now - hits[0])) + 1
-    hits.append(now)
-    if len(REGISTER_RATE) > 2048:
-        for key in list(REGISTER_RATE):
-            REGISTER_RATE[key] = [t for t in REGISTER_RATE[key]
-                                  if now - t < REGISTER_WINDOW_SECONDS]
-            if not REGISTER_RATE[key]:
-                del REGISTER_RATE[key]
-    return 0
+    return state.store().window_reserve('register', [(address, REGISTER_MAX_REQUESTS)],
+                                        REGISTER_WINDOW_SECONDS, time.time())
 
 
-def _prune_login_bucket(key, now):
-    hits = [t for t in FAILED_LOGINS.get(key, []) if now - t < LOGIN_WINDOW_SECONDS]
-    FAILED_LOGINS[key] = hits
-    return hits
-
-
-def _login_wait_locked(username, address, now):
-    """Seconds to wait, or 0. Caller holds FAILED_LOGINS_LOCK."""
+def _login_limits(username, address):
     account_key, address_key = _login_keys(username, address)
-    for key, limit in ((account_key, LOGIN_MAX_ATTEMPTS),
-                       (address_key, LOGIN_IP_MAX_ATTEMPTS)):
-        hits = _prune_login_bucket(key, now)
-        if len(hits) >= limit:
-            return int(LOGIN_WINDOW_SECONDS - (now - hits[0])) + 1
-    return 0
+    return [(account_key, LOGIN_MAX_ATTEMPTS), (address_key, LOGIN_IP_MAX_ATTEMPTS)]
 
 
 def _login_blocked(username, address):
     """Is either bucket over its limit? Returns seconds to wait, or 0."""
-    with FAILED_LOGINS_LOCK:
-        return _login_wait_locked(username, address, time.time())
+    return state.store().window_wait('login', _login_limits(username, address),
+                                     LOGIN_WINDOW_SECONDS, time.time())
 
 
 def _reserve_login_attempt(username, address):
@@ -304,36 +254,16 @@ def _reserve_login_attempt(username, address):
     Reserving first means guesses in flight count, not only finished ones.
     """
     now = time.time()
-    with FAILED_LOGINS_LOCK:
-        wait = _login_wait_locked(username, address, now)
-        if wait:
-            return wait, None
-        for key in _login_keys(username, address):
-            FAILED_LOGINS.setdefault(key, []).append(now)
-        _sweep_login_buckets(now)
-    return 0, now
+    wait = state.store().window_reserve('login', _login_limits(username, address),
+                                        LOGIN_WINDOW_SECONDS, now)
+    return (wait, None) if wait else (0, now)
 
 
 def _release_login_attempt(username, address, reservation):
     """Hand back a reservation for an attempt that was not a wrong guess."""
     if reservation is None:
         return
-    with FAILED_LOGINS_LOCK:
-        for key in _login_keys(username, address):
-            hits = FAILED_LOGINS.get(key)
-            if hits and reservation in hits:
-                hits.remove(reservation)
-
-
-def _sweep_login_buckets(now):
-    """The dict is only ever appended to, so drop buckets that have aged out
-    rather than growing it forever. Caller holds FAILED_LOGINS_LOCK."""
-    if len(FAILED_LOGINS) > 2048:
-        for key in list(FAILED_LOGINS):
-            FAILED_LOGINS[key] = [t for t in FAILED_LOGINS[key]
-                                  if now - t < LOGIN_WINDOW_SECONDS]
-            if not FAILED_LOGINS[key]:
-                del FAILED_LOGINS[key]
+    state.store().window_remove('login', list(_login_keys(username, address)), reservation)
 
 
 def _reserve_reauthentication(current_user, field):
@@ -362,9 +292,7 @@ def _reserve_reauthentication(current_user, field):
 
 
 def _clear_failed_logins(username, address):
-    with FAILED_LOGINS_LOCK:
-        for key in _login_keys(username, address):
-            FAILED_LOGINS.pop(key, None)
+    state.store().window_clear('login', list(_login_keys(username, address)))
 
 
 def _validate_share1_png(encoded):
@@ -874,7 +802,7 @@ def add_security_headers(response):
 
 def emit_users():
     """Broadcast each connected user their account list with online state."""
-    for session_id, user in list(chat_room.sessions.items()):
+    for session_id, user in chat_room.all_sessions():
         emit('users_updated', {
             'users': chat_room.get_users_list(user['id'])
         }, to=session_id)
@@ -1087,7 +1015,7 @@ def _require_target(actor, target_id):
 
 def _admin_session_ids():
     ids = []
-    for sid, user in list(chat_room.sessions.items()):
+    for sid, user in chat_room.all_sessions():
         if chat_room.is_admin(user['id']):
             ids.append(sid)
     return ids

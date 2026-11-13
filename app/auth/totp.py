@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import base64
 import io
-import threading
-import time
 
 import pyotp
 import qrcode
+
+from app import state
 
 TOTP_ISSUER = 'Reveal-X'
 TOTP_DIGITS = 6
@@ -28,8 +28,10 @@ TOTP_VALID_WINDOW = 1
 # A correct code must not be replayable inside its own window: without this,
 # anyone who observes a code (shoulder-surfing, a logged request) could reuse
 # it for up to 90 seconds. Keyed by (user_id, code).
-_used_codes: dict[tuple[str, str], float] = {}
-_used_lock = threading.Lock()
+#
+# The record of used codes lives in app.state, so that with more than one
+# worker a code accepted by one cannot be accepted again by another.
+REPLAY_HORIZON_SECONDS = TOTP_INTERVAL * (TOTP_VALID_WINDOW + 1)
 
 
 def generate_totp_secret() -> str:
@@ -62,13 +64,6 @@ def totp_qr_data_url(secret: str, account_label: str) -> str:
     return f'data:image/png;base64,{encoded}'
 
 
-def _prune_used(now: float) -> None:
-    horizon = TOTP_INTERVAL * (TOTP_VALID_WINDOW + 1)
-    for key, seen_at in list(_used_codes.items()):
-        if now - seen_at > horizon:
-            _used_codes.pop(key, None)
-
-
 def verify_totp_code(secret: str, code: str, user_id: str = '') -> bool:
     """Check a 6-digit code, rejecting replays of one already accepted."""
     if not secret or not code:
@@ -82,18 +77,9 @@ def verify_totp_code(secret: str, code: str, user_id: str = '') -> bool:
     if not totp.verify(code, valid_window=TOTP_VALID_WINDOW):
         return False
 
-    now = time.time()
-    key = (user_id or secret, code)
-    with _used_lock:
-        _prune_used(now)
-        if key in _used_codes:
-            return False
-        _used_codes[key] = now
-
-    return True
+    return state.store().claim_once(('totp', user_id or secret, code), REPLAY_HORIZON_SECONDS)
 
 
 def reset_replay_cache() -> None:
     """Test hook: forget which codes have been used."""
-    with _used_lock:
-        _used_codes.clear()
+    state.store().clear_claims()

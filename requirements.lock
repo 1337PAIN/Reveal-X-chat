@@ -1,10 +1,12 @@
 # Generated: the fully resolved runtime dependency tree, including
 # transitive packages. Produced on 05 Nov 2026 by installing
-# requirements.txt into a clean virtual environment and freezing it:
+# requirements.txt into a clean virtual environment and freezing it, and
+# regenerated on 14 Nov 2026 for redis, constrained by the previous lock so
+# that nothing else moved:
 #
 #     python -m venv .venv
 #     .venv/Scripts/activate
-#     pip install -r requirements.txt
+#     pip install -r requirements.txt -c requirements.lock
 #     pip freeze > requirements.lock
 #
 # Install this file, not requirements.txt, to reproduce the environment
@@ -67,6 +69,7 @@ PyOTP==2.10.0
 python-engineio==4.15.1
 python-socketio==5.18.1
 qrcode==8.2
+redis==5.2.1
 requests==2.34.2
 scikit-learn==1.9.0
 scipy==1.18.1

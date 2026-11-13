@@ -69,6 +69,11 @@ socketio_options = {
 }
 if app.config['ALLOWED_ORIGINS']:
     socketio_options['cors_allowed_origins'] = app.config['ALLOWED_ORIGINS']
+# With more than one worker, an emit to a socket held by another worker has to
+# travel through a shared queue, and the throttles, replay cache and session
+# table have to be shared too (app/state.py). One setting turns on both.
+if os.environ.get('REVEALX_REDIS_URL', '').strip():
+    socketio_options['message_queue'] = os.environ['REVEALX_REDIS_URL'].strip()
 
 socketio = SocketIO(app, **socketio_options)
 

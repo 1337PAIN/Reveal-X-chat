@@ -8,6 +8,9 @@
 # is what gets deployed; this file is the dev half.
 pytest==9.2.0
 pytest-cov==7.1.0   # pytest --cov=app --cov-report=term-missing
+# An in-process Redis, so tests/test_state.py holds RedisStore to the same
+# contract as MemoryStore without a server.
+fakeredis==2.26.2
 
 # ONNX export toolchain (milestone M2).
 #
