@@ -332,6 +332,10 @@ async function deleteMessage(messageId, isSent) {
     if (!agreed) return;
 
     socket.emit('delete_message', { message_id: messageId });
+    // Focus is on this message's "More actions" button, which goes when the
+    // message does, and focus would fall to <body> -- the next Tab starting
+    // from the top of the page. The composer is where a keyboard user goes on.
+    messageInput.focus();
 }
 
 /**

@@ -270,6 +270,12 @@ Not measured by the script above, but present:
   closes with focus lost -- inside it, or fallen to `<body>` -- hands it back
   to whatever opened it. A dialog that chose its own focus, as the delete
   confirmation does with Cancel, is left alone.
+- **Focus is not dropped when what held it goes away.** After signing in,
+  focus was in the form that had just been hidden; after deleting a message
+  it was on that message's "More actions" button, removed with it. Both
+  times it fell to `<body>` and the next Tab started from the top of the
+  page. Signing in now puts focus on the account search, and deleting puts it
+  on the message box (`tests/test_focus_not_lost.py`).
 - **Nothing empty is drawn as if it were content.** The reconstruction
   previews were `<img src="">` -- a broken-image icon whose alt text a screen
   reader announced -- until something loaded; they are now hidden and replaced

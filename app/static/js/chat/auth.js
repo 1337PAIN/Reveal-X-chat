@@ -212,6 +212,14 @@ socket.on('auth_success', (data) => {
     
     authModal.style.display = 'none';
     if (deleteAccountBtn) deleteAccountBtn.style.display = 'block';
+    // Focus was in the sign-in form, which has just been hidden, so it fell
+    // to <body>. Put it on the account search, the first thing to do next.
+    // Only if focus really was lost: after a resume the user may be typing.
+    const focused = document.activeElement;
+    if (!focused || focused === document.body || authModal.contains(focused)) {
+        const search = document.getElementById('userSearchInput');
+        if (search) search.focus();
+    }
     
     late.updateUsersList(data.users);
     // admin.js registers this; guard so chat still works if it is absent.
