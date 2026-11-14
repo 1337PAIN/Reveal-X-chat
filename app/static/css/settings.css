@@ -701,6 +701,15 @@ body[data-theme="light"] .lock-screen {
 /* The picker is absolutely positioned against the bubble. */
 .message { position: relative; }
 
+/* Each bubble's backdrop-filter makes it a stacking context, so the
+   picker's z-index only counts inside its own bubble. Flipped below a bubble
+   near the top (.below), it was painted under the next bubble and could not
+   be clicked. Lift the bubble that holds an open picker or menu instead. */
+.message:has(> .reaction-picker),
+.message:has(.message-menu:not([hidden])) {
+    z-index: 60;
+}
+
 /* --- Show/hide password ---------------------------------------------------
    The wrapper has to inherit the field's layout role, or wrapping an input
    that was sized by a flex parent collapses it. */

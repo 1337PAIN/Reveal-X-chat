@@ -349,7 +349,11 @@ Not measured by the script above, but present:
   going to "More actions". Focus now moves to the first reaction, Left and
   Right move between them, and a choice or Escape closes it with focus back
   on the button, which says `aria-expanded`
-  (`tests/test_reaction_picker_keyboard.py`).
+  (`tests/test_reaction_picker_keyboard.py`). Flipped below a bubble near
+  the top of the chat, the picker used to be painted under the next bubble
+  (each bubble's `backdrop-filter` makes it its own stacking context) and
+  could not be clicked; the bubble holding an open picker or menu is now
+  lifted above its neighbours (`tests/test_bubble_popovers_on_top.py`).
 - **The contact list works by keyboard.** Each row's clickable part is a
   `<button type="button">` (`contact-row.js`), so Tab reaches it and Enter or
   Space opens the chat; the open chat carries `aria-current="true"`. The rows
