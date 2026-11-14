@@ -992,6 +992,24 @@ body[data-theme="light"] .message-menu-item.danger {
     color: var(--success);
 }
 
+/* The light theme's sent bubble composites to #b5c0f2, where the name
+   (--accent) measured 6.34:1 and the time and status (--text-secondary)
+   6.87:1 -- under AAA's 7:1 at this size. Scoped here so the shared tokens
+   stay as audited everywhere else: 8.03:1 and 7.82:1. */
+body[data-theme="light"] .message.sent .message-username {
+    color: #06302d;
+}
+
+body[data-theme="light"] .message.sent .message-time,
+body[data-theme="light"] .message.sent .message-status {
+    color: #252c3d;
+}
+
+/* "Read" stays green, dark enough for 7.96:1 on the same bubble. */
+body[data-theme="light"] .message.sent[data-read="true"] .message-status {
+    color: #08321a;
+}
+
 .typing-indicator {
     color: var(--text-secondary);
     font-size: 12px;
