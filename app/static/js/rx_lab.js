@@ -448,7 +448,7 @@ function renderResults(data) {
     }
 
     const list = document.getElementById('explanationList');
-    list.innerHTML = '';
+    list.replaceChildren();
     data.ml.explanation.forEach((line) => {
         const li = document.createElement('li');
         li.textContent = line;

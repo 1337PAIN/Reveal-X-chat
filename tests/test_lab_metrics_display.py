@@ -21,3 +21,10 @@ def test_no_metric_is_printed_raw():
 
 def test_the_dashboard_goes_through_the_formatter():
     assert LAB_JS.count('metric(') >= 9
+
+
+def test_the_lab_page_never_uses_innerHTML():
+    # The one use cleared the explanation list (innerHTML = ''); harmless,
+    # but the house rule is none at all, so a future edit cannot slide data
+    # into it. replaceChildren() does the clearing.
+    assert 'innerHTML' not in LAB_JS
