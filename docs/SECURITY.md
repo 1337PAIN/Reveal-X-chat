@@ -245,6 +245,19 @@ localises damage and survives a re-encode. Either alone would be weaker.
   `tests/test_startup_path.py` fails the build if a third-party script or
   stylesheet reappears in any template. Fonts used to come from Google Fonts
   and cdnjs, which told both who opened the app and when.
+- **Every vendored file is a recorded release.** `app/static/vendor/vendor.json`
+  lists each library's npm name, version, source tarball and the sha256 of
+  every file; `tests/test_vendored_assets.py` checks the hashes and that the
+  version banner in each file matches, and `.gitattributes` keeps `vendor/`
+  byte-exact so a Windows checkout hashes the same as CI.
+  `scripts/check_vendored_advisories.py` asks OSV about each release and fails
+  on any advisory; CI runs it on every push and weekly. DOMPurify was 3.0.6,
+  against which OSV lists twenty-three advisories, and is now 3.4.18; checked
+  in a browser, the real library strips `onerror`, `javascript:` URLs, script
+  and iframe tags and the known mutation-XSS shapes, and leaves plain
+  formatting alone. `cleanHTML()` currently has no caller in the app; the
+  one place DOMPurify runs is on an already-escaped username in
+  `chat/render.js`, so it is a second layer there, not the first.
 
 ### Data lifetime
 

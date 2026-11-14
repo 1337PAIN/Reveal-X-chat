@@ -1,0 +1,4 @@
+# Vendored releases are kept byte-for-byte as published, so their sha256 in
+# app/static/vendor/vendor.json is the same on a Windows checkout (core.autocrlf)
+# as on CI. Without this, git rewrote LF to CRLF in two onnxruntime files.
+app/static/vendor/** -text

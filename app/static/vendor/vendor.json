@@ -1,0 +1,109 @@
+{
+  "_comment": "One entry per vendored library: the npm release it came from and the sha256 of each file as served. tests/test_vendored_assets.py checks the hashes and version banners; scripts/check_vendored_advisories.py asks OSV about each release. Upgrade by replacing the files, then updating version, source and sha256 here.",
+  "libraries": [
+    {
+      "npm": "dompurify",
+      "version": "3.4.18",
+      "source": "https://registry.npmjs.org/dompurify/-/dompurify-3.4.18.tgz",
+      "files": [
+        {
+          "path": "dompurify/purify.min.js",
+          "sha256": "8053ee2a6a09f9d50f7fcd6fb7f07072f52c7f3fa9aa12147cab4feaf65ee970",
+          "upstream": "package/dist/purify.min.js"
+        }
+      ]
+    },
+    {
+      "npm": "socket.io-client",
+      "version": "4.5.4",
+      "source": "https://registry.npmjs.org/socket.io-client/-/socket.io-client-4.5.4.tgz",
+      "files": [
+        {
+          "path": "socketio/socket.io.min.js",
+          "sha256": "18a36a927dac54650b18b903f8f8778219e02e13946e581d9b3e1e4995f7435b",
+          "upstream": "package/dist/socket.io.min.js"
+        }
+      ]
+    },
+    {
+      "npm": "onnxruntime-web",
+      "version": "1.19.2",
+      "source": "https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.19.2.tgz",
+      "files": [
+        {
+          "path": "onnxruntime/ort.wasm.min.js",
+          "sha256": "98e831517582c08fc1b729def487a8b0152c83fc641746137eb4c7ad46032f1c",
+          "upstream": "package/dist/ort.wasm.min.js"
+        },
+        {
+          "path": "onnxruntime/ort-wasm-simd-threaded.mjs",
+          "sha256": "d870a377322c3053fb97432d548423f165dd15e2af232947592fc07b0d2f3639",
+          "upstream": "package/dist/ort-wasm-simd-threaded.mjs"
+        },
+        {
+          "path": "onnxruntime/ort-wasm-simd-threaded.wasm",
+          "sha256": "1bf0b9ed7ad025cf9ca88ce6da29e54df3f128a169f8241d71823e81f078d578",
+          "upstream": "package/dist/ort-wasm-simd-threaded.wasm"
+        }
+      ]
+    },
+    {
+      "npm": "@fontsource/inter",
+      "version": "5.0.18",
+      "source": "https://registry.npmjs.org/@fontsource/inter/-/inter-5.0.18.tgz",
+      "files": [
+        {
+          "path": "inter/inter.css",
+          "sha256": "86989e145ca1fda53c69de6536787226f71507e2febf98ce1fd27e363e412a88",
+          "upstream": "package/latin-*.css, package/latin-ext-*.css",
+          "note": "Assembled here from the package's per-weight stylesheets, weights 400-700 only; not byte-identical to any one upstream file."
+        },
+        {
+          "path": "inter/LICENSE",
+          "sha256": "426ef06df3fa0af49e84ec5c89908fa9234a756e6872deeae0016bb1822f0544",
+          "upstream": "package/LICENSE"
+        },
+        {
+          "path": "inter/files/inter-latin-400-normal.woff2",
+          "sha256": "2301bb030a2bcaa9c763cc4771bd717aac16709c29eaba00673fcbe7cdf99a59",
+          "upstream": "package/files/inter-latin-400-normal.woff2"
+        },
+        {
+          "path": "inter/files/inter-latin-500-normal.woff2",
+          "sha256": "eebf14aba456b89b7e899584e076588a92e422a45b37fb5fa36ce17519a3e8c5",
+          "upstream": "package/files/inter-latin-500-normal.woff2"
+        },
+        {
+          "path": "inter/files/inter-latin-600-normal.woff2",
+          "sha256": "3022fadde78fd30c384797bcef8bebc18c96083527a850f62a58d8957a8b208f",
+          "upstream": "package/files/inter-latin-600-normal.woff2"
+        },
+        {
+          "path": "inter/files/inter-latin-700-normal.woff2",
+          "sha256": "7b43cb86a0e63bbb55376b4ea60d8cc9527a1421c367aa09962725e0c5140f5f",
+          "upstream": "package/files/inter-latin-700-normal.woff2"
+        },
+        {
+          "path": "inter/files/inter-latin-ext-400-normal.woff2",
+          "sha256": "56d25f402cc61fdce9234854cfed7454a56640f40b43aea6ecccd2eb8a950863",
+          "upstream": "package/files/inter-latin-ext-400-normal.woff2"
+        },
+        {
+          "path": "inter/files/inter-latin-ext-500-normal.woff2",
+          "sha256": "7e15a0f1fa0b0dc355709d096d44f7a193d13a768d31d4c110bc4f749715da2f",
+          "upstream": "package/files/inter-latin-ext-500-normal.woff2"
+        },
+        {
+          "path": "inter/files/inter-latin-ext-600-normal.woff2",
+          "sha256": "5f70855945ba172e94934e29808f41634939aef0f4f79187f5c802697f6f6507",
+          "upstream": "package/files/inter-latin-ext-600-normal.woff2"
+        },
+        {
+          "path": "inter/files/inter-latin-ext-700-normal.woff2",
+          "sha256": "c17e9995083308c693edea87e048ac5f73b554d88b184eb12570654a4e75d8af",
+          "upstream": "package/files/inter-latin-ext-700-normal.woff2"
+        }
+      ]
+    }
+  ]
+}
