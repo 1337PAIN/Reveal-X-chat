@@ -325,3 +325,26 @@ tbody tr:hover td { background: rgba(255, 255, 255, .04); }
 
     body::before { display: none; }
 }
+
+/* "Run all attacks": the quieter of the two buttons, in the nav links'
+   surface, whose text contrast is already measured. */
+.secondary-btn {
+    margin-top: .6rem;
+    background: var(--panel-2);
+}
+
+#attackTable caption {
+    text-align: left;
+    padding: 0 0 .6rem;
+    color: var(--muted);
+    font-size: .85rem;
+}
+
+/* An attack the HMAC caught and the ML missed. The words say so ("no
+   (missed)"); the rule only draws the eye to the row. */
+#attackTable tr.missed th,
+#attackTable tr.missed td {
+    border-top: 2px solid #fbbf24;
+    border-bottom: 2px solid #fbbf24;
+    font-weight: 700;
+}

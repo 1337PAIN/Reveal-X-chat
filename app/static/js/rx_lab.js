@@ -6,6 +6,7 @@ const statusText = document.getElementById('statusText');
 const attackSelect = document.getElementById('attackSelect');
 const strengthRange = document.getElementById('strengthRange');
 const strengthValue = document.getElementById('strengthValue');
+const runAllBtn = document.getElementById('runAllBtn');
 let selectedDataUrl = '';
 
 const ids = {
@@ -52,9 +53,95 @@ function loadFile(file) {
         sourcePreview.src = selectedDataUrl;
         sourcePreview.style.display = 'block';
         runBtn.disabled = false;
+        if (runAllBtn) runAllBtn.disabled = false;
         statusText.textContent = `${file.name} loaded. Choose attack type and run analysis.`;
     };
     reader.readAsDataURL(file);
+}
+
+/**
+ * One /api/lab/process call. A rate-limit answer (429, "Try again in Ns") is
+ * waited out and retried, so a long run carries on instead of failing
+ * halfway; anything else is thrown.
+ */
+async function processOnce(attack, strength) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const res = await fetch('/api/lab/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: selectedDataUrl, attack, strength }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) return data;
+        const wait = res.status === 429 ? window.revealxLabFormat.retryAfter(data.error) : null;
+        if (wait === null) throw new Error(data.error || 'Processing failed');
+        statusText.textContent = `Waiting ${wait}s for the lab's rate limit...`;
+        await new Promise((resolve) => setTimeout(resolve, (wait + 1) * 1000));
+    }
+    throw new Error('Still rate limited after waiting. Try again in a minute.');
+}
+
+function tableCell(text, header) {
+    const cell = document.createElement(header ? 'th' : 'td');
+    if (header) cell.setAttribute('scope', 'row');
+    cell.textContent = text;
+    return cell;
+}
+
+/**
+ * Every attack on the uploaded image, in the README's order, one request at
+ * a time (the lab allows 20 a minute; seven fit), filling the table as each
+ * comes back. Built with textContent throughout.
+ */
+async function runAllAttacks() {
+    const { ATTACKS, attackRow } = window.revealxLabFormat;
+    const body = document.getElementById('attackTableBody');
+    const note = document.getElementById('attackTableNote');
+    const strength = Number(strengthRange.value) / 100;
+    body.replaceChildren();
+    note.textContent = '';
+    const missed = [];
+    let flaggedByMl = 0;
+    for (const [index, attack] of ATTACKS.entries()) {
+        statusText.textContent = `Running ${index + 1} of ${ATTACKS.length}: ${attack.label}...`;
+        const row = attackRow(attack.label, await processOnce(attack.value, strength));
+        const tr = document.createElement('tr');
+        tr.append(
+            tableCell(row.attack, true),
+            tableCell(row.missedByMl ? 'no (missed)' : row.ml),
+            tableCell(row.hmac),
+            tableCell(row.psnr),
+            tableCell(row.ssim),
+        );
+        if (row.ml === 'yes') flaggedByMl += 1;
+        if (row.missedByMl) {
+            tr.classList.add('missed');
+            missed.push(row.attack);
+        }
+        body.append(tr);
+    }
+    // Only what the rows show: "missed" means the HMAC caught it and the ML
+    // did not; the ML's own count is reported separately.
+    note.textContent = missed.length
+        ? `The ML flagged ${flaggedByMl} of ${ATTACKS.length}; it missed ${missed.join(', ')}, which the HMAC caught.`
+        : `The ML flagged ${flaggedByMl} of ${ATTACKS.length} at this strength.`;
+    statusText.textContent = `All ${ATTACKS.length} attacks done.`;
+}
+
+if (runAllBtn) {
+    runAllBtn.addEventListener('click', async () => {
+        if (!selectedDataUrl) return;
+        runAllBtn.disabled = true;
+        runBtn.disabled = true;
+        try {
+            await runAllAttacks();
+        } catch (error) {
+            statusText.textContent = error.message;
+        } finally {
+            runAllBtn.disabled = !selectedDataUrl;
+            runBtn.disabled = !selectedDataUrl;
+        }
+    });
 }
 
 runBtn.addEventListener('click', async () => {

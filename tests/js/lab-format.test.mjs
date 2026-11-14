@@ -96,3 +96,46 @@ test('the skipped-enhancement caption never compares two equal-looking numbers',
     });
     assert.match(caption, /SSIM 0\.855 against 0\.865/);
 });
+
+// "Run all attacks": the README's table of which attacks the ML and the HMAC
+// catch, reproduced live on the uploaded image. These are its pure parts.
+
+test('the attacks run in the README table\'s order, with its names', () => {
+    assert.deepEqual(fmt.ATTACKS.map((a) => a.label), [
+        'Block replacement', 'Blur region', 'Brightness shift', 'Crop + resize',
+        'Scratch/line', 'JPEG damage', 'Random noise injection',
+    ]);
+    assert.deepEqual(fmt.ATTACKS.map((a) => a.value), [
+        'block', 'blur', 'brightness', 'crop', 'scratch', 'jpeg', 'noise',
+    ]);
+});
+
+test('a row says yes or no for each detector, with rounded quality', () => {
+    const row = fmt.attackRow('Block replacement', {
+        ml: { tampered: true },
+        integrity: { exact_tamper_detected: true },
+        metrics: { reconstructed: { psnr: 14.2611, ssim: 0.8412 } },
+    });
+    assert.deepEqual(row, {
+        attack: 'Block replacement', ml: 'yes', hmac: 'yes',
+        psnr: '14.26 dB', ssim: '0.84', missedByMl: false,
+    });
+});
+
+test('an attack the HMAC catches and the ML does not is marked as missed', () => {
+    // Random noise on a random share changes nothing the features measure.
+    const row = fmt.attackRow('Random noise injection', {
+        ml: { tampered: false },
+        integrity: { exact_tamper_detected: true },
+        metrics: { reconstructed: { psnr: 20, ssim: 0.9 } },
+    });
+    assert.equal(row.ml, 'no');
+    assert.equal(row.hmac, 'yes');
+    assert.equal(row.missedByMl, true);
+});
+
+test('the wait in a rate-limit answer is read back in seconds', () => {
+    assert.equal(fmt.retryAfter('Too many requests. Try again in 12s.'), 12);
+    assert.equal(fmt.retryAfter('Processing failed on the server'), null);
+    assert.equal(fmt.retryAfter(undefined), null);
+});

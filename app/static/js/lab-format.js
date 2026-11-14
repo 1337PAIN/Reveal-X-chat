@@ -64,5 +64,52 @@
         return [metric(a), metric(b)];
     }
 
-    window.revealxLabFormat = { enhancedCaption, metric, metricPair };
+    /**
+     * The seven attacks, in the order and with the names of the README's
+     * "ML detects / HMAC detects" table, which "Run all attacks" reproduces
+     * on the uploaded image. tests/test_lab_run_all.py keeps the two in step.
+     */
+    const ATTACKS = [
+        { value: 'block', label: 'Block replacement' },
+        { value: 'blur', label: 'Blur region' },
+        { value: 'brightness', label: 'Brightness shift' },
+        { value: 'crop', label: 'Crop + resize' },
+        { value: 'scratch', label: 'Scratch/line' },
+        { value: 'jpeg', label: 'JPEG damage' },
+        { value: 'noise', label: 'Random noise injection' },
+    ];
+
+    /**
+     * One row of that table from one /api/lab/process response. An attack the
+     * HMAC catches and the ML does not is flagged: that is the README's point
+     * (random noise on a random share changes nothing the features measure),
+     * and the table should show it, not bury it.
+     */
+    function attackRow(label, data) {
+        const ml = Boolean(data && data.ml && data.ml.tampered);
+        const hmac = Boolean(data && data.integrity && data.integrity.exact_tamper_detected);
+        const quality = (data && data.metrics && data.metrics.reconstructed) || {};
+        return {
+            attack: label,
+            ml: ml ? 'yes' : 'no',
+            hmac: hmac ? 'yes' : 'no',
+            psnr: metric(quality.psnr, 'dB'),
+            ssim: metric(quality.ssim),
+            missedByMl: hmac && !ml,
+        };
+    }
+
+    /**
+     * Seconds to wait, read from the lab's rate-limit answer ("Too many
+     * requests. Try again in 12s."), or null if it is not one. The run waits
+     * that long and carries on rather than failing halfway through the table.
+     */
+    function retryAfter(message) {
+        const match = /Try again in (\d+)s/.exec(String(message || ''));
+        return match ? Number(match[1]) : null;
+    }
+
+    window.revealxLabFormat = {
+        enhancedCaption, metric, metricPair, ATTACKS, attackRow, retryAfter,
+    };
 }());
