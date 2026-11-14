@@ -278,7 +278,9 @@ Not measured by the script above, but present:
   both themes. Each stays `aria-hidden`, the button's `aria-label` carrying
   the name (`icons.js`, `tests/js/icons.test.mjs`, `tests/test_svg_icons.py`).
   Emoji that are part of a status's wording, such as "🔒 Key exchanged",
-  are left as text.
+  are left as text. The dialogs' close buttons draw the same close icon
+  instead of a "×" character; the accounts dialog's used a class no
+  stylesheet defined and showed as an unstyled, black browser button.
 - The offline indicator shows a crossed-out wifi icon, drawn as inline SVG
   and named "Offline". It used to ask Font Awesome for `fa-wifi-slash`,
   which the free set does not have, so it showed an empty box; the library

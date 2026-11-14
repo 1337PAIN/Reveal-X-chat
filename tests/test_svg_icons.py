@@ -84,3 +84,26 @@ def test_script_built_icons_use_the_helper():
 def test_the_helper_loads_first_and_is_precached():
     assert INDEX.index('js/icons.js') < INDEX.index('js/chat/main.js')
     assert "'/static/js/icons.js'" in SW
+
+
+@pytest.mark.parametrize('element_id', [
+    'cancelReplyBtn', 'closePanel', 'closeKeyManagerBtn', 'closeSettingsBtn',
+    'closeAdminBtn', 'totpSetupCloseBtn',
+])
+def test_close_buttons_draw_the_close_icon(element_id):
+    # They were a "×" character (one an &times; entity), drawn in each
+    # dialog's own font size and read as "times" wherever a label slipped.
+    tag = re.search(rf'<button[^>]*\bid="{element_id}"[^>]*>(.*?)</button>', INDEX, re.S)
+    assert tag, element_id
+    assert 'aria-label="' in tag.group(0)
+    body = tag.group(1)
+    assert '<use href="#i-close"' in body
+    assert '×' not in body and '&times;' not in body
+
+
+def test_every_dialog_close_button_is_styled_as_one():
+    # The accounts dialog's used class="close-btn", which no stylesheet
+    # defines: an unstyled browser button, black on the dark dialog.
+    assert 'class="close-btn"' not in INDEX
+    tag = re.search(r'<button[^>]*\bid="closeAdminBtn"[^>]*>', INDEX).group(0)
+    assert 'class="btn-close"' in tag
