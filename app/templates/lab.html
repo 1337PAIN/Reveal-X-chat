@@ -66,6 +66,7 @@
             <!-- All seven attacks on this image, one request at a time, filling
                  the table under "Every attack on this image". -->
             <button id="runAllBtn" class="primary-btn secondary-btn" type="button" disabled>Run all attacks</button>
+            <button id="sweepBtn" class="primary-btn secondary-btn" type="button" disabled>Sweep strength</button>
             <p id="statusText" class="status-text" role="status">Choose an image to begin.</p>
         </section>
 
@@ -108,6 +109,25 @@
             <article class="image-card metric-card"><h3>Model explanation</h3><ul id="explanationList"><li>Run analysis to view reasoning.</li></ul></article>
         </section>
 
+        <section class="metrics-panel" id="sweepSection">
+            <h2>How strength changes the result</h2>
+            <p>Runs the chosen attack at six strengths, from 5% to 75%, and plots how much of the image survives (SSIM of the reconstruction) and how sure the ML is that Share 1 was tampered with.</p>
+            <figure class="sweep-figure">
+                <svg id="sweepChart" class="sweep-chart" role="img" aria-labelledby="sweepSummary" viewBox="0 0 640 280" preserveAspectRatio="xMidYMid meet"></svg>
+                <figcaption id="sweepSummary">Choose an image and an attack, then sweep the strength.</figcaption>
+                <ul class="sweep-legend">
+                    <li><span class="sweep-key sweep-key-ssim" aria-hidden="true"></span>Reconstruction SSIM (solid, circles)</li>
+                    <li><span class="sweep-key sweep-key-ml" aria-hidden="true"></span>ML tamper probability (dashed, squares)</li>
+                </ul>
+            </figure>
+            <div class="table-wrap">
+                <table id="sweepTable">
+                    <caption>The values plotted above</caption>
+                    <thead><tr><th scope="col">Strength</th><th scope="col">SSIM</th><th scope="col">ML tamper probability</th><th scope="col">ML verdict</th></tr></thead>
+                    <tbody id="sweepTableBody"><tr><td colspan="4">No sweep yet.</td></tr></tbody>
+                </table>
+            </div>
+        </section>
         <section class="metrics-panel" id="attackTableSection">
             <h2>Every attack on this image</h2>
             <p>Runs each attack on Share 1 at the strength above and records which check catches it. The README says the HMAC catches all seven and the ML misses random noise, because noise on a random share changes nothing its features measure; this table checks that on your image.</p>

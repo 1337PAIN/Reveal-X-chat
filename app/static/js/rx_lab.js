@@ -7,6 +7,7 @@ const attackSelect = document.getElementById('attackSelect');
 const strengthRange = document.getElementById('strengthRange');
 const strengthValue = document.getElementById('strengthValue');
 const runAllBtn = document.getElementById('runAllBtn');
+const sweepBtn = document.getElementById('sweepBtn');
 let selectedDataUrl = '';
 
 const ids = {
@@ -54,6 +55,7 @@ function loadFile(file) {
         sourcePreview.style.display = 'block';
         runBtn.disabled = false;
         if (runAllBtn) runAllBtn.disabled = false;
+        if (sweepBtn) sweepBtn.disabled = false;
         statusText.textContent = `${file.name} loaded. Choose attack type and run analysis.`;
     };
     reader.readAsDataURL(file);
@@ -126,6 +128,106 @@ async function runAllAttacks() {
         ? `The ML flagged ${flaggedByMl} of ${ATTACKS.length}; it missed ${missed.join(', ')}, which the HMAC caught.`
         : `The ML flagged ${flaggedByMl} of ${ATTACKS.length} at this strength.`;
     statusText.textContent = `All ${ATTACKS.length} attacks done.`;
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(tag, attrs, text) {
+    const el = document.createElementNS(SVG_NS, tag);
+    Object.entries(attrs).forEach(([name, value]) => el.setAttribute(name, String(value)));
+    if (text !== undefined) el.textContent = text;
+    return el;
+}
+
+/**
+ * Draw the sweep from sweepChart()'s geometry: axes, 0/0.5/1 gridlines, a
+ * solid SSIM line with circles and a dashed ML line with squares, so the
+ * two differ by more than colour. Built with createElementNS throughout.
+ */
+function drawSweep(points) {
+    const svg = document.getElementById('sweepChart');
+    // Drawn at the chart's real width, not scaled from a fixed viewBox:
+    // scaled down to a phone, 12px labels came out at about 6px.
+    const width = Math.max(300, Math.round(svg.getBoundingClientRect().width) || 640);
+    const box = { width, height: 280, pad: { top: 16, right: 20, bottom: 40, left: 48 } };
+    svg.setAttribute('viewBox', `0 0 ${width} ${box.height}`);
+    const chart = window.revealxLabFormat.sweepChart(points, box);
+    const bottom = box.height - box.pad.bottom;
+    const right = box.width - box.pad.right;
+    const parts = [];
+    chart.yTicks.forEach((tick) => {
+        parts.push(svgEl('line', { x1: box.pad.left, x2: right, y1: tick.y, y2: tick.y, class: 'sweep-grid' }));
+        parts.push(svgEl('text', { x: box.pad.left - 8, y: tick.y + 4, 'text-anchor': 'end', class: 'sweep-label' }, tick.label));
+    });
+    chart.xTicks.forEach((tick) => {
+        parts.push(svgEl('text', { x: tick.x, y: bottom + 20, 'text-anchor': 'middle', class: 'sweep-label' }, tick.label));
+    });
+    parts.push(svgEl('text', { x: (box.pad.left + right) / 2, y: box.height - 4, 'text-anchor': 'middle', class: 'sweep-label' }, 'Attack strength'));
+    parts.push(svgEl('path', { d: chart.ssimPath, class: 'sweep-line sweep-ssim' }));
+    parts.push(svgEl('path', { d: chart.mlPath, class: 'sweep-line sweep-ml' }));
+    chart.points.forEach((p) => {
+        parts.push(svgEl('circle', { cx: p.x, cy: p.ssimY, r: 4.5, class: 'sweep-dot sweep-ssim-dot' }));
+        parts.push(svgEl('rect', { x: p.x - 4, y: p.mlY - 4, width: 8, height: 8, class: 'sweep-dot sweep-ml-dot' }));
+    });
+    svg.replaceChildren(...parts);
+}
+
+// Redrawn at the new width when the window changes size (a phone rotating),
+// for the same reason it is drawn at its real width in the first place.
+let lastSweep = null;
+let resizeQueued = false;
+window.addEventListener('resize', () => {
+    if (!lastSweep || resizeQueued) return;
+    resizeQueued = true;
+    setTimeout(() => { resizeQueued = false; drawSweep(lastSweep); }, 150);
+});
+
+/** The chosen attack at each of SWEEP_STRENGTHS, one request at a time. */
+async function runSweep() {
+    const { SWEEP_STRENGTHS, metric, sweepSummary } = window.revealxLabFormat;
+    // "None" has no strength to sweep; block replacement stands in for it.
+    const attack = attackSelect.value === 'none' ? 'block' : attackSelect.value;
+    const label = attackSelect.querySelector(`option[value="${attack}"]`).textContent;
+    const body = document.getElementById('sweepTableBody');
+    const points = [];
+    body.replaceChildren();
+    for (const [index, strength] of SWEEP_STRENGTHS.entries()) {
+        statusText.textContent = `Sweeping ${label}: ${index + 1} of ${SWEEP_STRENGTHS.length} (${Math.round(strength * 100)}%)...`;
+        const data = await processOnce(attack, strength);
+        const point = {
+            strength,
+            ssim: data.metrics.reconstructed.ssim,
+            ml: data.ml.probability_tampered,
+            verdict: data.ml.tampered ? 'Tampered' : 'Clean',
+        };
+        points.push(point);
+        const tr = document.createElement('tr');
+        tr.append(
+            tableCell(`${Math.round(strength * 100)}%`, true),
+            tableCell(metric(point.ssim)),
+            tableCell(metric(point.ml)),
+            tableCell(point.verdict),
+        );
+        body.append(tr);
+    }
+    lastSweep = points;
+    drawSweep(points);
+    document.getElementById('sweepSummary').textContent = sweepSummary(label, points);
+    statusText.textContent = `Sweep of ${label} done.`;
+}
+
+if (sweepBtn) {
+    sweepBtn.addEventListener('click', async () => {
+        if (!selectedDataUrl) return;
+        [sweepBtn, runAllBtn, runBtn].forEach((b) => { if (b) b.disabled = true; });
+        try {
+            await runSweep();
+        } catch (error) {
+            statusText.textContent = error.message;
+        } finally {
+            [sweepBtn, runAllBtn, runBtn].forEach((b) => { if (b) b.disabled = !selectedDataUrl; });
+        }
+    });
 }
 
 if (runAllBtn) {

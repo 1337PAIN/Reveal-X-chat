@@ -109,7 +109,56 @@
         return match ? Number(match[1]) : null;
     }
 
+    /** The server clamps strength to 5-75%; the sweep spans that range. */
+    const SWEEP_STRENGTHS = [0.05, 0.15, 0.25, 0.35, 0.5, 0.75];
+
+    /**
+     * Geometry for the strength-sweep chart: an inline SVG drawn by the page
+     * from these numbers (a chart library would be a third-party request).
+     * x is strength across the plot area; both series -- reconstruction SSIM
+     * and the ML's tamper probability -- share a 0-1 scale, 1 at the top.
+     *
+     * @param {{strength:number, ssim:number, ml:number}[]} points
+     * @param {{width:number, height:number, pad:{top,right,bottom,left}}} box
+     */
+    function sweepChart(points, box) {
+        const sorted = [...points].sort((a, b) => a.strength - b.strength);
+        const { width, height, pad } = box;
+        const plotW = width - pad.left - pad.right;
+        const plotH = height - pad.top - pad.bottom;
+        const lo = sorted[0].strength;
+        const hi = sorted[sorted.length - 1].strength;
+        const xOf = (s) => pad.left + (hi === lo ? 0 : ((s - lo) / (hi - lo)) * plotW);
+        const yOf = (v) => pad.top + (1 - Math.max(0, Math.min(1, v))) * plotH;
+        const placed = sorted.map((p) => ({
+            ...p, x: xOf(p.strength), ssimY: yOf(p.ssim), mlY: yOf(p.ml),
+        }));
+        const path = (key) => placed
+            .map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p[key].toFixed(1)}`)
+            .join(' ');
+        return {
+            points: placed,
+            ssimPath: path('ssimY'),
+            mlPath: path('mlY'),
+            xTicks: placed.map((p) => ({ x: p.x, label: `${Math.round(p.strength * 100)}%` })),
+            yTicks: [0, 0.5, 1].map((v) => ({ y: yOf(v), label: String(v) })),
+        };
+    }
+
+    /** The chart's text alternative: where each series starts and ends. */
+    function sweepSummary(label, points) {
+        const sorted = [...points].sort((a, b) => a.strength - b.strength);
+        const first = sorted[0];
+        const last = sorted[sorted.length - 1];
+        const pct = (s) => `${Math.round(s * 100)}%`;
+        const ssimVerb = last.ssim < first.ssim ? 'falls' : 'goes';
+        return `${label} from ${pct(first.strength)} to ${pct(last.strength)}: `
+            + `SSIM ${ssimVerb} from ${metric(first.ssim)} to ${metric(last.ssim)}; `
+            + `ML tamper probability goes from ${metric(first.ml)} to ${metric(last.ml)}.`;
+    }
+
     window.revealxLabFormat = {
         enhancedCaption, metric, metricPair, ATTACKS, attackRow, retryAfter,
+        SWEEP_STRENGTHS, sweepChart, sweepSummary,
     };
 }());

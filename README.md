@@ -499,8 +499,8 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 924 server tests
-node --test "tests/js/*.test.mjs"   # 173 browser tests
+pytest                          # 930 server tests
+node --test "tests/js/*.test.mjs"   # 179 browser tests
 ```
 
 Both run on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
@@ -509,9 +509,9 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**924 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
+**930 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
 
-**173 browser tests** run the shipped `app/static/js` files verbatim on Node's
+**179 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
 They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v2 reflection, associated-data and downgrade cases; key pinning and the safety number; the send policy that decides when plaintext is allowed; the browser-side visual cryptography split, its PNG codec and the end-to-end hash; and the shipped v1 client as a fixture, so old rows are proven to still decrypt), the escaping layer, and the service worker's request scoping.
 
@@ -558,6 +558,7 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 2. Select `None / clean share` and run analysis. Both shares look random, HMAC passes, ML says clean.
 3. Select `Block replacement` and run again. Show the HMAC mismatch, ML confidence, heatmap, damaged reconstruction, and the PSNR/SSIM drop.
 4. Press **Run all attacks** to fill the table of which check catches each of the seven attacks on this image.
+5. Pick an attack and press **Sweep strength** to chart it from 5% to 75%: reconstruction SSIM and the ML's tamper probability, drawn as an inline SVG with the same numbers in a table. Swept with random noise, SSIM collapses while the ML's probability stays flat, which is the case the HMAC exists for.
 
 ---
 

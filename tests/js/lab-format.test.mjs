@@ -139,3 +139,50 @@ test('the wait in a rate-limit answer is read back in seconds', () => {
     assert.equal(fmt.retryAfter('Processing failed on the server'), null);
     assert.equal(fmt.retryAfter(undefined), null);
 });
+
+// Strength sweep: one attack at six strengths, drawn as an inline SVG (no
+// chart library: nothing third-party may load) with the same numbers in a
+// table. sweepChart() is the geometry; the page only draws what it returns.
+
+const box = { width: 400, height: 200, pad: { top: 10, right: 10, bottom: 30, left: 40 } };
+const points = [
+    { strength: 0.75, ssim: 0.2, ml: 0.95 },
+    { strength: 0.05, ssim: 0.95, ml: 0.1 },
+    { strength: 0.35, ssim: 0.6, ml: 0.7 },
+];
+
+test('the sweep runs the strengths the server accepts, weakest first', () => {
+    assert.deepEqual(fmt.SWEEP_STRENGTHS, [0.05, 0.15, 0.25, 0.35, 0.5, 0.75]);
+});
+
+test('strength runs left to right across the plot area', () => {
+    const chart = fmt.sweepChart(points, box);
+    // 0.35 is 30/70 of the way from 5% to 75%: 40 + (0.3 / 0.7) * 350 = 190.
+    assert.deepEqual(chart.points.map((p) => Math.round(p.x)), [40, 190, 390]);
+});
+
+test('both series share a 0-to-1 scale, 1 at the top', () => {
+    const chart = fmt.sweepChart(points, box);
+    const first = chart.points[0];
+    assert.equal(first.ssimY, 10 + (1 - 0.95) * 160);
+    assert.equal(first.mlY, 10 + (1 - 0.1) * 160);
+});
+
+test('each series is one path through its points in order', () => {
+    const chart = fmt.sweepChart(points, box);
+    assert.match(chart.ssimPath, /^M40(\.0+)? \d/);
+    assert.equal((chart.ssimPath.match(/L/g) || []).length, 2);
+    assert.equal((chart.mlPath.match(/L/g) || []).length, 2);
+});
+
+test('axes are labelled: each strength as a percentage, 0 / 0.5 / 1 up the side', () => {
+    const chart = fmt.sweepChart(points, box);
+    assert.deepEqual(chart.xTicks.map((t) => t.label), ['5%', '35%', '75%']);
+    assert.deepEqual(chart.yTicks.map((t) => t.label), ['0', '0.5', '1']);
+    assert.deepEqual(chart.yTicks.map((t) => t.y), [170, 90, 10]);
+});
+
+test('a one-line summary for screen readers says where SSIM and the ML end up', () => {
+    assert.equal(fmt.sweepSummary('Block replacement', points),
+        'Block replacement from 5% to 75%: SSIM falls from 0.95 to 0.20; ML tamper probability goes from 0.10 to 0.95.');
+});

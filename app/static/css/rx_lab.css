@@ -348,3 +348,21 @@ tbody tr:hover td { background: rgba(255, 255, 255, .04); }
     border-bottom: 2px solid #fbbf24;
     font-weight: 700;
 }
+
+/* Strength sweep (rx_lab.js drawSweep). The two series differ by line style
+   and marker as well as colour: SSIM solid with circles, the ML dashed with
+   squares. Both colours are well over 3:1 on the panel. */
+.sweep-figure { margin: 1rem 0; }
+.sweep-chart { width: 100%; height: auto; display: block; }
+.sweep-grid { stroke: rgba(148, 163, 184, .25); stroke-width: 1; }
+.sweep-label { fill: var(--muted); font-size: 12px; }
+.sweep-line { fill: none; stroke-width: 2.5; }
+.sweep-ssim { stroke: #5eead4; }
+.sweep-ml { stroke: #fbbf24; stroke-dasharray: 7 5; }
+.sweep-ssim-dot { fill: #5eead4; }
+.sweep-ml-dot { fill: #fbbf24; }
+.sweep-figure figcaption { margin-top: .5rem; color: var(--text); }
+.sweep-legend { list-style: none; display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; padding: 0; margin: .6rem 0 0; color: var(--muted); font-size: .85rem; }
+.sweep-key { display: inline-block; width: 26px; height: 0; margin-right: .45rem; vertical-align: middle; border-top: 3px solid; }
+.sweep-key-ssim { border-color: #5eead4; }
+.sweep-key-ml { border-top-style: dashed; border-color: #fbbf24; }
