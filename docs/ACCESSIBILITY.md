@@ -286,6 +286,10 @@ Not measured by the script above, but present:
   which the free set does not have, so it showed an empty box; the library
   (about 400 KB of CSS and fonts, used for nothing else) is gone
   (`tests/test_startup_path.py`).
+- `/lab`'s header scrolls with the page. It was sticky: about 230px of
+  title pinned over a laptop screen, more on a phone, hiding whatever the
+  keyboard had focused beneath it (WCAG 2.4.11)
+  (`tests/test_lab_header_scrolls.py`).
 - Responsive down to 375px with 44px minimum touch targets. A bubble's meta
   row wraps: on a share it carries the "Opens once" chip, the time, the
   status and two 44px buttons, about 320px, and on a phone it used to spill

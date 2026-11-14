@@ -78,9 +78,8 @@ body::before {
     -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(170%);
     backdrop-filter: blur(var(--blur-lg)) saturate(170%);
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.22);
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    /* Scrolls with the page. It was sticky: about 230px of title pinned over
+       the results, hiding whatever the keyboard had focused beneath it. */
 }
 
 .eyebrow {
