@@ -282,10 +282,10 @@
                 <button id="closeSettingsBtn" class="btn-close" type="button" aria-label="Close settings">×</button>
             </div>
             <div class="settings-body">
-                <div class="settings-section">
-                    <h3>Profile</h3>
-                    <div class="form-group">
-                        <label>Profile Photo</label>
+                <section class="settings-section" aria-labelledby="settingsProfileHeading">
+                    <h3 id="settingsProfileHeading">Profile</h3>
+                    <div class="form-group" role="group" aria-labelledby="settingsPhotoCaption">
+                        <span id="settingsPhotoCaption" class="form-label">Profile photo</span>
                         <div class="profile-photo-upload">
                             <img id="settingsProfilePreview" src="" alt="Profile photo" class="settings-profile-preview">
                             <button type="button" id="settingsProfileBtn" class="btn btn-secondary">Change photo</button>
@@ -309,10 +309,10 @@
                             <option value="dnd">Do Not Disturb</option>
                         </select>
                     </div>
-                </div>
+                </section>
 
-                <div class="settings-section">
-                    <h3>Security</h3>
+                <section class="settings-section" aria-labelledby="settingsSecurityHeading">
+                    <h3 id="settingsSecurityHeading">Security</h3>
                     <div class="settings-option">
                         <label for="settingsTotp">
                             <input type="checkbox" id="settingsTotp">
@@ -332,10 +332,10 @@
                             The passcode is stored as a PBKDF2-SHA256 hash and never leaves this device.
                         </p>
                     </div>
-                </div>
+                </section>
 
-                <div class="settings-section">
-                    <h3>Preferences</h3>
+                <section class="settings-section" aria-labelledby="settingsPreferencesHeading">
+                    <h3 id="settingsPreferencesHeading">Preferences</h3>
                     <div class="settings-option">
                         <label for="settingsNotifications">
                             <input type="checkbox" id="settingsNotifications" checked>
@@ -372,20 +372,27 @@
                             Show typing indicators
                         </label>
                     </div>
-                </div>
+                </section>
 
-                <div class="settings-section">
-                    <h3>Data & Storage</h3>
+                <section class="settings-section" aria-labelledby="settingsDataHeading">
+                    <h3 id="settingsDataHeading">Data & Storage</h3>
                     <div class="settings-option">
                         <button id="exportDataBtn" class="btn btn-secondary w-100">Export Chat History</button>
                     </div>
                     <div class="settings-option">
                         <button id="clearCacheBtn" class="btn btn-secondary w-100">Clear Cache</button>
                     </div>
+                </section>
+
+                <!-- Its own section, last: the one action here that cannot be
+                     reversed should not sit in a row of harmless ones. -->
+                <section class="settings-section settings-danger" aria-labelledby="settingsAccountHeading">
+                    <h3 id="settingsAccountHeading">Account</h3>
+                    <p class="settings-hint">Deleting your account cannot be undone.</p>
                     <div class="settings-option">
                         <button id="deleteAccountBtn" class="btn btn-danger w-100">Delete Account</button>
                     </div>
-                </div>
+                </section>
             </div>
             <div class="settings-footer">
                 <span id="settingsFeedback" class="settings-feedback" aria-live="polite"></span>

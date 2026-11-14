@@ -396,6 +396,13 @@ Not measured by the script above, but present:
   not offline, so an "away" contact showed green beside an amber pip. Your
   own avatar shows your initial until there is a photo, as contacts do; it
   was an empty circle (`tests/test_presence_and_own_avatar.py`).
+- **Settings are sections a screen reader can jump between.** Each group
+  (Profile, Security, Preferences, Data & Storage, Account) is a `<section>`
+  named by its heading. "Delete Account" used to sit in Data & Storage
+  between two harmless buttons; it has an Account section of its own, last,
+  set apart by a rule and saying it cannot be undone. "Profile photo" was a
+  `<label>` tied to nothing; it now captions the photo controls' group
+  (`tests/test_settings_grouping.py`).
 - **Your photo can be changed from the keyboard.** The sidebar avatar and
   settings' "Change photo" were both `<label>`s for a file input with the
   `hidden` attribute; neither can take focus, so Tab never reached them.

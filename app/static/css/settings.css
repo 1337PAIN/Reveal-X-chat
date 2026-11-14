@@ -828,3 +828,16 @@ body[data-theme="light"] .lock-screen {
     width: 18px;
     height: 18px;
 }
+
+/* The Account section holds the one irreversible action, so it is set apart
+   with a rule above it rather than looking like the rows before it. */
+.settings-danger {
+    border-top: 1px solid var(--glass-border-strong, var(--border));
+    padding-top: 16px;
+}
+
+.settings-hint {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: -8px 0 12px;
+}
