@@ -131,7 +131,7 @@ async function runBrowserDetection(data) {
 
 function setLoading(isLoading) {
     runBtn.disabled = isLoading || !selectedDataUrl;
-    runBtn.textContent = isLoading ? 'Processing...' : 'Run Reveal-X Analysis';
+    runBtn.textContent = isLoading ? 'Processing...' : 'Run analysis';
     if (isLoading) statusText.textContent = 'Generating shares, running ML detection and calculating metrics...';
 }
 

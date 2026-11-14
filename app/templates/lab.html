@@ -21,7 +21,7 @@
 <body>
     <header class="lab-header">
         <div>
-            <p class="eyebrow">Reveal-X Final Product</p>
+            <p class="eyebrow">Reveal-X</p>
             <h1>AI Tamper Detection & Visual Cryptography Lab</h1>
             <p class="subtitle">Generate VC shares, simulate attacks, verify integrity, detect tampering with ML, reconstruct locally, enhance the result, and evaluate PSNR/SSIM.</p>
         </div>
@@ -35,12 +35,12 @@
         <section class="control-card">
             <div class="step-badge">1</div>
             <h2>Upload image</h2>
-            <p>Use a document, face, logo, medical scan, or any sensitive grayscale/RGB image for demo.</p>
+            <p>Any image works: a document, a logo, a photo. It is split, attacked and measured on this server, then discarded; it is not saved.</p>
             <label class="drop-zone" id="dropZone">
                 <input type="file" id="imageInput" accept="image/*" hidden>
-                <span class="drop-icon">📷</span>
+                <span class="drop-icon" aria-hidden="true">📷</span>
                 <strong>Choose an image</strong>
-                <small>PNG, JPG, WEBP or BMP. The app resizes large images for fast FYP demo.</small>
+                <small>PNG, JPG, WebP or BMP. It is converted to grayscale and scaled to 512 px on its longest side.</small>
             </label>
             <img id="sourcePreview" class="source-preview" alt="Selected preview">
         </section>
@@ -62,7 +62,7 @@
             </select>
             <label class="field-label" for="strengthRange">Attack strength: <span id="strengthValue">35%</span></label>
             <input id="strengthRange" type="range" min="5" max="75" value="35" class="range-input">
-            <button id="runBtn" class="primary-btn" disabled>Run Reveal-X Analysis</button>
+            <button id="runBtn" class="primary-btn" disabled>Run analysis</button>
             <p id="statusText" class="status-text">Choose an image to begin.</p>
         </section>
 
@@ -75,7 +75,7 @@
             <article class="summary-card">
                 <span>ML tamper result</span>
                 <strong id="mlResult">Waiting</strong>
-                <small id="mlDetail">RandomForest detector will classify the received share.</small>
+                <small id="mlDetail">A random forest classifies the received Share 1.</small>
             </article>
             <article class="summary-card">
                 <span>In-browser ML (ONNX)</span>
@@ -106,7 +106,7 @@
         </section>
 
         <section class="metrics-panel">
-            <h2>Evaluation Dashboard</h2>
+            <h2>Quality metrics</h2>
             <div class="table-wrap">
                 <table>
                     <thead><tr><th>Metric</th><th>Reconstructed</th><th>Enhanced</th></tr></thead>
