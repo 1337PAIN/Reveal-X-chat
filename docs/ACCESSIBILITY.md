@@ -196,7 +196,10 @@ Not measured by the script above, but present:
 - `prefers-reduced-motion`, `prefers-reduced-transparency` and
   `@supports not (backdrop-filter)` fallbacks, so the glass layer degrades to
   solid surfaces rather than becoming unreadable.
-- Responsive down to 375px with 44px minimum touch targets.
+- Responsive down to 375px with 44px minimum touch targets. `/lab` holds at
+  320, 375 and 390px with no sideways scroll: its single-column grid used to
+  size itself to the metrics table's 325px minimum, which pushed every card
+  9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
 - **The contact list works by keyboard.** Each row's clickable part is a
   `<button type="button">` (`contact-row.js`), so Tab reaches it and Enter or
   Space opens the chat; the open chat carries `aria-current="true"`. The rows

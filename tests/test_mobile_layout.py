@@ -218,3 +218,45 @@ def test_bottom_sheet_clears_the_home_indicator(css):
     body = rule_body(phone, '.modal-content')
     assert body is not None, 'the phone-width modal rule is gone'
     assert 'env(safe-area-inset-bottom' in body
+
+
+# ----------------------------------------------------------------------
+# /lab at phone widths
+# ----------------------------------------------------------------------
+#
+# Measured at 375px before this: every card on /lab ended at 384px and the
+# page scrolled sideways by 9px. The single-column grid sized its track to
+# the widest item's min-content, and the metrics table alone is 325px wide at
+# its narrowest, so every card was pushed to 365px inside 337px of space.
+
+LAB_CSS_PATH = 'app/static/css/rx_lab.css'
+
+
+@pytest.fixture(scope='module')
+def lab_css():
+    return read(LAB_CSS_PATH)
+
+
+def lab_rule(css, selector):
+    match = re.search(re.escape(selector) + r'\s*\{([^}]*)\}', css)
+    assert match, f'no rule for {selector}'
+    return match.group(1)
+
+
+def test_the_lab_grid_cannot_grow_past_the_screen(lab_css):
+    assert 'grid-template-columns: minmax(0, 1fr)' in lab_rule(lab_css, '.lab-shell')
+    assert 'repeat(2, minmax(0, 1fr))' in lab_css, 'the two-column layout too'
+
+
+@pytest.mark.parametrize('selector,minimum', [('.summary-grid', 220), ('.image-grid', 240)])
+def test_card_grids_fit_a_320px_screen(lab_css, selector, minimum):
+    """min(Npx, 100%): a card never asks for more than the width it has."""
+    rule = lab_rule(lab_css, selector)
+    assert f'minmax(min({minimum}px, 100%), 1fr)' in rule
+
+
+def test_wide_lab_content_scrolls_inside_its_own_box(lab_css):
+    assert 'overflow-x: auto' in lab_rule(lab_css, '.table-wrap')
+    cards = lab_rule(lab_css, '.control-card, .summary-card, .image-card, .metrics-panel')
+    assert 'min-width: 0' in cards
+    assert 'max-width: 100%' in lab_rule(lab_css, '.lab-shell img')

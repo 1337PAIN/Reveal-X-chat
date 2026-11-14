@@ -115,7 +115,13 @@ nav { display: flex; gap: .75rem; flex-wrap: wrap; }
     box-shadow: 0 6px 18px rgba(0, 0, 0, .24), inset 0 1px 0 var(--highlight);
 }
 
-.lab-shell { padding: 2rem clamp(1rem, 5vw, 4rem) 4rem; display: grid; gap: 1.25rem; }
+.lab-shell { padding: 2rem clamp(1rem, 5vw, 4rem) 4rem; display: grid; gap: 1.25rem; grid-template-columns: minmax(0, 1fr); }
+
+/* minmax(0, 1fr), not the implicit auto track: an auto track grows to its
+   widest item's min-content, and the metrics table alone is 325px at its
+   narrowest, so at 375px every card was pushed to 365px inside 337px of room
+   and the page scrolled sideways. Wide content now scrolls in its own box. */
+.lab-shell img { max-width: 100%; }
 
 .control-card, .summary-card, .image-card, .metrics-panel {
     border: 1px solid var(--line);
@@ -124,13 +130,14 @@ nav { display: flex; gap: .75rem; flex-wrap: wrap; }
     box-shadow: var(--shadow), inset 0 1px 0 var(--highlight);
     -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(160%);
     backdrop-filter: blur(var(--blur-lg)) saturate(160%);
+    min-width: 0;
 }
 
 .control-card { padding: 1.4rem; position: relative; }
 .control-card:nth-of-type(1), .control-card:nth-of-type(2) { min-height: 100%; }
 
 @media (min-width: 900px) {
-    .lab-shell { grid-template-columns: 1fr 1fr; }
+    .lab-shell { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .summary-grid, .image-grid, .metrics-panel { grid-column: 1 / -1; }
 }
 
@@ -207,7 +214,7 @@ option { background: #101528; color: #e8ecf6; }
 .primary-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .status-text { min-height: 1.4rem; }
 
-.summary-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.summary-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
 .summary-card { padding: 1.1rem; transition: transform .2s ease, border-color .2s ease; }
 .summary-card:hover { transform: translateY(-2px); border-color: var(--line-strong); }
 .summary-card span { color: var(--muted); font-weight: 700; font-size: .9rem; }
@@ -226,7 +233,7 @@ option { background: #101528; color: #e8ecf6; }
 .summary-card.danger strong { color: var(--danger); }
 .summary-card.success strong { color: var(--success); }
 
-.image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 1rem; }
 .image-card { padding: 1rem; min-height: 22rem; }
 
 .image-card img {
