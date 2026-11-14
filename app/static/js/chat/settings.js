@@ -22,6 +22,7 @@ import {
 } from './core.js';
 import {
     announceToScreenReader,
+    showOwnInitial,
 } from './basics.js';
 import {
     logoutUser,
@@ -148,6 +149,7 @@ socket.on('settings_saved', (data) => {
     if (data.username) {
         state.currentUser.username = data.username;
         accountName.textContent = data.username;
+        showOwnInitial(data.username);
         settingsUsername.value = data.username;
         localStorage.setItem('revealx_username', data.username);
     }

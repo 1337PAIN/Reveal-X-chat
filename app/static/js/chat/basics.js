@@ -119,6 +119,15 @@ export function updateConnectionBanner() {
     banner.hidden = !view.visible;
 }
 
+/**
+ * Show your initial on your own avatar until there is a photo, as contacts
+ * without one have. It was an empty circle.
+ */
+export function showOwnInitial(username) {
+    const slot = document.getElementById('profileInitial');
+    if (slot) slot.textContent = (username || '?').charAt(0).toUpperCase();
+}
+
 // Escape modals using Keyboard
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {

@@ -391,3 +391,8 @@ Not measured by the script above, but present:
   are any): named from its content it read "e2ebobOffline", and the unread
   badge relied on `aria-label` on a plain `<span>`, which ARIA does not allow
   (`tests/js/contact-row.test.mjs`, `tests/test_contact_rows.py`).
+  Presence is shown once, as a pip on the avatar coloured by status, beside
+  the status in words. A second dot at the row's edge was green for anyone
+  not offline, so an "away" contact showed green beside an amber pip. Your
+  own avatar shows your initial until there is a photo, as contacts do; it
+  was an empty circle (`tests/test_presence_and_own_avatar.py`).

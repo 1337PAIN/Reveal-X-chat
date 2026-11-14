@@ -17,6 +17,7 @@ import {
     usernameInput,
 } from './core.js';
 import {
+    showOwnInitial,
     updateConnectionBanner,
 } from './basics.js';
 import {
@@ -200,6 +201,7 @@ socket.on('auth_success', (data) => {
     if (totpChallenge) totpChallenge.classList.add('hidden');
     localStorage.setItem('revealx_username', state.currentUser.username);
     accountName.textContent = state.currentUser.username;
+    showOwnInitial(state.currentUser.username);
     const ownStatus = document.getElementById('userStatus');
     if (ownStatus) ownStatus.textContent = STATUS_LABELS[state.currentUser.status || 'online'];
     

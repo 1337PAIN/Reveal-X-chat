@@ -317,6 +317,25 @@ body::before {
     display: none;
 }
 
+/* With no photo the <img> was an empty circle. It hides until it has a src,
+   and your initial (#profileInitial, set by basics.js showOwnInitial) takes
+   its place, the same size; a photo hides the initial again. */
+.profile-preview:not([src]),
+.profile-preview[src=""] {
+    display: none;
+}
+
+/* Scoped to the picker so it outranks the contact-sized .avatar-dot below. */
+.profile-picker .profile-initial {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+}
+
+.profile-preview[src]:not([src=""]) ~ .profile-initial {
+    display: none;
+}
+
 .account-name {
     color: var(--text-primary);
     font-size: 14px;
@@ -518,22 +537,10 @@ body::before {
     background: rgba(255, 255, 255, 0.04);
 }
 
-.users-list li::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--success);
-}
-
 .empty-state {
     color: var(--text-secondary);
     font-style: italic;
     cursor: default;
-}
-
-.empty-state::before {
-    display: none;
 }
 
 .users-list li.active {
@@ -543,10 +550,6 @@ body::before {
 
 .users-list li.offline {
     color: var(--text-secondary);
-}
-
-.users-list li.offline::before {
-    background: var(--text-secondary);
 }
 
 .user-name {
