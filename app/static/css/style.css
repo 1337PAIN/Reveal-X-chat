@@ -860,6 +860,11 @@ body::before {
     font-size: 10px;
     gap: 8px;
     justify-content: flex-end;
+    /* Wraps: a share's chip, time, status, React and More actions are about
+       320px, wider than a bubble on a 375px phone, and with flex-end the
+       row spilled out past the bubble's left edge. */
+    flex-wrap: wrap;
+    row-gap: 4px;
     margin-top: 4px;
 }
 

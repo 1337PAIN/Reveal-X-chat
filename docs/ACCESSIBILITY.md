@@ -265,7 +265,10 @@ Not measured by the script above, but present:
   slide ignored reduced motion. It now rests in place, slides only as an
   entrance, and does not slide at all under reduced motion
   (`tests/test_bottom_sheet_motion.py`).
-- Responsive down to 375px with 44px minimum touch targets. `/lab` holds at
+- Responsive down to 375px with 44px minimum touch targets. A bubble's meta
+  row wraps: on a share it carries the "Opens once" chip, the time, the
+  status and two 44px buttons, about 320px, and on a phone it used to spill
+  out past the bubble's left edge (`tests/test_message_meta_wraps.py`). `/lab` holds at
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
