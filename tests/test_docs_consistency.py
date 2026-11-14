@@ -140,3 +140,26 @@ def test_every_script_security_md_names_defines_the_function():
         pattern = r'function\s+' + name + r'\b|(?:const|let)\s+' + name + r'\b'
         assert re.search(pattern, path.read_text(encoding='utf-8')), \
             f'SECURITY.md says {name} is in {filename}; it is not'
+
+
+DEPLOYMENT = (ROOT / 'docs' / 'DEPLOYMENT.md').read_text(encoding='utf-8')
+
+
+def test_deployment_has_the_pre_demo_checklist():
+    """Free Render Postgres expires 30 days after creation and is deleted 14
+    days later; a demo on day 31 would find an empty app. The checklist and
+    the backup that guards against it are part of deploying, so they are held
+    in place like the numbers above."""
+    assert '## Before a demo or viva' in DEPLOYMENT
+    section = DEPLOYMENT.split('## Before a demo or viva', 1)[1].split('\n## ', 1)[0]
+    for needle in ('30 days', '14 days', 'creation date', 'REVEAL_X_SECRET_KEY',
+                   'REVEALX_DATA_KEY', 'scripts/backup_postgres.sh', 'pg_restore'):
+        assert needle in section, f'"Before a demo or viva" does not mention {needle}'
+
+
+def test_backup_script_takes_a_custom_format_dump_of_database_url():
+    script = (ROOT / 'scripts' / 'backup_postgres.sh').read_text(encoding='utf-8')
+    assert script.startswith('#!'), 'needs a shebang to run as ./scripts/backup_postgres.sh'
+    assert re.search(r'pg_dump\b[^\n]*-Fc[^\n]*"\$DATABASE_URL"', script)
+    assert 'set -eu' in script, 'a failed dump must not look like a successful one'
+    assert '$(date' in script, 'the dump file name carries the date'

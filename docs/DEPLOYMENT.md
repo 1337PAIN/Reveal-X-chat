@@ -270,6 +270,51 @@ earlier Reveal-X keeps its accounts and messages
 Start one process first after an upgrade. Two processes migrating the same
 database at the same moment is not guarded against.
 
+## Before a demo or viva
+
+Three things fail quietly on the free tiers, and each looks like a broken app
+rather than an expired plan. Check them a few days before, not on the morning.
+
+- [ ] **The database's creation date.** A free Render Postgres database expires
+      **30 days** after it is created and is **deleted 14 days** after that,
+      along with every account in it. Open Render → the `reveal-x-db` database
+      and read its creation date. If the demo falls past day 30, either upgrade
+      it to a paid instance, recreate it close to the date (back up first, see
+      below), or move `DATABASE_URL` to a host whose free tier does not expire.
+- [ ] **The service is awake.** A free Render web service sleeps after a spell
+      with no traffic, and the first request then waits while it starts — long
+      enough for the Socket.IO connection banner to show. Open the site a few
+      minutes before you present.
+- [ ] **`REVEAL_X_SECRET_KEY` and `REVEALX_DATA_KEY` are set explicitly.**
+      Without the first, each restart mints a new key: sessions end, and every
+      share stored before the restart fails its HMAC and reports as *tampered*,
+      which looks exactly like a real detection. Without the second, TOTP
+      secrets sit unencrypted; and once it is set, changing or removing it makes
+      the app refuse to start rather than lose them. `render.yaml` generates the
+      first; set the second in the dashboard (the generator command is in
+      [Environment](#environment)) and keep a copy somewhere other than Render.
+
+### Backing up and restoring
+
+```bash
+DATABASE_URL='postgres://…external URL from Render…' ./scripts/backup_postgres.sh
+```
+
+`scripts/backup_postgres.sh` runs `pg_dump -Fc` against `$DATABASE_URL` and
+writes `revealx-<UTC date and time>.dump`. Use the database's *external* URL
+from a laptop; the internal one resolves only inside Render. To load a dump into
+a new database:
+
+```bash
+pg_restore --clean --if-exists --no-owner --no-acl            --dbname "$NEW_DATABASE_URL" revealx-20261115-090000Z.dump
+```
+
+`--no-owner --no-acl` because the new database's role names differ from the
+old one's. Then point `DATABASE_URL` at the new database and keep
+`REVEAL_X_SECRET_KEY` and `REVEALX_DATA_KEY` unchanged: the encrypted TOTP
+secrets and the share tags in the dump were made with them. Messages need no
+care, since they expire within the hour anyway.
+
 ## HTTPS
 
 Terminate TLS at a reverse proxy (nginx, Caddy, your host's load balancer) and
@@ -289,6 +334,8 @@ deployment option.
 ## Checklist
 
 - [ ] `REVEAL_X_SECRET_KEY` set to something persistent
+- [ ] `REVEALX_DATA_KEY` set, and a copy kept outside the host
+- [ ] On a free database: [Before a demo or viva](#before-a-demo-or-viva)
 - [ ] `REVEAL_X_COOKIE_SECURE=true` if serving HTTPS
 - [ ] TLS terminated in front of gunicorn
 - [ ] `REVEALX_ADMIN_PASSWORD` set, then rotated after first sign-in
