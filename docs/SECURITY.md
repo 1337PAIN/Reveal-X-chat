@@ -203,9 +203,14 @@ localises damage and survives a re-encode. Either alone would be weaker.
 
 - CSP sent as a response header (`handlers/http.py`, `add_security_headers`), with
   `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, no
-  `'unsafe-inline'` for scripts, and no CDN at all: socket.io, DOMPurify, Font
-  Awesome and Inter are vendored, so the only third-party origins left are
-  Google's, for Firebase sign-in. Inline *styles* are still allowed. A second
+  `'unsafe-inline'` for scripts, and no CDN at all: socket.io, DOMPurify and
+  Inter are vendored (Font Awesome has been dropped), so the only third-party
+  origins left are Google's, for Firebase sign-in. Inline *styles* are still
+  allowed. The app's own pages no longer use any -- no `style` attributes or
+  `<style>` blocks in the templates or in markup built by script
+  (`tests/test_styles_in_stylesheets.py`) -- but Google's sign-in scripts
+  are not ours, and removing `'unsafe-inline'` for styles waits until Google
+  sign-in has been tested with it gone. A second
   copy of the policy used to sit in a `<meta>` tag in `index.html`, listing
   `'unsafe-inline'` scripts and three CDNs; both were enforced, so it changed
   nothing but misled anyone reading it, and it has been removed.

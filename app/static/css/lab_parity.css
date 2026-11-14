@@ -1,0 +1,24 @@
+/* /lab/parity: the browser/server feature parity check (lab-parity.js).
+   Its own sheet rather than rx_lab.css: .ok, .bad and .muted are generic
+   names that would leak into /lab. Moved out of a <style> block in the
+   template, so the page needs no inline styles. */
+
+.parity-shell { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+.case { margin-bottom: 1.75rem; }
+.case h3 { margin: 0 0 .35rem; font-size: 1rem; }
+.case .why { margin: 0 0 .6rem; opacity: .72; font-size: .85rem; }
+table.parity { width: 100%; border-collapse: collapse; font-size: .82rem;
+               font-variant-numeric: tabular-nums; }
+table.parity th, table.parity td { padding: .3rem .5rem; text-align: right;
+                                   border-bottom: 1px solid rgba(148,163,184,.18); }
+table.parity th:first-child, table.parity td:first-child { text-align: left; }
+.ok    { color: #34d399; font-weight: 600; }
+.bad   { color: #f87171; font-weight: 700; }
+.verdict { padding: .55rem .8rem; border-radius: 10px; font-weight: 600;
+           display: inline-block; margin-bottom: .5rem; }
+.verdict.ok  { background: rgba(52,211,153,.14); border: 1px solid rgba(52,211,153,.4); }
+.verdict.bad { background: rgba(248,113,113,.14); border: 1px solid rgba(248,113,113,.45); }
+#summary { font-size: 1.02rem; margin: 1rem 0 1.5rem; }
+.muted { opacity: .68; font-size: .84rem; }
+
+.parity-engine { margin-top: .4rem; }

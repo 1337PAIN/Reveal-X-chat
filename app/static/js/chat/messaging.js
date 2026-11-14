@@ -94,8 +94,7 @@ socket.on('message_deleted', (data) => {
     forgetShare2(data && data.message_id);
     const node = messagesContainer.querySelector(`[data-message-id="${data.message_id}"]`);
     if (node) {
-        node.style.opacity = '0.4';
-        node.style.textDecoration = 'line-through';
+        node.classList.add('message-leaving');
         setTimeout(() => node.remove(), 250);
     }
 });

@@ -68,10 +68,7 @@ function renderVisibleMessagesSlice() {
     // If older messages hidden, prepend load indicator
     if (startIdx > 0) {
         const loadMore = document.createElement('button');
-        loadMore.className = 'btn btn-secondary';
-        loadMore.style.margin = '10px auto';
-        loadMore.style.display = 'block';
-        loadMore.style.width = '200px';
+        loadMore.className = 'btn btn-secondary load-older';
         loadMore.textContent = 'Load Older Messages';
         loadMore.addEventListener('click', () => {
             state.visibleMessagesCount += 50;

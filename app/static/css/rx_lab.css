@@ -160,7 +160,8 @@ p { color: var(--muted); }
     transition: background .2s ease, border-color .2s ease;
 }
 
-.drop-zone:hover {
+.drop-zone:hover,
+.drop-zone.dragging {
     background: rgba(94, 234, 212, .12);
     border-color: var(--accent);
 }

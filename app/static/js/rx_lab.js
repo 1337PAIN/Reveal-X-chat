@@ -25,14 +25,14 @@ strengthRange.addEventListener('input', () => {
 dropZone.addEventListener('click', () => input.click());
 dropZone.addEventListener('dragover', (event) => {
     event.preventDefault();
-    dropZone.style.borderColor = 'var(--accent)';
+    dropZone.classList.add('dragging');
 });
 dropZone.addEventListener('dragleave', () => {
-    dropZone.style.borderColor = 'rgba(94, 234, 212, .45)';
+    dropZone.classList.remove('dragging');
 });
 dropZone.addEventListener('drop', (event) => {
     event.preventDefault();
-    dropZone.style.borderColor = 'rgba(94, 234, 212, .45)';
+    dropZone.classList.remove('dragging');
     const file = event.dataTransfer.files && event.dataTransfer.files[0];
     if (file) loadFile(file);
 });

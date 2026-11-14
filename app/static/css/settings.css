@@ -761,3 +761,33 @@ body[data-theme="light"] .lock-screen {
    outranks .password-field input and left the field short of its wrapper --
    so the control floated away from the field's edge. */
 #adminModal .admin-create-row .password-field input { width: 100%; }
+
+/* --- Moved out of markup and scripts -------------------------------------
+   Each of these was a style attribute or a run of element.style writes. */
+
+/* Read by screen readers, not drawn. #srAnnouncements named this class long
+   before any stylesheet defined it, and carried the rules inline instead. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* A deleted message fades and is struck through for the 250ms before
+   messaging.js removes it. */
+.message.message-leaving {
+    opacity: .4;
+    text-decoration: line-through;
+}
+
+.load-older {
+    display: block;
+    width: 200px;
+    margin: 10px auto;
+}

@@ -346,8 +346,10 @@ def add_security_headers(response):
         # the policy that nothing loads from is an origin an injected tag can.
         "script-src 'self' 'wasm-unsafe-eval' "
         "https://www.gstatic.com https://apis.google.com; "
-        # Inline *styles* remain: the markup and the scripts set style
-        # attributes throughout. Inline *scripts* are not allowed.
+        # Inline *styles* remain allowed. The app's own markup has none any
+        # more (tests/test_styles_in_stylesheets.py), but Google's sign-in
+        # scripts are not ours; drop this once Google sign-in is tested
+        # without it. Inline *scripts* are not allowed.
         "style-src 'self' 'unsafe-inline'; "
         "font-src 'self'; "
         "img-src 'self' data: blob: https://*.googleusercontent.com; "

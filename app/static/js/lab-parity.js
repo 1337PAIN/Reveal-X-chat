@@ -274,7 +274,7 @@
         const all = passed === CASES.length;
         summary.innerHTML = `<span class="verdict ${all ? 'ok' : 'bad'}">
             ${passed} / ${CASES.length} cases at full parity</span>
-            <div class="muted" style="margin-top:.4rem">
+            <div class="muted parity-engine">
             Engine: ${engine} &middot; tolerance: ${REL_TOL.toExponential(0)} relative
             </div>`;
         btn.disabled = false;
