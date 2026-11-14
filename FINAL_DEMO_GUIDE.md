@@ -10,11 +10,11 @@ Open two browser windows at `http://127.0.0.1:5000` and register two accounts (s
 
 ### 1. Show that E2EE is real
 
-Click the 🔑 button in the sidebar. Both accounts show **🔒 Key exchanged** with a key fingerprint.
+Click the 🔑 button in the sidebar. Both accounts show **🔒 Key exchanged** and a 60-digit **Safety number** — the same digits in both windows, because it is computed from both keys. Tick **Mark as verified** once you have compared them.
 
 Say:
 
-> Each browser generated an ECDH P-256 key pair. The private key is non-extractable and lives in IndexedDB — script cannot read it out. Only the public key was published. The shared AES-GCM key is derived with HKDF.
+> Each browser generated an ECDH P-256 key pair. The private key is non-extractable and lives in IndexedDB — script cannot read it out. Only the public key was published. HKDF derives one AES-GCM key per direction, and every message authenticates its sender, recipient and a random message id, so the server cannot reflect a message back to me or replay it unnoticed. My browser pinned bob's key the first time it saw it: if the server ever hands out a different one, sending stops until I accept the change. Comparing this number out of band is what catches a key swapped before first contact.
 
 Send a text message, then show what the server actually stored:
 
@@ -45,9 +45,11 @@ ML: Clean Share - 96.3% confidence
 RandomForest VC share tamper detector - checked in 29 ms
 ```
 
+Once bob opens it, one more row appears: `End-to-end SHA-256: match (the sender's Share 1, unchanged)`.
+
 Say:
 
-> The server recorded an HMAC of Share 1 when it was written to disk. The moment the share reached the recipient, their client asked the server to re-verify it and to run the Random Forest detector over it. Both checks pass, and this happened automatically — no button was pressed.
+> The split happened in alice's browser — the server never had the picture. It received Share 1, which is random noise, and a ciphertext holding Share 2 and the SHA-256 of Share 1, which it stores but cannot open, so bob did not even need to be online. The server recorded an HMAC of Share 1 when it was written to disk. The moment the share reached the recipient, their client asked the server to re-verify it and to run the Random Forest detector over it. Both checks pass, and this happened automatically — no button was pressed.
 
 ### 4. Attack the share and show detection
 
@@ -65,11 +67,11 @@ HMAC-SHA256: MISMATCH (share was modified)
 ML: Tampered Share - 100.0% confidence
 ```
 
-Expand **Suspicious-region heatmap and reasoning** to show the heatmap and the model's explanation.
+Expand **Suspicious-region heatmap and reasoning** to show the heatmap and the model's explanation. When bob reconstructs, the end-to-end row also reads `MISMATCH (not the Share 1 the sender made)`.
 
 Say:
 
-> Nothing in the app did that. An attacker with write access to the stored share replaced a block of it, exactly as could happen on a compromised server. The HMAC no longer matches, which is exact proof of modification. The ML detector independently classified it as tampered, and the heatmap shows *where* — which a hash alone cannot tell you.
+> Nothing in the app did that. An attacker with write access to the stored share replaced a block of it, exactly as could happen on a compromised server. The HMAC no longer matches, which is exact proof of modification. And even an attacker who also rewrote the server's HMAC record would be caught by the end-to-end hash: alice's browser sealed it inside the encrypted message, where the server cannot change it. The ML detector independently classified it as tampered, and the heatmap shows *where* — which a hash alone cannot tell you.
 
 ### 5. Reconstruct — and show the browser checking for itself
 
@@ -122,16 +124,22 @@ Say:
 Open `http://127.0.0.1:5000/lab`.
 
 1. Upload an image.
-2. Choose **None / clean share**, click **Run Reveal-X Analysis**.
+2. Choose **None / clean share**, click **Run analysis**.
    - Both shares look like random noise.
    - HMAC verification passed, ML classified the share as clean.
-   - XOR reconstruction recovered the image exactly: SSIM 1.0, PSNR 99 dB.
+   - XOR reconstruction recovered the image exactly: SSIM 1.00, PSNR at its 99 dB ceiling.
+   - Click any result image to open it large with crisp pixels; drag the **Original vs reconstructed** divider to compare the two in one frame.
 3. Change the attack to **Block replacement** and run again.
    - SHA-256/HMAC detect the exact tampering.
    - ML detects the suspicious pattern and shows the heatmap.
    - PSNR/SSIM drop because the reconstruction is damaged.
 4. Point at the enhancement row. When enhancement would *lower* SSIM, the dashboard says so explicitly and reports the unenhanced result instead of quietly substituting it.
 5. Point at the **In-browser ML (ONNX)** card. It reports the same verdict, the inference time (typically **under a millisecond**), and `Δp` — how far the browser's probability sits from the server's. Expect `Δp` around `1e-8`.
+
+6. Press **Run all attacks**: the dashboard runs all seven and fills a table of which check catches each, outlining any the ML missed. If it hits the 20-requests-a-minute limit it says so and waits.
+7. Choose an attack and press **Sweep strength**: it runs that attack from 5% to 75% and charts reconstruction SSIM against the ML's tamper probability, with the numbers in a table underneath.
+
+The dashboard is the one place the server still sees an image — it is a teaching tool with no recipient, and nothing it processes is stored.
 
 Worth running the **noise** attack here as a pair with Demo 3: HMAC says tampered, and *both* ML engines say clean. The browser inherits the model's real blind spot rather than papering over it, which is the honest outcome — see the HMAC-vs-ML answer below.
 
@@ -207,7 +215,7 @@ Visual Cryptography + E2EE + HMAC Integrity + ML Tamper Detection + Reconstructi
 pytest
 ```
 
-170 tests: VC round-trips and share secrecy, tamper detection and its fallback scorer, metrics, HMAC integrity across all seven attacks, one-time share access, deletion, retention, SQL portability, the HTTP endpoints, the Socket.IO handlers covering voice, E2EE payloads, key registration and account settings, Firebase token verification, the TOTP second factor, and the ONNX export.
+951 server tests (8 skip by design) and, with `node --test "tests/js/*.test.mjs"`, 179 browser tests. They cover VC round-trips and share secrecy, the browser-side split and everything the server refuses (the image itself, a plaintext Share 2, anything not plausibly a share), tamper detection and its fallback scorer, metrics, HMAC integrity across all seven attacks, one-time share access including eight requests racing for one share, deletion, retention, SQL portability, the HTTP endpoints and every Socket.IO handler, E2EE protocol v2 and key pinning, Firebase token verification, the TOTP second factor and its sealing at rest, the ONNX export, and the interface's accessibility rules.
 
 The ONNX tests check that the exported model matches scikit-learn on clean shares and all seven attacks, never flips a verdict, still reproduces the model's real `noise` blind spot, and that every browser asset is actually shipped and served — a missing file would silently disable in-browser detection without breaking anything visible.
 
@@ -217,7 +225,7 @@ python scripts/validate_final_product.py
 
 ## Screenshots worth capturing
 
-- The key manager showing exchanged fingerprints.
+- The key manager showing the same safety number in both windows.
 - A clean share bubble (green, ✅ verified intact).
 - A tampered share bubble (red, HMAC mismatch + ML confidence).
 - The expanded heatmap and reasoning.
