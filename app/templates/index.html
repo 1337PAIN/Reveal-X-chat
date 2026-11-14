@@ -549,6 +549,20 @@
         </div>
     </div>
 
+    <!-- The app's own confirmation (dialogs.js askConfirm), used in place of
+         window.confirm(). Cancel is the default focus. -->
+    <div id="confirmDialog" class="modal hidden" role="alertdialog" aria-modal="true"
+         aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogBody">
+        <div class="modal-content">
+            <h2 id="confirmDialogTitle">Are you sure?</h2>
+            <p id="confirmDialogBody"></p>
+            <div class="modal-actions">
+                <button id="confirmDialogCancel" class="btn btn-secondary" type="button">Cancel</button>
+                <button id="confirmDialogOk" class="btn btn-danger" type="button">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <div id="totpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="totpTitle">
         <div class="modal-content">
             <h2 id="totpTitle">Two-factor authentication</h2>
@@ -661,6 +675,7 @@
     <script src="{{ asset('js/crypto.js') }}"></script>
     <script src="{{ asset('js/vc-client.js') }}"></script>
     <script src="{{ asset('js/contact-row.js') }}"></script>
+    <script src="{{ asset('js/dialogs.js') }}"></script>
     <!-- In-browser tamper detection. Registers window.revealxTamperML but does
          not download the ~11 MB wasm runtime until something asks for a verdict. -->
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>

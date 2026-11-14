@@ -583,19 +583,10 @@ body[data-theme="light"] .lock-screen {
    .reaction-pill and .message-reactions were already styled; these are the
    pieces that were missing along with the client code. */
 
-.btn-react {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-    padding: 2px 4px;
-    border-radius: var(--radius-xs);
-    opacity: .75;
-}
+/* Size and hit area for .btn-react are in style.css with .btn-message-menu. */
+.btn-react { font-size: 13px; opacity: .75; }
 
-.btn-react:hover { opacity: 1; background: var(--glass-2); }
+.btn-react:hover { opacity: 1; }
 
 .reaction-pill {
     padding: 1px 8px;

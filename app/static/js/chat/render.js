@@ -488,7 +488,12 @@ export function displayMessage(msg) {
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
                 <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
-                <button class="btn-delete-message" data-message-id="${msg.id}" title="${isSent ? 'Delete for everyone' : 'Delete for me'}" aria-label="${isSent ? 'Delete for everyone' : 'Delete for me'}">×</button>
+                <span class="message-menu-wrap">
+                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
+                    <span class="message-menu" role="menu" hidden>
+                        <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
+                    </span>
+                </span>
             </div>
             <div class="message-reactions"></div>
         `;
@@ -496,8 +501,18 @@ export function displayMessage(msg) {
         // textContent, so message bodies can never introduce markup.
         fillTextContent(messageDiv.querySelector('.message-text'), msg);
 
-        const btn = messageDiv.querySelector('.btn-delete-message');
-        if (btn) btn.addEventListener('click', () => late.deleteMessage(msg.id, isSent));
+        // Delete sits in a per-message menu (dialogs.js) rather than as a bare
+        // "x" beside the timestamp, which was easy to hit by accident on a
+        // phone; deleteMessage then asks in an in-app dialog.
+        const menuBtn = messageDiv.querySelector('.btn-message-menu');
+        const menu = messageDiv.querySelector('.message-menu');
+        if (menuBtn && menu) {
+            const control = window.revealxDialogs.wireMenu(menuBtn, menu);
+            menu.querySelector('[role="menuitem"]').addEventListener('click', () => {
+                control.close(true);
+                late.deleteMessage(msg.id, isSent);
+            });
+        }
 
         const reactBtn = messageDiv.querySelector('.btn-react');
         if (reactBtn) reactBtn.addEventListener('click', () => toggleReactionPicker(msg.id, reactBtn));
@@ -517,7 +532,12 @@ export function displayMessage(msg) {
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
                 <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
-                <button class="btn-delete-message" data-message-id="${msg.id}" title="${isSent ? 'Delete for everyone' : 'Delete for me'}" aria-label="${isSent ? 'Delete for everyone' : 'Delete for me'}">×</button>
+                <span class="message-menu-wrap">
+                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
+                    <span class="message-menu" role="menu" hidden>
+                        <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
+                    </span>
+                </span>
             </div>
             <div class="message-reactions"></div>
         `;
@@ -528,8 +548,18 @@ export function displayMessage(msg) {
             msg
         );
 
-        const btn = messageDiv.querySelector('.btn-delete-message');
-        if (btn) btn.addEventListener('click', () => late.deleteMessage(msg.id, isSent));
+        // Delete sits in a per-message menu (dialogs.js) rather than as a bare
+        // "x" beside the timestamp, which was easy to hit by accident on a
+        // phone; deleteMessage then asks in an in-app dialog.
+        const menuBtn = messageDiv.querySelector('.btn-message-menu');
+        const menu = messageDiv.querySelector('.message-menu');
+        if (menuBtn && menu) {
+            const control = window.revealxDialogs.wireMenu(menuBtn, menu);
+            menu.querySelector('[role="menuitem"]').addEventListener('click', () => {
+                control.close(true);
+                late.deleteMessage(msg.id, isSent);
+            });
+        }
 
         const reactBtn = messageDiv.querySelector('.btn-react');
         if (reactBtn) reactBtn.addEventListener('click', () => toggleReactionPicker(msg.id, reactBtn));
@@ -580,7 +610,12 @@ export function displayMessage(msg) {
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
                 <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
-                <button class="btn-delete-message" data-message-id="${msg.id}" title="${isSent ? 'Delete for everyone' : 'Delete for me'}" aria-label="${isSent ? 'Delete for everyone' : 'Delete for me'}">×</button>
+                <span class="message-menu-wrap">
+                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
+                    <span class="message-menu" role="menu" hidden>
+                        <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
+                    </span>
+                </span>
             </div>
             <div class="message-reactions"></div>
         `;
@@ -607,8 +642,18 @@ export function displayMessage(msg) {
             runShareAnalysis(msg, { panel: messageDiv.querySelector('[data-role="tamper-panel"]') });
         }
 
-        const btn = messageDiv.querySelector('.btn-delete-message');
-        if (btn) btn.addEventListener('click', () => late.deleteMessage(msg.id, isSent));
+        // Delete sits in a per-message menu (dialogs.js) rather than as a bare
+        // "x" beside the timestamp, which was easy to hit by accident on a
+        // phone; deleteMessage then asks in an in-app dialog.
+        const menuBtn = messageDiv.querySelector('.btn-message-menu');
+        const menu = messageDiv.querySelector('.message-menu');
+        if (menuBtn && menu) {
+            const control = window.revealxDialogs.wireMenu(menuBtn, menu);
+            menu.querySelector('[role="menuitem"]').addEventListener('click', () => {
+                control.close(true);
+                late.deleteMessage(msg.id, isSent);
+            });
+        }
 
         const reactBtn = messageDiv.querySelector('.btn-react');
         if (reactBtn) reactBtn.addEventListener('click', () => toggleReactionPicker(msg.id, reactBtn));

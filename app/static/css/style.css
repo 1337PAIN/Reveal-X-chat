@@ -878,20 +878,83 @@ body::before {
     font-weight: 600;
 }
 
-.btn-delete-message {
+/* Message actions. .btn-react was 13px text with 2px padding (about 21 x
+   17px) and delete a bare 16px "x" with none, beside the timestamp: hard to
+   hit, and easy to hit the wrong one. 24 x 24px everywhere (WCAG 2.5.8) and
+   44 x 44px on touch screens, from padding, not a bigger glyph. Delete now
+   lives in a small per-message menu. */
+.btn-react,
+.btn-message-menu {
+    align-items: center;
     background: none;
     border: none;
+    border-radius: var(--radius-xs);
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 16px;
-    padding: 0;
+    display: inline-flex;
+    justify-content: center;
     line-height: 1;
-    transition: color 0.2s;
-    margin-left: auto;
+    min-height: 24px;
+    min-width: 24px;
+    padding: 4px;
 }
 
-.btn-delete-message:hover {
+.btn-message-menu:hover,
+.btn-react:hover {
+    background: var(--glass-2);
+    color: var(--text-primary);
+}
+
+@media (pointer: coarse) {
+    .btn-react,
+    .btn-message-menu {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+.message-menu-wrap {
+    margin-left: auto;
+    position: relative;
+}
+
+.message-menu {
+    background: var(--bg-secondary);
+    border: 1px solid var(--glass-border-strong, var(--border));
+    border-radius: var(--radius-sm, 8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    padding: 4px;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 4px);
+    z-index: 20;
+}
+
+.message-menu[hidden] {
+    display: none;
+}
+
+.message-menu-item {
+    background: none;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: var(--text-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    min-height: 44px;
+    padding: 8px 14px;
+    text-align: left;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.message-menu-item.danger {
     color: var(--danger);
+}
+
+.message-menu-item:hover {
+    background: var(--glass-2);
 }
 
 .btn-message-action {

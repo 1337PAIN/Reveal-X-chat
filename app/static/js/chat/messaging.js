@@ -296,11 +296,21 @@ async function sendMessage() {
  * Scope depends on who you are: the sender owns what they sent and removes it
  * from both sides; the recipient can only drop their own copy.
  */
-function deleteMessage(messageId, isSent) {
-    const question = isSent
-        ? 'Delete this message for everyone? It will be removed from both sides.'
-        : 'Delete this message from your side? The sender keeps their copy.';
-    if (!confirm(question)) return;
+async function deleteMessage(messageId, isSent) {
+    // Asked in the app (dialogs.js), not with the browser's confirm box, which blocks
+    // the page, cannot be themed, and reads as a browser alert.
+    const agreed = await window.revealxDialogs.askConfirm(isSent
+        ? {
+            title: 'Delete for everyone?',
+            body: 'This message will be removed from both sides.',
+            confirmLabel: 'Delete for everyone',
+        }
+        : {
+            title: 'Delete for you?',
+            body: 'It is removed from your side only. The sender keeps their copy.',
+            confirmLabel: 'Delete for me',
+        });
+    if (!agreed) return;
 
     socket.emit('delete_message', { message_id: messageId });
 }

@@ -200,6 +200,14 @@ Not measured by the script above, but present:
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
+- **Message actions are big enough to hit.** React and "More actions" are at
+  least 24 × 24px everywhere (WCAG 2.5.8) and 44 × 44px on touch screens,
+  from padding rather than a larger glyph. React used to be about 21 × 17px
+  and delete a bare 16px "×" beside the timestamp. Delete now sits in a
+  per-message menu (`aria-haspopup`, `aria-expanded`, focus moves in and back,
+  Escape closes) and asks in an in-app dialog whose default focus is Cancel,
+  instead of `window.confirm()` (`dialogs.js`, `tests/js/dialogs.test.mjs`,
+  `tests/test_message_actions.py`).
 - **The contact list works by keyboard.** Each row's clickable part is a
   `<button type="button">` (`contact-row.js`), so Tab reaches it and Enter or
   Space opens the chat; the open chat carries `aria-current="true"`. The rows
