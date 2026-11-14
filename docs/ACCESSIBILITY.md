@@ -280,7 +280,12 @@ Not measured by the script above, but present:
   per-message menu (`aria-haspopup`, `aria-expanded`, focus moves in and back,
   Escape closes) and asks in an in-app dialog whose default focus is Cancel,
   instead of `window.confirm()` (`dialogs.js`, `tests/js/dialogs.test.mjs`,
-  `tests/test_message_actions.py`).
+  `tests/test_message_actions.py`). The reaction picker works the same way:
+  Enter used to open it but leave focus on the button, with the next Tab
+  going to "More actions". Focus now moves to the first reaction, Left and
+  Right move between them, and a choice or Escape closes it with focus back
+  on the button, which says `aria-expanded`
+  (`tests/test_reaction_picker_keyboard.py`).
 - **The contact list works by keyboard.** Each row's clickable part is a
   `<button type="button">` (`contact-row.js`), so Tab reaches it and Enter or
   Space opens the chat; the open chat carries `aria-current="true"`. The rows

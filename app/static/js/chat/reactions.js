@@ -52,18 +52,42 @@ export function renderReactions(messageId, reactions) {
     });
 }
 
-/** The small picker shown by the react control on a bubble. */
+// The react button whose picker is open, so closing it -- by a choice,
+// Escape, or a click elsewhere -- can say so and hand focus back.
+let pickerTrigger = null;
+
+function closeReactionPicker(returnFocus) {
+    const open = document.querySelector('.reaction-picker');
+    if (open) open.remove();
+    const button = pickerTrigger;
+    pickerTrigger = null;
+    if (!button) return;
+    button.setAttribute('aria-expanded', 'false');
+    if (returnFocus && button.isConnected) button.focus();
+}
+
+/**
+ * The small picker shown by the react control on a bubble.
+ *
+ * Keyboard use is the same as the message menu's (dialogs.js wireMenu):
+ * focus moves to the first reaction, Left/Right move between them, and a
+ * choice or Escape closes it with focus back on the button. Before, Enter
+ * opened it but left focus on the button, and Tab went on to "More
+ * actions" -- the picker comes after it in the bubble.
+ */
 export function toggleReactionPicker(messageId, button) {
     const existing = document.querySelector('.reaction-picker');
     if (existing) {
         const wasMine = existing.dataset.messageId === messageId;
-        existing.remove();
+        closeReactionPicker(wasMine);
         if (wasMine) return;
     }
 
     const picker = document.createElement('div');
     picker.className = 'reaction-picker';
     picker.dataset.messageId = messageId;
+    picker.setAttribute('role', 'group');
+    picker.setAttribute('aria-label', 'Reactions');
     REACTION_CHOICES.forEach(emoji => {
         const choice = document.createElement('button');
         choice.type = 'button';
@@ -71,15 +95,31 @@ export function toggleReactionPicker(messageId, button) {
         choice.setAttribute('aria-label', 'React with ' + emoji);
         choice.addEventListener('click', () => {
             socket.emit('react_message', { message_id: messageId, emoji: emoji });
-            picker.remove();
+            closeReactionPicker(true);
         });
         picker.appendChild(choice);
+    });
+    picker.addEventListener('keydown', (event) => {
+        const choices = Array.from(picker.querySelectorAll('button'));
+        const at = choices.indexOf(document.activeElement);
+        if (event.key === 'Escape') {
+            // Handled here so basics.js's Escape (which closes dialogs) is
+            // not also asked to deal with it.
+            event.stopPropagation();
+            closeReactionPicker(true);
+        } else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+            event.preventDefault();
+            const step = event.key === 'ArrowRight' ? 1 : -1;
+            choices[(at + step + choices.length) % choices.length].focus();
+        }
     });
     // Anchored to the whole bubble, not the meta row: the meta sits at the
     // bottom, so opening upward from there put the picker over the message
     // text. From the bubble it floats clear above it.
     const bubble = button.closest('.message') || button.parentElement;
     bubble.appendChild(picker);
+    pickerTrigger = button;
+    button.setAttribute('aria-expanded', 'true');
 
     // ...but a bubble near the top of the scroll area has no room above, and
     // the picker was clipped by the container. Flip it under the bubble when
@@ -87,12 +127,13 @@ export function toggleReactionPicker(messageId, button) {
     const room = picker.getBoundingClientRect();
     const bounds = messagesContainer.getBoundingClientRect();
     if (room.top < bounds.top + 4) picker.classList.add('below');
+
+    picker.querySelector('button').focus();
 }
 
 document.addEventListener('click', (event) => {
     if (!event.target.closest('.reaction-picker') && !event.target.closest('.btn-react')) {
-        const open = document.querySelector('.reaction-picker');
-        if (open) open.remove();
+        closeReactionPicker(false);
     }
 });
 

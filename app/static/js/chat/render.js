@@ -504,7 +504,7 @@ export function displayMessage(msg) {
                 <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
-                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
+                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false">☺</button>
                 <span class="message-menu-wrap">
                     <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
                     <span class="message-menu" role="menu" hidden>
@@ -549,7 +549,7 @@ export function displayMessage(msg) {
                 <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
-                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
+                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false">☺</button>
                 <span class="message-menu-wrap">
                     <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
                     <span class="message-menu" role="menu" hidden>
@@ -623,7 +623,7 @@ export function displayMessage(msg) {
                 <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
-                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
+                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false">☺</button>
                 <span class="message-menu-wrap">
                     <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
                     <span class="message-menu" role="menu" hidden>
