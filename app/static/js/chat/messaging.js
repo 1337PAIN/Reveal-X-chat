@@ -132,6 +132,25 @@ messageInput.addEventListener('keypress', (event) => {
     if (event.key === 'Enter') sendMessage();
 });
 
+// The character counter (composer.js). Visible for the last 200 characters;
+// announced politely only when a threshold is crossed, through the existing
+// screen-reader region -- the visible counter itself is aria-hidden so a
+// reader is not told the count on every keystroke.
+let lastComposerLength = 0;
+function updateComposerCounter() {
+    const length = messageInput.value.length;
+    const counter = document.getElementById('composerCounter');
+    const view = window.revealxComposer.counterState(length, MAX_MESSAGE_LENGTH, lastComposerLength);
+    lastComposerLength = length;
+    if (counter) {
+        counter.hidden = !view.visible;
+        counter.textContent = view.text;
+        counter.dataset.level = view.level;
+    }
+    if (view.announce) announceToScreenReader(view.announce);
+}
+messageInput.addEventListener('input', updateComposerCounter);
+
 messageInput.addEventListener('input', () => {
     if (!state.selectedRecipientId) return;
     // With typing indicators off, nothing is emitted at all - the peer never
@@ -261,6 +280,7 @@ async function sendMessage() {
 
     const recipientId = state.selectedRecipientId;
     messageInput.value = '';
+    updateComposerCounter();
 
     let payload = { recipient_id: recipientId, message: text };
 

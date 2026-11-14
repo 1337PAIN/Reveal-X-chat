@@ -55,8 +55,12 @@ vc = VisualCryptography()
 reconstructor = VCReconstructor()
 tamper_detector = TamperDetector()
 MAX_TEXT_LENGTH = 2000
-# Base64 AES-GCM ciphertext runs roughly 1.4x the plaintext plus the tag.
-MAX_CIPHERTEXT_LENGTH = 4000
+# The largest base64 AES-GCM ciphertext a MAX_TEXT_LENGTH message can produce:
+# up to 4 UTF-8 bytes a character, plus the 16-byte tag, base64'd. This was
+# 4000, which fits 2,000 ASCII characters but refused a long message in Urdu
+# or with emoji -- invisible while the field's maxlength was 500, and a
+# refusal of text the field accepted once it was raised to the real limit.
+MAX_CIPHERTEXT_LENGTH = 4 * -(-(MAX_TEXT_LENGTH * 4 + 16) // 3)
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 
 #: Client-side split (send_share). Share 1 is random, so its PNG barely

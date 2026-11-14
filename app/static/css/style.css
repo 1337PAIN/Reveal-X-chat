@@ -2213,3 +2213,18 @@ body[data-theme="light"] .message-menu-item.danger {
     font-size: 11px;
     line-height: 1.2;
 }
+
+
+/* The composer's character counter (composer.js), shown for the last 200
+   characters. Both colours are the theme's text tokens, already audited AAA. */
+.composer-counter {
+    align-self: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.composer-counter[data-level="full"] {
+    color: var(--text-primary);
+    font-weight: 700;
+}

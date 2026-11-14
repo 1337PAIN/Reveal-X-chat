@@ -103,7 +103,7 @@
                         <p id="chatSubtitle">Choose someone online to start a private chat</p>
                     </div>
                     <!-- [MODIFIED] Added debounce attribute for search -->
-                    <input type="search" id="messageSearchInput" class="message-search" placeholder="Search chat..." autocomplete="off" debounce="300">
+                    <input type="search" id="messageSearchInput" class="message-search" placeholder="Search chat..." autocomplete="off">
                 </div>
 
                 <div id="messagesContainer" class="messages-container">
@@ -143,9 +143,10 @@
                         autocomplete="off"
                         disabled
                         aria-label="Message input"
-                        maxlength="500"
+                        maxlength="2000"
                         pattern="[^\s].*"
                     >
+                    <span id="composerCounter" class="composer-counter" aria-hidden="true" hidden></span>
                     <button id="sendBtn" class="btn btn-send" disabled aria-label="Send message">Send</button>
                 </div>
             </section>
@@ -676,6 +677,7 @@
     <script src="{{ asset('js/vc-client.js') }}"></script>
     <script src="{{ asset('js/contact-row.js') }}"></script>
     <script src="{{ asset('js/dialogs.js') }}"></script>
+    <script src="{{ asset('js/composer.js') }}"></script>
     <!-- In-browser tamper detection. Registers window.revealxTamperML but does
          not download the ~11 MB wasm runtime until something asks for a verdict. -->
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>

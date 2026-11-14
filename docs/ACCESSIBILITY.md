@@ -200,6 +200,12 @@ Not measured by the script above, but present:
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
+- **The composer's limit is the real one, and it says so near the end.** Its
+  `maxlength` was 500 while the server allows 2,000, so long messages were cut
+  off without a word. A counter appears for the last 200 characters and is
+  announced through the polite live region only when a threshold is crossed
+  (200, 100, 50, 20, 10 left, the limit), not per keystroke (`composer.js`,
+  `tests/js/composer.test.mjs`, `tests/test_composer.py`).
 - **No native `alert()`, `confirm()` or `prompt()`.** They block the page,
   cannot be themed, and some screen readers announce them as browser alerts
   unrelated to the app. Questions use the in-app dialog (`askConfirm`),

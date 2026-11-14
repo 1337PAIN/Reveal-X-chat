@@ -164,6 +164,11 @@ bucket of 30 that refills at one a second, `send_voice` has 10 refilling every
 `message_error` / `image_error` / `group_error` with "You are sending too
 fast".
 
+A plaintext `message` may be up to 2,000 characters. An encrypted one may be
+up to 10,688 base64 characters: the ciphertext of 2,000 four-byte UTF-8
+characters plus the tag, so nothing the composer accepts is refused once
+encrypted. (It was 4,000, which refused long messages in Urdu or with emoji.)
+
 `encrypted` + `iv` mean the body is AES-GCM ciphertext the server cannot read.
 An encrypted send must also carry `v: 2` and `msg_uuid`, a lowercase RFC 4122
 UUID. Both are stored and handed back in `extra` unchanged, because the
