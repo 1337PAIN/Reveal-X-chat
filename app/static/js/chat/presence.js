@@ -68,42 +68,17 @@ export function updateUsersList(nextUsers) {
         return;
     }
 
+    // Rows are built by contact-row.js: a <button> per account, so the list
+    // can be reached and used by keyboard, and nothing from another user is
+    // ever parsed as markup.
     visible.forEach(user => {
-        const li = document.createElement('li');
-        const count = state.unreadCounts[user.id] || 0;
-        li.dataset.userId = user.id;
-        li.className = user.id === state.selectedRecipientId ? 'active' : '';
-        if (!user.online) li.classList.add('offline');
-        
-        // Built with createElement and .src, never interpolated: the photo is
-        // a data URL from another user, and it used to be spliced into
-        // innerHTML, where a quote in it ended the attribute and the rest
-        // became markup in everyone's sidebar.
-        let avatar;
-        if (user.profile_image) {
-            avatar = document.createElement('img');
-            avatar.className = 'avatar-img';
-            avatar.alt = user.username;
-            avatar.src = user.profile_image;
-        } else {
-            avatar = document.createElement('div');
-            avatar.className = 'avatar-dot';
-            avatar.textContent = user.username.charAt(0).toUpperCase();
-        }
-        
         const status = user.status || (user.online ? 'online' : 'offline');
-        li.dataset.status = status;
-
-        li.innerHTML = `
-            <span class="user-meta">
-                <span class="user-name">${escapeHtml(user.username)}</span>
-                <span class="user-status-line">${escapeHtml(user.bio || STATUS_LABELS[status] || status)}</span>
-            </span>
-            ${count > 0 ? `<span class="unread-badge" aria-label="${count} unread messages">${count}</span>` : ''}
-        `;
-        li.prepend(avatar);
-        li.addEventListener('click', () => selectUser(user.id));
-        usersList.appendChild(li);
+        usersList.appendChild(window.revealxContactRow.buildContactRow(document, user, {
+            selected: user.id === state.selectedRecipientId,
+            unread: state.unreadCounts[user.id] || 0,
+            statusLabel: STATUS_LABELS[status] || status,
+            onSelect: selectUser,
+        }));
     });
 }
 

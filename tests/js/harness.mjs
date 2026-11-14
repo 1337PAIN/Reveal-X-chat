@@ -139,3 +139,57 @@ export async function importBrowserModule(file, globals = {}) {
     Object.assign(globalThis, globals);
     return import(pathToFileURL(file).href);
 }
+
+/**
+ * A minimal document for DOM-building code: createElement, attributes,
+ * classList, dataset, children, textContent, listeners. Enough to inspect
+ * the tree a builder produces -- not a browser, and it never parses HTML, so
+ * a builder that falls back to innerHTML is visible as `innerHTMLWrites`.
+ */
+export function makeDocument() {
+    const doc = { innerHTMLWrites: 0 };
+    doc.createElement = (tag) => {
+        const el = {
+            tagName: tag.toUpperCase(),
+            children: [],
+            attributes: {},
+            dataset: {},
+            listeners: {},
+            _text: '',
+            className: '',
+            get textContent() {
+                return this._text + this.children.map((c) => c.textContent).join('');
+            },
+            set textContent(value) { this._text = String(value); this.children = []; },
+            set innerHTML(_value) { doc.innerHTMLWrites += 1; },
+            get innerHTML() { return ''; },
+            setAttribute(name, value) { this.attributes[name] = String(value); },
+            getAttribute(name) { return name in this.attributes ? this.attributes[name] : null; },
+            removeAttribute(name) { delete this.attributes[name]; },
+            hasAttribute(name) { return name in this.attributes; },
+            append(...nodes) { this.children.push(...nodes); },
+            appendChild(node) { this.children.push(node); return node; },
+            prepend(...nodes) { this.children.unshift(...nodes); },
+            addEventListener(kind, fn) { (this.listeners[kind] ||= []).push(fn); },
+            click() { (this.listeners.click || []).forEach((fn) => fn({ preventDefault() {} })); },
+            querySelectorAll(tag) {
+                const out = [];
+                const walk = (n) => n.children.forEach((c) => {
+                    if (c.tagName === tag.toUpperCase()) out.push(c);
+                    walk(c);
+                });
+                walk(this);
+                return out;
+            },
+            get classList() {
+                const self = this;
+                return {
+                    add: (...names) => { self.className = [...new Set([...self.className.split(' ').filter(Boolean), ...names])].join(' '); },
+                    contains: (name) => self.className.split(' ').includes(name),
+                };
+            },
+        };
+        return el;
+    };
+    return doc;
+}

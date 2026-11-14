@@ -285,6 +285,30 @@ body[data-theme="light"] .logo-image {
     transition: background .18s ease, border-color .18s ease, transform .18s ease;
 }
 
+/* The clickable part of a row is a real <button> (contact-row.js), so the
+   list works by keyboard. It inherits the row's look; the global
+   :focus-visible ring now shows on it, which the <li> never could because it
+   was not focusable at all. 44px for the touch-target rule. */
+.users-list li {
+    padding: 0;
+}
+
+.contact-button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: inherit;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 12px;
+    text-align: left;
+    width: 100%;
+}
+
 .users-list li:hover {
     background: var(--glass-2);
     border-color: var(--glass-border);

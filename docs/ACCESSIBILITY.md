@@ -197,3 +197,9 @@ Not measured by the script above, but present:
   `@supports not (backdrop-filter)` fallbacks, so the glass layer degrades to
   solid surfaces rather than becoming unreadable.
 - Responsive down to 375px with 44px minimum touch targets.
+- **The contact list works by keyboard.** Each row's clickable part is a
+  `<button type="button">` (`contact-row.js`), so Tab reaches it and Enter or
+  Space opens the chat; the open chat carries `aria-current="true"`. The rows
+  were `<li>` elements with a click listener, which a keyboard could not reach
+  at all, so no conversation could be opened without a mouse or touch
+  (`tests/js/contact-row.test.mjs`, `tests/test_contact_rows.py`).
