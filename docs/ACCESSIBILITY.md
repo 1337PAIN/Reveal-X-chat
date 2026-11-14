@@ -285,5 +285,8 @@ Not measured by the script above, but present:
   `<button type="button">` (`contact-row.js`), so Tab reaches it and Enter or
   Space opens the chat; the open chat carries `aria-current="true"`. The rows
   were `<li>` elements with a click listener, which a keyboard could not reach
-  at all, so no conversation could be opened without a mouse or touch
+  at all, so no conversation could be opened without a mouse or touch.
+  Each button is named "name, status" (plus "3 unread messages" when there
+  are any): named from its content it read "e2ebobOffline", and the unread
+  badge relied on `aria-label` on a plain `<span>`, which ARIA does not allow
   (`tests/js/contact-row.test.mjs`, `tests/test_contact_rows.py`).

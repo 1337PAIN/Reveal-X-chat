@@ -66,6 +66,22 @@ test('unread count, presence and state are exposed', () => {
     assert.ok(li.classList.contains('offline'));
     assert.equal(li.dataset.status, 'away');
     assert.match(button.textContent, /3/);
+    // The count is said in the button's name; the badge itself is hidden,
+    // since aria-label on a plain <span> is not allowed and may be ignored.
     const badge = li.querySelectorAll('span').find((s) => s.className === 'unread-badge');
-    assert.equal(badge.getAttribute('aria-label'), '3 unread messages');
+    assert.equal(badge.getAttribute('aria-hidden'), 'true');
+    assert.equal(badge.getAttribute('aria-label'), null);
+    assert.equal(button.getAttribute('aria-label'), 'alice, Online, 3 unread messages');
+});
+
+test('the name and status are read as separate words', () => {
+    // Read from content, the name and status line ran together: a screen
+    // reader said "e2ebobOffline". The button now carries an explicit name.
+    const { button } = row({ ...alice, online: false, status: 'offline' }, { statusLabel: 'Offline' });
+    assert.equal(button.getAttribute('aria-label'), 'alice, Offline');
+});
+
+test('a bio stands in for the status, as it does on screen', () => {
+    const { button } = row({ ...alice, bio: 'at the desk' });
+    assert.equal(button.getAttribute('aria-label'), 'alice, at the desk');
 });

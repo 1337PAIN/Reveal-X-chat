@@ -64,19 +64,26 @@
         name.textContent = user.username;
         const line = doc.createElement('span');
         line.className = 'user-status-line';
-        line.textContent = user.bio || opts.statusLabel || status;
+        const statusText = user.bio || opts.statusLabel || status;
+        line.textContent = statusText;
         meta.append(name, line);
 
         button.append(avatar, meta);
 
         const unread = Number(opts.unread) || 0;
+        // An explicit name: read from content, the name and status line ran
+        // together ("e2ebobOffline"). The badge is hidden and its count said
+        // here instead -- aria-label on a plain <span> is not allowed.
+        const spoken = [user.username, statusText];
         if (unread > 0) {
+            spoken.push(`${unread} unread messages`);
             const badge = doc.createElement('span');
             badge.className = 'unread-badge';
-            badge.setAttribute('aria-label', `${unread} unread messages`);
+            badge.setAttribute('aria-hidden', 'true');
             badge.textContent = String(unread);
             button.append(badge);
         }
+        button.setAttribute('aria-label', spoken.join(', '));
 
         if (typeof opts.onSelect === 'function') {
             button.addEventListener('click', () => opts.onSelect(user.id));
