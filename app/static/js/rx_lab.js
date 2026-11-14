@@ -33,6 +33,35 @@ if (heatmapOpacity && heatOverlay) {
     applyHeat();
 }
 
+// Click-to-zoom. Each result image is a button, disabled until it has an
+// image; it opens the image large in a native modal dialog, and focus goes
+// back to the button when the dialog closes (by Close, Escape or a click on
+// the backdrop).
+const zoomDialog = document.getElementById('zoomDialog');
+let zoomOpener = null;
+if (zoomDialog) {
+    const zoomImage = document.getElementById('zoomImage');
+    document.querySelectorAll('.zoom-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+            const img = button.querySelector('img');
+            if (!img || !img.getAttribute('src')) return;
+            zoomImage.src = img.src;
+            zoomImage.alt = img.alt;
+            document.getElementById('zoomTitle').textContent = button.getAttribute('aria-label').replace(/^Enlarge /, '');
+            zoomOpener = button;
+            zoomDialog.showModal();
+        });
+    });
+    document.getElementById('zoomClose').addEventListener('click', () => zoomDialog.close());
+    zoomDialog.addEventListener('click', (event) => {
+        if (event.target === zoomDialog) zoomDialog.close();
+    });
+    zoomDialog.addEventListener('close', () => {
+        if (zoomOpener) zoomOpener.focus();
+        zoomOpener = null;
+    });
+}
+
 strengthRange.addEventListener('input', () => {
     strengthValue.textContent = `${strengthRange.value}%`;
 });
@@ -341,6 +370,11 @@ function renderResults(data) {
     Object.entries(ids).forEach(([key, elementId]) => {
         const el = document.getElementById(elementId);
         if (el && data.images[key]) el.src = data.images[key];
+    });
+    // Each image can now be opened large.
+    document.querySelectorAll('.zoom-btn').forEach((button) => {
+        const img = button.querySelector('img');
+        if (img && img.getAttribute('src')) button.disabled = false;
     });
     // The share under the heatmap overlay.
     const heatBase = document.getElementById('imgHeatBase');

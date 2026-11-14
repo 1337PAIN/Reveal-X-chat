@@ -499,7 +499,7 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 934 server tests
+pytest                          # 944 server tests
 node --test "tests/js/*.test.mjs"   # 179 browser tests
 ```
 
@@ -509,7 +509,7 @@ completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
 
-**934 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
+**944 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
 
 **179 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
@@ -556,7 +556,7 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 
 1. Upload an image at `/lab`.
 2. Select `None / clean share` and run analysis. Both shares look random, HMAC passes, ML says clean.
-3. Select `Block replacement` and run again. Show the HMAC mismatch, ML confidence, heatmap, damaged reconstruction, and the PSNR/SSIM drop. The heatmap is drawn over the received share; its opacity slider goes from the share alone (0%) to the heatmap alone (100%).
+3. Select `Block replacement` and run again. Show the HMAC mismatch, ML confidence, heatmap, damaged reconstruction, and the PSNR/SSIM drop. The heatmap is drawn over the received share; its opacity slider goes from the share alone (0%) to the heatmap alone (100%). Click any result image (or focus it and press Enter) to open it large with crisp pixels, where a scratch or a replaced block on the noise-like share is easy to see.
 4. Press **Run all attacks** to fill the table of which check catches each of the seven attacks on this image.
 5. Pick an attack and press **Sweep strength** to chart it from 5% to 75%: reconstruction SSIM and the ML's tamper probability, drawn as an inline SVG with the same numbers in a table. Swept with random noise, SSIM collapses while the ML's probability stays flat, which is the case the HMAC exists for.
 

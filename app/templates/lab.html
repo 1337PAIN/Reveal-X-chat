@@ -99,10 +99,10 @@
         </section>
 
         <section class="image-grid">
-            <article class="image-card"><h3>Original</h3><img id="imgOriginal" alt="Original image"><p>Input image after safe resize.</p></article>
-            <article class="image-card"><h3>Share 1 clean</h3><img id="imgShare1Clean" alt="Clean Share 1"><p>Random-looking transmitted share before attack.</p></article>
-            <article class="image-card"><h3>Share 1 received</h3><img id="imgShare1Received" alt="Received Share 1"><p>This is the share analyzed by HMAC and ML.</p></article>
-            <article class="image-card"><h3>Share 2</h3><img id="imgShare2" alt="Share 2"><p>Second share required for reconstruction.</p></article>
+            <article class="image-card"><h3>Original</h3><button type="button" class="zoom-btn" disabled aria-label="Enlarge Original"><img id="imgOriginal" alt="Original image"></button><p>Input image after safe resize.</p></article>
+            <article class="image-card"><h3>Share 1 clean</h3><button type="button" class="zoom-btn" disabled aria-label="Enlarge Share 1 clean"><img id="imgShare1Clean" alt="Clean Share 1"></button><p>Random-looking transmitted share before attack.</p></article>
+            <article class="image-card"><h3>Share 1 received</h3><button type="button" class="zoom-btn" disabled aria-label="Enlarge Share 1 received"><img id="imgShare1Received" alt="Received Share 1"></button><p>This is the share analyzed by HMAC and ML.</p></article>
+            <article class="image-card"><h3>Share 2</h3><button type="button" class="zoom-btn" disabled aria-label="Enlarge Share 2"><img id="imgShare2" alt="Share 2"></button><p>Second share required for reconstruction.</p></article>
             <article class="image-card">
                 <h3>Tamper heatmap</h3>
                 <!-- The heatmap over the received share it was computed from, so a
@@ -115,8 +115,8 @@
                 <input id="heatmapOpacity" type="range" min="0" max="100" value="60" class="range-input">
                 <p>Bright regions are statistically suspicious. At 0% you see the share alone; at 100%, the heatmap alone.</p>
             </article>
-            <article class="image-card"><h3>Reconstructed</h3><img id="imgReconstructed" alt="Reconstructed image"><p>XOR result from received Share 1 and Share 2.</p></article>
-            <article class="image-card"><h3 id="enhancedTitle">Enhanced output</h3><img id="imgEnhanced" alt="Enhanced image"><p id="enhancedCaption">Denoised and sharpened output for quality comparison.</p></article>
+            <article class="image-card"><h3>Reconstructed</h3><button type="button" class="zoom-btn" disabled aria-label="Enlarge Reconstructed"><img id="imgReconstructed" alt="Reconstructed image"></button><p>XOR result from received Share 1 and Share 2.</p></article>
+            <article class="image-card"><h3 id="enhancedTitle">Enhanced output</h3><button type="button" class="zoom-btn" disabled aria-label="Enlarge Enhanced output"><img id="imgEnhanced" alt="Enhanced image"></button><p id="enhancedCaption">Denoised and sharpened output for quality comparison.</p></article>
             <article class="image-card metric-card"><h3>Model explanation</h3><ul id="explanationList"><li>Run analysis to view reasoning.</li></ul></article>
         </section>
 
@@ -167,6 +167,15 @@
             <pre id="hashBlock" class="hash-block">Hashes will appear here after processing.</pre>
         </section>
     </main>
+    <!-- One result image, large. A native dialog shown modal: focus moves in,
+         Escape closes it, and rx_lab.js puts focus back on the image. -->
+    <dialog id="zoomDialog" class="zoom-dialog" aria-labelledby="zoomTitle">
+        <div class="zoom-head">
+            <h2 id="zoomTitle">Image</h2>
+            <button type="button" id="zoomClose" class="nav-link" aria-label="Close enlarged image">Close</button>
+        </div>
+        <img id="zoomImage" alt="">
+    </dialog>
 
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>
     <script src="{{ asset('js/lab-format.js') }}"></script>
