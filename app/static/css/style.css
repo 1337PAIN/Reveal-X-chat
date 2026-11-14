@@ -1726,6 +1726,15 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     }
 }
 
+/* Entrances, under reduced motion: each new bubble slid up as it faded in,
+   so a busy chat was never still. All three rest in their final state, so
+   turning the animation off simply shows them. */
+@media (prefers-reduced-motion: reduce) {
+    .message,
+    .offline-banner,
+    .activity-flash { animation: none; }
+}
+
 /* ==========================================
    Real-time share tamper detection
    ========================================== */

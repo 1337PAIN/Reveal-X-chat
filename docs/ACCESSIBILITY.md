@@ -264,7 +264,11 @@ Not measured by the script above, but present:
   arrive, so it was invisible whenever the animation did not play, and the
   slide ignored reduced motion. It now rests in place, slides only as an
   entrance, and does not slide at all under reduced motion
-  (`tests/test_bottom_sheet_motion.py`).
+  (`tests/test_bottom_sheet_motion.py`). The same goes for each new message
+  bubble's slide-in, the offline banner's slide-down and the activity flash,
+  none of which had a reduced-motion override, so a busy chat was never still
+  (`tests/test_reduced_motion_entrances.py`). The spinner keeps its existing
+  cross-fade substitute.
 - Responsive down to 375px with 44px minimum touch targets. A bubble's meta
   row wraps: on a share it carries the "Opens once" chip, the time, the
   status and two 44px buttons, about 320px, and on a phone it used to spill
