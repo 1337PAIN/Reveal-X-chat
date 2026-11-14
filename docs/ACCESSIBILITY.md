@@ -200,6 +200,12 @@ Not measured by the script above, but present:
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
+- **Every dialog is announced as one, and every close button says what it
+  closes.** The settings panel was a plain `<div>` (now `role="dialog"`,
+  `aria-modal`, labelled by its heading), and its "×" -- like those of the
+  encryption keys and two-factor setup panels -- was read as "times" or
+  "Close" without saying which of the stacked panels it closed. The sidebar's
+  "Accounts" heading is an `h2` (`tests/test_dialog_semantics.py`).
 - **Nothing empty is drawn as if it were content.** The reconstruction
   previews were `<img src="">` -- a broken-image icon whose alt text a screen
   reader announced -- until something loaded; they are now hidden and replaced

@@ -451,7 +451,7 @@ body::before {
     z-index: 850;
 }
 
-.sidebar-header h3 {
+.sidebar-header h2 {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 1px;

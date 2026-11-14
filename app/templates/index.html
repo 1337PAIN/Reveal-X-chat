@@ -83,7 +83,7 @@
                 </div>
 
                 <div class="sidebar-header">
-                    <h3>Accounts</h3>
+                    <h2>Accounts</h2>
                     <input type="search" id="userSearchInput" class="user-search" placeholder="Search accounts..." autocomplete="off">
                 </div>
                 <ul id="usersList" class="users-list">
@@ -227,7 +227,7 @@
         <div class="modal-content">
             <div class="settings-header">
                 <h2 id="keyManagerTitle">Encryption Keys</h2>
-                <button id="closeKeyManagerBtn" class="btn-close" type="button">×</button>
+                <button id="closeKeyManagerBtn" class="btn-close" type="button" aria-label="Close encryption keys">×</button>
             </div>
             <div class="key-manager-content">
                 <div class="key-info">
@@ -267,11 +267,11 @@
     </div>
 
     <!-- Settings Modal -->
-    <div id="settingsModal" class="modal hidden">
+    <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <div class="modal-content settings-content">
             <div class="settings-header">
-                <h2>Settings</h2>
-                <button id="closeSettingsBtn" class="btn-close" type="button">×</button>
+                <h2 id="settingsTitle">Settings</h2>
+                <button id="closeSettingsBtn" class="btn-close" type="button" aria-label="Close settings">×</button>
             </div>
             <div class="settings-body">
                 <div class="settings-section">
@@ -583,7 +583,7 @@
         <div class="modal-content">
             <div class="settings-header">
                 <h2 id="totpSetupTitle">Set up two-factor authentication</h2>
-                <button id="totpSetupCloseBtn" class="btn-close" type="button" aria-label="Close">×</button>
+                <button id="totpSetupCloseBtn" class="btn-close" type="button" aria-label="Close two-factor setup">×</button>
             </div>
             <p>Scan this with Google Authenticator, Authy or 1Password, then enter the code it shows.</p>
             <img id="totpQr" class="totp-qr" alt="Two-factor setup QR code">
