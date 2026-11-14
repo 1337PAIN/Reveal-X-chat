@@ -13,8 +13,9 @@ Two implementations:
   which is what running more than one worker requires: otherwise each worker
   has its own login throttle (so N workers allow N times the attempts), its
   own replay cache (so a TOTP code can be used once per worker) and its own
-  idea of who is online. Multi-step updates use WATCH/MULTI, so they stay
-  atomic across workers without server-side scripting.
+  idea of who is online. Each check-and-update holds a short per-key lock
+  (SET NX with an expiry), so it stays atomic across workers without
+  server-side scripting.
 
 What stays per process on purpose: half-finished TOTP sign-ins and
 enrolments, which are keyed by socket id. A socket lives on one worker (the
@@ -198,23 +199,40 @@ class RedisStore:
     def _wkey(self, namespace, key):
         return self._k('w', namespace, json.dumps(key, separators=(',', ':')))
 
-    def _transaction(self, watch, body):
-        """Run body(pipe) under WATCH, retrying when another worker interferes."""
-        from redis.exceptions import WatchError
-        while True:
-            with self.r.pipeline() as pipe:
-                try:
-                    pipe.watch(*watch)
-                    return body(pipe)
-                except WatchError:
-                    continue
+    def _locked(self, names, body):
+        """Run body() holding a short Redis lock on each of these keys.
+
+        Check-then-update has to be one step across workers. This used
+        WATCH/MULTI, which is optimistic: under full-suite load it once let
+        10 of 30 parallel login reservations through against a limit of 8 --
+        in fakeredis, but optimistic retries are exactly where a subtle
+        emulation or driver difference hides. A plain mutex per key (SET NX
+        with an expiry, taken in sorted order so two callers cannot deadlock,
+        released only by its owner) is easy to reason about and behaves the
+        same everywhere.
+        """
+        locks = sorted({self._k('lock', name) for name in names})
+        token = uuid.uuid4().hex
+        held = []
+        try:
+            for lock in locks:
+                deadline = time.monotonic() + 5
+                while not self.r.set(lock, token, nx=True, px=2000):
+                    if time.monotonic() > deadline:
+                        raise TimeoutError(f'could not lock {lock}')
+                    time.sleep(0.001)
+                held.append(lock)
+            return body()
+        finally:
+            for lock in held:
+                # Only ours: an expired lock may already belong to someone else.
+                if self.r.get(lock) in (token, token.encode()):
+                    self.r.delete(lock)
 
     # -------------------------------------------------- sliding windows
 
     def _wait_in(self, conn, namespace, keys_limits, span, now):
-        # Read-only on purpose: under WATCH, writing a watched key before
-        # MULTI would abort this connection's own transaction. Old entries
-        # are pruned inside the transaction instead.
+        # Read-only: old entries are pruned in the same pipeline as the add.
         for key, limit in keys_limits:
             name = self._wkey(namespace, key)
             if conn.zcount(name, now - span, '+inf') >= limit:
@@ -229,19 +247,18 @@ class RedisStore:
     def window_reserve(self, namespace, keys_limits, span, now):
         names = [self._wkey(namespace, key) for key, _ in keys_limits]
 
-        def body(pipe):
-            wait = self._wait_in(pipe, namespace, keys_limits, span, now)
+        def body():
+            wait = self._wait_in(self.r, namespace, keys_limits, span, now)
             if wait:
-                pipe.unwatch()
                 return wait
-            pipe.multi()
+            pipe = self.r.pipeline()
             for name in names:
                 pipe.zremrangebyscore(name, '-inf', now - span)
                 pipe.zadd(name, {f'{now!r}|{uuid.uuid4().hex}': now})
                 pipe.expire(name, int(span) + 60)
             pipe.execute()
             return 0
-        return self._transaction(names, body)
+        return self._locked(names, body)
 
     def window_remove(self, namespace, keys, stamp):
         for key in keys:
@@ -263,18 +280,18 @@ class RedisStore:
     def take_token(self, key, capacity, rate, now):
         name = self._k('b', json.dumps(key, separators=(',', ':')))
 
-        def body(pipe):
-            stored = pipe.hgetall(name)
+        def body():
+            stored = self.r.hgetall(name)
             tokens = float(stored.get(b'tokens', capacity)) if stored else float(capacity)
             last = float(stored.get(b'last', now)) if stored else now
             tokens = min(float(capacity), tokens + (now - last) * rate)
             allowed = tokens >= 1
-            pipe.multi()
+            pipe = self.r.pipeline()
             pipe.hset(name, mapping={'tokens': tokens - 1 if allowed else tokens, 'last': now})
             pipe.expire(name, 3600)
             pipe.execute()
             return allowed
-        return self._transaction([name], body)
+        return self._locked([name], body)
 
     # ----------------------------------------------------- one-time use
 

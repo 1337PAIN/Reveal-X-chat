@@ -18,7 +18,9 @@ from app import state
 def store(request):
     if request.param == 'memory':
         return state.MemoryStore()
-    return state.RedisStore(fakeredis.FakeRedis())
+    # Its own server: FakeRedis() instances otherwise share a default one,
+    # so one test's keys would be visible to the next.
+    return state.RedisStore(fakeredis.FakeRedis(server=fakeredis.FakeServer()))
 
 
 def test_a_window_counts_and_refuses_past_its_limit(store):
@@ -130,3 +132,24 @@ def test_redis_also_turns_on_the_socketio_message_queue():
     out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,
                          cwd=str(__import__('pathlib').Path(__file__).resolve().parent.parent))
     assert out.stdout.strip().endswith('redis://localhost:6379/0'), out.stderr[-500:]
+
+
+def test_the_limit_holds_across_many_parallel_rounds():
+    """The single round above passed hundreds of times and still failed once
+    under full-suite load with optimistic WATCH/MULTI; many rounds in a row,
+    with the two-key login reservation, is the case that has to hold."""
+    for _ in range(40):
+        store = state.RedisStore(fakeredis.FakeRedis(server=fakeredis.FakeServer()))
+        keys = [(('account', 'victim'), 8), (('address', '10.0.0.1'), 50)]
+        barrier, results = threading.Barrier(24), []
+
+        def go():
+            barrier.wait()
+            results.append(store.window_reserve('login', keys, 900, 1000.0))
+
+        threads = [threading.Thread(target=go) for _ in range(24)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert results.count(0) == 8
