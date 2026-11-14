@@ -195,6 +195,60 @@ result while this audit was being done:
   sign-in and `/lab`. Transient states (toasts, the TOTP modal, the
   reconstruction panel mid-fetch) are not visited automatically.
 
+## Automated check: axe-core
+
+axe-core 4.10.2 was run in the browser against the sign-in screen, the chat
+with a conversation open, the settings panel and `/lab`, in both themes
+(14 Nov 2026), with its AAA contrast rule (`color-contrast-enhanced`)
+switched on as well as the default WCAG A/AA rules: **0 violations** on
+every screen. `/lab` has one theme only, so it was checked once. axe is not a
+project dependency and nothing loads it: it was injected for the run from a
+copy outside the repository.
+
+Two things to know when repeating it:
+
+- **Freeze transitions first.** Run after toggling the theme, axe reported
+  eight contrast failures (2.2:1) that were the previous theme's surfaces
+  under the new theme's text, mid-animation -- the same trap as point 5
+  above. In a background tab the animation never finishes, so waiting is not
+  enough; add `*, *::before, *::after { transition: none !important;
+  animation: none !important; }` before running. With that, there were
+  none.
+- **Its name computation caught what its rules did not.** No rule failed on
+  the contact list, but `axe.commons.text.accessibleText()` gave a contact's
+  name as "e2ebobOffline". That is now fixed (below).
+
+## Keyboard-only walkthrough
+
+Done with real key presses, no pointer, in the in-app browser on
+14 Nov 2026, signed in as a test account. Each step says where focus went.
+
+| Step | Keys | Result |
+| --- | --- | --- |
+| Sign in | page loads | Focus starts in the username box (remembered username pre-filled) |
+| | Shift+Tab | Wraps to "Request account", the dialog's last control -- not into the chat behind |
+| | Tab, type password, Enter | Signed in; focus on the account search |
+| Open a chat | Tab | The contact, read as "e2ebob, Offline" |
+| | Enter | Chat opens; focus moves to the message box |
+| Send | type, Enter | Sent, end-to-end encrypted; focus stays in the message box |
+| React | Shift+Tab ×4 | "Add a reaction" on the new message |
+| | Enter | Picker opens; focus on "React with 👍" |
+| | Right, Enter | Reacted with ❤️; picker closes; focus back on "Add a reaction" |
+| | Enter, Escape | Picker opens and closes; focus back on the button |
+| Delete | Tab, Enter | "More actions" menu opens; focus on "Delete for everyone" |
+| | Enter | Confirmation opens; focus on **Cancel** |
+| | Tab / Shift+Tab | Cycles Cancel and "Delete for everyone" only |
+| | Shift+Tab, Enter | Deleted from both sides; focus on the message box |
+| Settings | Shift+Tab to Settings, Enter | Settings opens; focus on "Close settings" |
+| | Shift+Tab | Wraps to "Save Changes", the panel's last control |
+| Close | Escape | Settings closes; focus back on the Settings button |
+
+Every step that failed on the first pass is fixed and listed under "Other
+accessibility work": the dialog let Shift+Tab out, the contact name ran
+together, the reaction picker never took focus, settings neither took focus
+nor gave it back, and focus fell to `<body>` after signing in and after a
+delete.
+
 ## Other accessibility work
 
 Not measured by the script above, but present:
