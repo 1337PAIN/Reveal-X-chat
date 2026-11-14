@@ -56,7 +56,7 @@ The split now happens in the sender's browser (`vc-client.js`, `send_share`):
 3. Only Share 1 is uploaded. On its own it is a one-time pad, statistically
    independent of the image. The server stores it byte for byte, records its
    HMAC and runs the tamper detector on it, as it always has.
-4. Share 2 travels inside an E2EE v3 message whose plaintext is
+4. Share 2 travels inside an E2EE v4 message whose plaintext is
    `{share2_png_b64, share1_sha256, width, height}`. The server stores that
    ciphertext as the message body and cannot open it, so the recipient no
    longer has to be online.
@@ -295,19 +295,23 @@ away the image's.
 are all visible to the server and to anyone watching the network. Message
 *contents* are encrypted; the social graph is not.
 
-**Protocol v3: what is bound, and what freshness does and does not prove.**
-Each direction of a conversation has its own key (HKDF info
-`reveal-x-message-key-v3|<sender public key>|<recipient public key>`), and
-AES-GCM authenticates
-`v3|<conversation>|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>`, where
-conversation is `dm` (`group:<id>` is reserved) and `sent_at` is the sender's
-clock in integer milliseconds (`e2ee.js`). So the server cannot reflect a
-message back to its author, move it to another conversation, relabel its
-sender, recipient or uuid, or change its time: any of those breaks the tag.
+**Protocol v4: what is bound, and what freshness does and does not prove.**
+Every message has its own ECDH key pair. Its key comes from HKDF-SHA256 over
+two agreements -- `es` = ECDH(ephemeral private, recipient's long-term public)
+and `ss` = ECDH(sender's long-term private, recipient's long-term public) --
+with info `reveal-x-message-key-v4|<sender public key>|<recipient public
+key>|<epk>`, so each direction and each message has its own key. AES-GCM
+authenticates
+`v4|<conversation>|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>|<epk>`,
+where conversation is `dm` (`group:<id>` is reserved), `sent_at` is the
+sender's clock in integer milliseconds and `epk` the message's ephemeral
+public key (`e2ee.js`). So the server cannot reflect a message back to its
+author, move it to another conversation, relabel its sender, recipient or
+uuid, change its time or swap its ephemeral key: any of those breaks the tag.
 No field may contain `|`, so two different contexts cannot encode alike.
 
 The chat opens every encrypted row through `openMessage`, in this order:
-decrypt (only `v: 3` is ever tried -- v1 and v2 decryption is removed, not
+decrypt (only `v: 4` is ever tried -- v1 to v3 decryption is removed, not
 kept as a fallback, and such a row shows *Sent before an update; can't be
 opened*); then **freshness** -- an authenticated `sent_at` more than 65
 minutes old or more than 5 minutes ahead is shown as *Can't be verified*;
@@ -349,10 +353,33 @@ verified**) detects that. Incoming messages are still shown while a change is
 pending review; only sending is blocked. Pins live in the browser, so a new
 browser or cleared site data starts from first use again.
 
-**No forward secrecy.** ECDH key pairs are long-lived. Compromising one
-participant's private key allows decryption of every past message in that
-conversation that an attacker captured. A ratchet (Double Ratchet or similar)
-would fix this and is not implemented.
+**Forward secrecy for the sender only.** Since protocol v4 each message is
+sealed with a fresh ephemeral key whose private half is never stored, mixed
+with the long-term pair (`es` and `ss` above). What that buys and what it does
+not:
+
+- *The sender's key, taken later, opens nothing she sent.* It yields `ss` but
+  not `es`. Held by `tests/js/e2ee.test.mjs` with a session reloaded from the
+  sender's own IndexedDB.
+- *The recipient's key, taken later, still opens everything sent to him.* It
+  yields both `es` (the ephemeral public key travels in the message) and
+  `ss`. Protecting that side needs a ratchet -- a Double Ratchet with an
+  X3DH-style handshake -- which is not implemented. So for any one
+  conversation, past messages are as safe as the *recipient's* device.
+- *The sender stays authenticated.* `es` alone could be computed by anyone
+  holding the recipient's public key, the server included; `ss` is mixed in
+  so a message opens as Alice's only if Alice's private key made it. A
+  message forged by a third party fails (`e2ee.test.mjs`).
+- *The sender cannot reread her own messages from the server.* The browser
+  keeps a copy of each message it sends, in memory only, until sign-out or a
+  reload; after that her own messages show *Sent with forward secrecy - only
+  the recipient can open it now*. A copy sealed to her own key would have
+  undone the protection. The copy is shown only for the exact ciphertext it
+  was made for, so a server cannot attach it to a swapped body.
+- The server checks that `epk` is a point on P-256 and is not the sender's
+  own long-term key, which would quietly make v4 static-static again
+  (`handlers/common.py`, `_ephemeral_key_problem`). That is a sanity check on
+  honest clients; the recipient's browser is what enforces the protocol.
 
 **Unauthenticated compute, now capped.** `/api/lab/process` and
 `/api/lab/features` still take an 8 MB image with no authentication, because

@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 from app import app as flask_app, socketio
-from e2ee_payload import now_ms
+from e2ee_payload import epk, now_ms
 
 
 def base64_payload(size=2048, fill=b'\x01'):
@@ -78,7 +78,7 @@ def test_encrypted_voice_is_stored_as_ciphertext(pair, store):
         'iv': 'MTIzNDU2Nzg5MDEy',
         'mime': 'audio/webm',
         'encrypted': True,
-        'v': 3, 'sent_at': now_ms(),
+        'v': 4, 'sent_at': now_ms(), 'epk': epk(),
         'msg_uuid': str(uuid.uuid4()),
     })
 
@@ -103,7 +103,7 @@ def test_encrypted_voice_needs_an_iv(pair):
         'audio': base64_payload(),
         'mime': 'audio/webm',
         'encrypted': True,
-        'v': 3, 'sent_at': now_ms(),
+        'v': 4, 'sent_at': now_ms(), 'epk': epk(),
         'msg_uuid': str(uuid.uuid4()),
     })
 
@@ -121,7 +121,7 @@ def test_unsupported_audio_types_are_rejected(pair, mime):
         'iv': 'MTIzNDU2Nzg5MDEy',
         'mime': mime,
         'encrypted': True,
-        'v': 3, 'sent_at': now_ms(),
+        'v': 4, 'sent_at': now_ms(), 'epk': epk(),
         'msg_uuid': str(uuid.uuid4()),
     })
 
@@ -163,7 +163,7 @@ def test_oversized_voice_is_rejected(pair, encrypted):
     if encrypted:
         payload.update({'audio': oversized, 'iv': 'MTIzNDU2Nzg5MDEy',
                         'mime': 'audio/webm', 'encrypted': True,
-                        'v': 3, 'sent_at': now_ms(), 'msg_uuid': str(uuid.uuid4())})
+                        'v': 4, 'sent_at': now_ms(), 'epk': epk(), 'msg_uuid': str(uuid.uuid4())})
     else:
         payload['audio'] = f'data:audio/webm;base64,{oversized}'
 
@@ -185,7 +185,7 @@ def test_encrypted_voice_cannot_be_forwarded(pair, store):
         'iv': 'MTIzNDU2Nzg5MDEy',
         'mime': 'audio/webm',
         'encrypted': True,
-        'v': 3, 'sent_at': now_ms(),
+        'v': 4, 'sent_at': now_ms(), 'epk': epk(),
         'msg_uuid': str(uuid.uuid4()),
     })
     message = events(bob_client, 'new_message')[0]['args'][0]
@@ -257,7 +257,7 @@ def test_encrypted_text_round_trip_over_sockets(pair, store):
         'message': 'Y2lwaGVydGV4dA==',
         'iv': 'MTIzNDU2Nzg5MDEy',
         'encrypted': True,
-        'v': 3, 'sent_at': now_ms(),
+        'v': 4, 'sent_at': now_ms(), 'epk': epk(),
         'msg_uuid': str(uuid.uuid4()),
     })
 

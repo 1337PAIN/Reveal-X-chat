@@ -109,7 +109,7 @@ function localTimeLabel(msg) {
 }
 
 /**
- * The E2EE v3 context for a stored message: what e2ee.js authenticates as
+ * The E2EE v4 context for a stored message: what e2ee.js authenticates as
  * AES-GCM associated data. The ids are the server's, from the row itself, so
  * a row relabelled with another sender or recipient no longer decrypts.
  * Direct messages are conversation "dm"; "group:<id>" is reserved for when
@@ -124,6 +124,7 @@ export function e2eeContext(msg) {
         recipientId: msg.recipient_id,
         msgUuid: extra.msg_uuid,
         sentAt: extra.sent_at,
+        epk: extra.epk,
     };
 }
 
@@ -148,6 +149,9 @@ export const OPEN_NOTICES = {
     legacy: 'Sent before an update; can\'t be opened.',
     unverifiable: 'Can\'t be verified - it was sent more than an hour ago or with a clock far from this one.',
     replay: REPLAYED_NOTICE,
+    // Forward secrecy (E2EE v4): the key that sealed it was thrown away, so
+    // once this page has reloaded only the recipient can open it.
+    'own-sealed': 'Sent with forward secrecy - only the recipient can open it now.',
 };
 
 /** Fill a message body, decrypting first when the payload is E2EE. */

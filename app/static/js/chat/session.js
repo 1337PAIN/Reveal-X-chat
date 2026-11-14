@@ -67,6 +67,9 @@ function extendSession() {
 
 export function logoutUser() {
     share2Memory.clear();
+    // Plaintext of messages sent from this page (E2EE v4 keeps it because the
+    // sender cannot decrypt them again). Sign-out does not reload, so drop it.
+    if (window.revealxE2EE) window.revealxE2EE.forgetSentCopies();
     state.resumeToken = null;
     clearTimeout(state.sessionTimeoutTimer);
     clearTimeout(state.sessionWarningTimer);

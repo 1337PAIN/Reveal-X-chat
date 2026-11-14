@@ -206,3 +206,26 @@ def test_a_changed_peer_key_blocks_sending_until_accepted(pair):
     open_chat_by_keyboard(bob, ALICE[0])
     message_with(bob, 'after the key changes').wait_for()
     assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_after_a_reload_only_the_recipient_can_read_a_sent_message(pair, server):
+    """E2EE v4 forward secrecy, as the people see it. The sender's
+    per-message key is gone once the message is sealed, so after a reload her
+    own browser cannot open it -- it says so -- while the recipient still can."""
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    send_text(alice, 'readable by bob only, after a reload')
+    message_with(alice, 'readable by bob only, after a reload').wait_for()
+
+    # A reload signs the page out (the resume token lives in page memory), so
+    # sign back in: same browser, same IndexedDB, same long-term key.
+    sign_in(alice, server, ALICE)
+    open_chat_by_keyboard(alice, BOB[0])
+    alice.locator('#messagesContainer .message', has_text='Sent with forward secrecy').first.wait_for()
+    assert alice.locator('#messagesContainer .message',
+                         has_text='readable by bob only, after a reload').count() == 0
+    shot(alice, 'forward-secrecy-own-message')
+
+    open_chat_by_keyboard(bob, ALICE[0])
+    message_with(bob, 'readable by bob only, after a reload').wait_for()
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors

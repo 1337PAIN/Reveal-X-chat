@@ -1,5 +1,5 @@
 /**
- * Reveal-X end-to-end encryption for private text messages.
+ * Reveal-X end-to-end encryption for text, voice and image shares.
  *
  * ECDH P-256 for key agreement, HKDF-SHA256 to turn the shared secret into a
  * message key, AES-GCM for the message itself. The private key is generated
@@ -8,36 +8,56 @@
  *
  * The server only ever sees the public key and the ciphertext.
  *
- * Protocol v3 (current, and the only one this file opens).
+ * Protocol v4 (current, and the only one this file opens).
  *
- *   v1 derived one key per *pair* of users with no associated data, so the
- *   server could reflect Alice's own message back to her as Bob's, or deliver
- *   it twice. v2 fixed both directions and bound the sender, recipient and a
- *   msg_uuid. v3 keeps that and adds two things:
+ *   v1 derived one key per *pair* of users with no associated data. v2 gave
+ *   each direction its own key and bound sender, recipient and a msg_uuid.
+ *   v3 also bound the conversation and the sender's clock. Every one of them
+ *   derived the message key from the two long-term key pairs alone, so anyone
+ *   who later obtained either private key could open every stored message.
  *
- *   - The conversation. AES-GCM additional data is
- *     "v3|<conversation>|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>",
- *     where conversation is "dm" for a direct message ("group:<id>" is
- *     reserved). A ciphertext cannot be moved into another conversation.
- *   - The sender's clock. sent_at is integer milliseconds from the sender,
- *     authenticated, so openMessage can refuse anything more than 65 minutes
- *     old or 5 minutes ahead -- a stored ciphertext cannot be replayed later
- *     as new. Freshness proves the *sender* wrote it in that window by their
- *     clock; it does not prove when the server delivered it.
+ *   v4 adds a fresh ECDH key pair for every message. The message key comes
+ *   from two agreements fed together into HKDF:
  *
- *   The replay check (same msg_uuid on a second row) now lives in IndexedDB,
- *   so a reload no longer forgets what was seen.
+ *     es = ECDH(ephemeral private, recipient long-term public)
+ *     ss = ECDH(sender long-term private, recipient long-term public)
  *
- * v1 and v2 decryption is gone, not kept as a fallback: a fallback is a
- * downgrade path. Messages expire after an hour on the server, so an hour
- * after this is deployed no v1 or v2 row is left to open; until then such a
- * row is shown as "sent before an update".
+ *   The ephemeral private key is never stored; it goes out of scope when the
+ *   message is sealed. So:
+ *
+ *   - Forward secrecy for the sender. Alice's long-term key, taken later,
+ *     gives ss but not es, so it opens none of the messages she sent.
+ *   - Not for the recipient. Bob's long-term key gives both es (with the
+ *     ephemeral public key, which travels in the message) and ss. Protecting
+ *     that side needs a ratchet, which this is not.
+ *   - The sender stays authenticated. es alone could be computed by anyone
+ *     holding Bob's public key -- the server included -- so ss is mixed in:
+ *     only Alice's private key makes a message that opens as hers.
+ *   - The sender cannot reopen what she sent from the stored row. This page
+ *     keeps an in-memory copy of each message it sends, released on sign-in
+ *     as someone else and on reload; after a reload her own messages show as
+ *     sealed. Keeping a copy encrypted to her own key would undo the point.
+ *
+ *   AES-GCM additional data is
+ *   "v4|<conversation>|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>|<epk>",
+ *   where conversation is "dm" ("group:<id>" is reserved) and epk is the
+ *   ephemeral public key, base64 SPKI. It also names the direction in the
+ *   HKDF info, so a message cannot be reflected back to its author.
+ *
+ *   openMessage then refuses anything whose authenticated sent_at is more
+ *   than 65 minutes old or 5 minutes ahead, and anything whose msg_uuid it
+ *   has already shown under another row -- a record kept in IndexedDB, so a
+ *   reload does not forget it.
+ *
+ * Older versions are refused, not decrypted: a fallback is a downgrade path.
+ * Messages expire after an hour on the server, so an hour after this is
+ * deployed no older row is left; until then one shows "sent before an update".
  */
 
 const RX_DB_NAME = 'revealx-e2ee';
 const RX_STORE = 'keypairs';
-const RX_INFO_V3 = 'reveal-x-message-key-v3';
-const RX_PROTOCOL = 3;
+const RX_INFO_V4 = 'reveal-x-message-key-v4';
+const RX_PROTOCOL = 4;
 
 // Freshness window for the authenticated sent_at. 65 minutes is the message
 // lifetime (one hour) plus five minutes of clock difference between sender
@@ -45,8 +65,12 @@ const RX_PROTOCOL = 3;
 const RX_MAX_AGE_MS = 65 * 60 * 1000;
 const RX_MAX_AHEAD_MS = 5 * 60 * 1000;
 
-// "<sender public key>|<recipient public key>" -> CryptoKey.
-const derivedKeyCache = new Map();
+// The long-term agreement ss per direction, "<sender pub>|<recipient pub>" ->
+// raw bits. The per-message half cannot be cached: it is new every time.
+const staticBitsCache = new Map();
+
+// How many sent messages this page remembers in clear for its own transcript.
+const RX_MAX_SENT_COPIES = 500;
 
 // No field may contain the separator: "a|b" + "c" and "a" + "b|c" would
 // otherwise be the same associated data for two different contexts.
@@ -55,15 +79,15 @@ function aadField(value) {
     return text.includes('|') ? null : text;
 }
 
-/** The v3 associated data, or null when a field cannot be encoded safely. */
+/** The v4 associated data, or null when a field cannot be encoded safely. */
 function associatedData(context) {
     const conversation = context.conversation || 'dm';
     if (conversation !== 'dm' && !/^group:[^|]+$/.test(conversation)) return null;
     if (!Number.isSafeInteger(context.sentAt) || context.sentAt < 0) return null;
-    const fields = [context.senderId, context.recipientId, context.msgUuid].map(aadField);
-    if (fields.some((field) => field === null || field === '')) return null;
+    const fields = [context.senderId, context.recipientId, context.msgUuid, context.epk].map(aadField);
+    if (fields.some((field) => field === null || field === '' || field === 'undefined')) return null;
     return new TextEncoder().encode(
-        `v3|${conversation}|${fields[0]}|${fields[1]}|${fields[2]}|${context.sentAt}`);
+        `v4|${conversation}|${fields[0]}|${fields[1]}|${fields[2]}|${context.sentAt}|${fields[3]}`);
 }
 
 // What a reader has already been shown, keyed
@@ -193,6 +217,9 @@ class E2EESession {
         // survives a reload; this keeps the check working when IndexedDB is
         // refused (some private windows) and answers repeat lookups quickly.
         this.seenInPage = new Map();
+        // msg_uuid -> {ciphertext, sentAt, bytes} for messages sent from this
+        // page: the only way the sender sees them again (see encryptBytes).
+        this.sentCopies = new Map();
         this.replayStoreBroken = false;
         this.replayPruned = null;
         // Replay checks run one at a time: two rows with the same uuid opened
@@ -202,8 +229,11 @@ class E2EESession {
 
     /** Load this user's key pair from IndexedDB, generating one on first use. */
     async init(userId, { regenerate = false } = {}) {
+        // Another account, or a new key pair: this page's copies of sent
+        // messages belong to the old one and are dropped.
+        if (userId !== this.userId || regenerate) this.sentCopies.clear();
         this.userId = userId;
-        derivedKeyCache.clear();
+        staticBitsCache.clear();
 
         if (!this.available) {
             this.keyPair = null;
@@ -307,52 +337,46 @@ class E2EESession {
         return true;
     }
 
+    /** A peer's public key as a WebCrypto ECDH key; throws on a malformed one. */
+    importPublicKey(publicKeyB64) {
+        return window.crypto.subtle.importKey(
+            'spki', base64ToBuffer(publicKeyB64), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+    }
+
     /**
-     * Derive an AES-GCM key for one direction of a conversation with a peer.
-     *
-     * The HKDF salt is bound to both public keys (sorted, so each side computes
-     * the same value), and the HKDF info names the direction: sender's public
-     * key, then recipient's. A->B and B->A are different keys, so one
-     * direction's ciphertext cannot be replayed as the other's.
+     * ss: the agreement between this account's long-term key and the peer's.
+     * It is the same in both directions (ECDH is symmetric), so it is cached
+     * per peer. On its own it is not the message key; see messageKey.
      */
-    async deriveKeyFor(peerPublicKeyB64, direction) {
-        if (!this.isReady() || !peerPublicKeyB64 || !direction) return null;
-
-        const cacheKey = `${direction.senderPublicKey}|${direction.recipientPublicKey}`;
-        const cached = derivedKeyCache.get(cacheKey);
+    async staticBits(peerPublicKeyB64) {
+        const cached = staticBitsCache.get(peerPublicKeyB64);
         if (cached) return cached;
+        const bits = await window.crypto.subtle.deriveBits(
+            { name: 'ECDH', public: await this.importPublicKey(peerPublicKeyB64) },
+            this.keyPair.privateKey, 256);
+        staticBitsCache.set(peerPublicKeyB64, bits);
+        return bits;
+    }
 
-        const peerKey = await window.crypto.subtle.importKey(
-            'spki',
-            base64ToBuffer(peerPublicKeyB64),
-            { name: 'ECDH', namedCurve: 'P-256' },
-            false,
-            []
-        );
-
-        const sharedBits = await window.crypto.subtle.deriveBits(
-            { name: 'ECDH', public: peerKey },
-            this.keyPair.privateKey,
-            256
-        );
-
-        const pair = [this.publicKey, peerPublicKeyB64].sort().join('|');
+    /**
+     * The AES-GCM key for one message: HKDF-SHA256 over es || ss.
+     *
+     * The salt is bound to both long-term public keys (sorted, so each side
+     * computes the same value). The info names the direction -- sender's
+     * long-term key, then recipient's -- and the message's ephemeral key, so
+     * A->B and B->A are different keys and every message has its own.
+     */
+    async messageKey(esBits, ssBits, direction, epk) {
+        const ikm = new Uint8Array(64);
+        ikm.set(new Uint8Array(esBits), 0);
+        ikm.set(new Uint8Array(ssBits), 32);
+        const pair = [direction.senderPublicKey, direction.recipientPublicKey].sort().join('|');
         const salt = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(pair));
-        const info = `${RX_INFO_V3}|${direction.senderPublicKey}|${direction.recipientPublicKey}`;
-
-        const hkdfKey = await window.crypto.subtle.importKey(
-            'raw', sharedBits, 'HKDF', false, ['deriveKey']
-        );
-        const messageKey = await window.crypto.subtle.deriveKey(
+        const info = `${RX_INFO_V4}|${direction.senderPublicKey}|${direction.recipientPublicKey}|${epk}`;
+        const hkdfKey = await window.crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveKey']);
+        return window.crypto.subtle.deriveKey(
             { name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode(info) },
-            hkdfKey,
-            { name: 'AES-GCM', length: 256 },
-            false,
-            ['encrypt', 'decrypt']
-        );
-
-        derivedKeyCache.set(cacheKey, messageKey);
-        return messageKey;
+            hkdfKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
     }
 
     /** Which way a message went, from this session's point of view. */
@@ -369,87 +393,151 @@ class E2EESession {
      * `context.recipientId` is the peer's user id. `context.msgUuid` and
      * `context.sentAt` (this clock, integer ms) are filled in when absent;
      * `context.conversation` defaults to "dm". Returns {ciphertext, iv, v,
-     * msg_uuid, sent_at} with the binary fields in base64, or null when the
-     * peer has no key yet or a field cannot be encoded.
+     * msg_uuid, sent_at, epk} with the binary fields in base64, or null when
+     * the peer has no key yet or a field cannot be encoded.
+     *
+     * The ephemeral private key lives only in this call. The plaintext is
+     * kept in this page's memory, so the sender's own transcript can show it
+     * until a reload; nothing that survives a reload can rebuild it.
      */
     async encryptBytes(peerPublicKeyB64, bytes, context = {}) {
-        const key = await this.deriveKeyFor(
-            peerPublicKeyB64, this.direction(peerPublicKeyB64, this.userId));
-        if (!key) return null;
+        if (!this.isReady() || !peerPublicKeyB64) return null;
 
         const msgUuid = context.msgUuid || newMessageUuid();
         const sentAt = context.sentAt === undefined ? Date.now() : context.sentAt;
+        let peerKey;
+        try {
+            peerKey = await this.importPublicKey(peerPublicKeyB64);
+        } catch (error) {
+            return null;
+        }
+        // extractable=false covers the private half; the public half is
+        // exportable regardless, which is all that is sent.
+        const ephemeral = await window.crypto.subtle.generateKey(
+            { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+        const epk = bufferToBase64(await window.crypto.subtle.exportKey('spki', ephemeral.publicKey));
+
         const additionalData = associatedData({
             conversation: context.conversation,
             senderId: this.userId,
             recipientId: context.recipientId,
             msgUuid,
             sentAt,
+            epk,
         });
         if (!additionalData) return null;
+
+        const es = await window.crypto.subtle.deriveBits(
+            { name: 'ECDH', public: peerKey }, ephemeral.privateKey, 256);
+        const ss = await this.staticBits(peerPublicKeyB64);
+        const key = await this.messageKey(es, ss, this.direction(peerPublicKeyB64, this.userId), epk);
+
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        const ciphertext = await window.crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv, additionalData }, key, bytes);
+        const ciphertext = bufferToBase64(await window.crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv, additionalData }, key, bytes));
+
+        this.rememberSent(msgUuid, ciphertext, sentAt, bytes);
         return {
-            ciphertext: bufferToBase64(ciphertext),
+            ciphertext,
             iv: bufferToBase64(iv),
             v: RX_PROTOCOL,
             msg_uuid: msgUuid,
             sent_at: sentAt,
+            epk,
         };
     }
 
+    /** Drop every copy of a sent message; called at sign-out, which does not reload. */
+    forgetSentCopies() {
+        this.sentCopies.clear();
+    }
+
+    /** Keep a sent message's plaintext for this page's lifetime, bounded. */
+    rememberSent(msgUuid, ciphertext, sentAt, bytes) {
+        const copy = bytes instanceof ArrayBuffer ? new Uint8Array(bytes.slice(0)) : new Uint8Array(bytes).slice();
+        this.sentCopies.set(msgUuid, { ciphertext, sentAt, bytes: copy });
+        while (this.sentCopies.size > RX_MAX_SENT_COPIES) {
+            this.sentCopies.delete(this.sentCopies.keys().next().value);
+        }
+    }
+
     /**
-     * Decrypt to an ArrayBuffer, or null when the payload cannot be opened.
+     * Decrypt a received message to an ArrayBuffer, or null when it cannot be
+     * opened.
      *
      * `context` is rebuilt from the stored row: {v, conversation, senderId,
-     * recipientId, msgUuid, sentAt}. Only v === 3 is ever tried. This is the
-     * cryptography alone; the chat goes through openMessage, which also
-     * checks freshness and replay.
+     * recipientId, msgUuid, sentAt, epk}. Only v === 4 is ever tried. A
+     * message this account sent never opens here -- its ephemeral key is gone
+     * -- and openMessage serves those from memory. This is the cryptography
+     * alone; the chat goes through openMessage, which also checks freshness
+     * and replay.
      */
     async decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64, context = {}) {
+        if (!this.isReady() || !peerPublicKeyB64) return null;
         if (!ciphertextB64 || !ivB64 || context.v !== RX_PROTOCOL) return null;
+        if (context.senderId === this.userId) return null;
         const additionalData = associatedData(context);
         if (!additionalData) return null;
-        const key = await this.deriveKeyFor(
-            peerPublicKeyB64, this.direction(peerPublicKeyB64, context.senderId));
-        if (!key) return null;
         try {
+            const es = await window.crypto.subtle.deriveBits(
+                { name: 'ECDH', public: await this.importPublicKey(context.epk) },
+                this.keyPair.privateKey, 256);
+            const ss = await this.staticBits(peerPublicKeyB64);
+            const key = await this.messageKey(
+                es, ss, this.direction(peerPublicKeyB64, context.senderId), context.epk);
             return await window.crypto.subtle.decrypt(
                 { name: 'AES-GCM', iv: new Uint8Array(base64ToBuffer(ivB64)), additionalData },
                 key, base64ToBuffer(ciphertextB64));
         } catch (error) {
-            // Wrong key, rotated peer key, wrong direction or context, or a
-            // tampered payload. AES-GCM does not say which, by design.
+            // Wrong key, rotated peer key, wrong direction or context, a
+            // malformed ephemeral key, or a tampered payload. AES-GCM does not
+            // say which, by design.
             return null;
         }
     }
 
     /**
-     * Open a stored message the way the chat must: decrypt, then check the
-     * authenticated sent_at is fresh, then check it is not a replay.
+     * Open a stored message the way the chat must.
+     *
+     * A received message: decrypt, then check the authenticated sent_at is
+     * fresh, then check it is not a replay. A message this account sent:
+     * served from this page's copy, only if the stored ciphertext is exactly
+     * the one sealed here, and still subject to the replay check.
      *
      * Returns {status, text?, bytes?}. status is one of
-     *   'legacy'       written by v1 or v2; never decrypted
+     *   'legacy'       written by v1, v2 or v3; never decrypted
      *   'failed'       did not authenticate (wrong key, tampered, relabelled)
+     *   'own-sealed'   sent by this account before this page loaded: forward
+     *                  secrecy means nothing here can open it any more
      *   'unverifiable' authentic, but sent_at is outside the freshness window
      *   'replay'       authentic and fresh, but this uuid was already shown
      *                  under a different row id
      *   'ok'           with `text` (or `bytes` when options.binary)
-     * Content is handed back only with 'ok'. The order matters: the replay
-     * record is written only for a message that authenticated, so a forged
-     * row cannot poison the record of a real one.
+     * Content is handed back only with 'ok'. The replay record is written only
+     * for a message that authenticated, so a forged row cannot poison it.
      */
     async openMessage(peerPublicKeyB64, ciphertextB64, ivB64, context = {}, options = {}) {
         if (context.v !== RX_PROTOCOL) return { status: 'legacy' };
-        const bytes = await this.decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64, context);
-        if (bytes === null) return { status: 'failed' };
 
-        const now = Date.now();
-        if (now - context.sentAt > RX_MAX_AGE_MS || context.sentAt - now > RX_MAX_AHEAD_MS) {
-            return { status: 'unverifiable' };
+        let bytes;
+        let checked = context;
+        if (context.senderId === this.userId) {
+            const copy = this.sentCopies.get(context.msgUuid);
+            if (!copy) return { status: 'own-sealed' };
+            if (copy.ciphertext !== ciphertextB64) return { status: 'failed' };
+            bytes = copy.bytes.slice().buffer;
+            // The row's sent_at is not authenticated for the sender; this
+            // page's own record of it is.
+            checked = { ...context, sentAt: copy.sentAt };
+        } else {
+            bytes = await this.decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64, context);
+            if (bytes === null) return { status: 'failed' };
+            const now = Date.now();
+            if (now - context.sentAt > RX_MAX_AGE_MS || context.sentAt - now > RX_MAX_AHEAD_MS) {
+                return { status: 'unverifiable' };
+            }
         }
-        if (await this.isReplay(context, options.messageId)) return { status: 'replay' };
+        if (await this.isReplay(checked, options.messageId)) return { status: 'replay' };
         return options.binary
             ? { status: 'ok', bytes }
             : { status: 'ok', text: new TextDecoder().decode(bytes) };
@@ -533,12 +621,10 @@ class E2EESession {
     /** Drop cached keys, e.g. after the peer publishes a new public key. */
     forgetPeer(peerPublicKeyB64) {
         if (!peerPublicKeyB64) {
-            derivedKeyCache.clear();
+            staticBitsCache.clear();
             return;
         }
-        for (const cacheKey of Array.from(derivedKeyCache.keys())) {
-            if (cacheKey.split('|').includes(peerPublicKeyB64)) derivedKeyCache.delete(cacheKey);
-        }
+        staticBitsCache.delete(peerPublicKeyB64);
     }
 }
 

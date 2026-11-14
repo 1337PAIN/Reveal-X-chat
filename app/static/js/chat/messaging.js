@@ -303,6 +303,7 @@ async function sendMessage() {
             v: sealed.v,
             msg_uuid: sealed.msg_uuid,
             sent_at: sealed.sent_at,
+            epk: sealed.epk,
         };
     }
 
@@ -589,6 +590,7 @@ async function sendVoiceMessage(blob, recipientId) {
             v: sealed.v,
             msg_uuid: sealed.msg_uuid,
             sent_at: sealed.sent_at,
+            epk: sealed.epk,
         });
         return;
     }

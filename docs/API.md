@@ -147,9 +147,9 @@ check the code at all.
 | Event | In | Out |
 | --- | --- | --- |
 | `select_chat` | `recipient_id`, `send_read_receipts` | `chat_history` |
-| `send_message` | `recipient_id`, `message`, `encrypted`, `iv`, `v`, `msg_uuid`, `sent_at`, `reply_to` | `new_message`, `message_error` |
-| `send_voice` | `recipient_id`, `audio`, `mime`, `encrypted`, `iv`, `v`, `msg_uuid`, `sent_at`, `reply_to` | `new_message`, `message_error` |
-| `send_share` | `recipient_id`, `share1_png`, `envelope`, `iv`, `encrypted`, `v`, `msg_uuid`, `sent_at`, `reply_to` | `new_message`, `image_error` |
+| `send_message` | `recipient_id`, `message`, `encrypted`, `iv`, `v`, `msg_uuid`, `sent_at`, `epk`, `reply_to` | `new_message`, `message_error` |
+| `send_voice` | `recipient_id`, `audio`, `mime`, `encrypted`, `iv`, `v`, `msg_uuid`, `sent_at`, `epk`, `reply_to` | `new_message`, `message_error` |
+| `send_share` | `recipient_id`, `share1_png`, `envelope`, `iv`, `encrypted`, `v`, `msg_uuid`, `sent_at`, `epk`, `reply_to` | `new_message`, `image_error` |
 | `send_image` | `recipient_id`, `image` | `image_error` (retired; see below) |
 | `forward_message` | `message_id`, `recipient_id` | `new_message`, `message_error` |
 | `react_message` | `message_id`, `emoji` | `message_reactions` |
@@ -170,13 +170,15 @@ characters plus the tag, so nothing the composer accepts is refused once
 encrypted. (It was 4,000, which refused long messages in Urdu or with emoji.)
 
 `encrypted` + `iv` mean the body is AES-GCM ciphertext the server cannot read.
-An encrypted send must also carry `v: 3`, `msg_uuid` (a lowercase RFC 4122
-UUID) and `sent_at` (the sender's clock, integer milliseconds since the
-epoch). All three are stored and handed back in `extra` unchanged, because the
-recipient authenticates the ciphertext against
-`v3|dm|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>`. The server answers
-`message_error` for a missing or malformed envelope, for `v` other than 3
-("Unsupported encryption version"; v1 and v2 are retired), for a `sent_at`
+An encrypted send must also carry `v: 4`, `msg_uuid` (a lowercase RFC 4122
+UUID), `sent_at` (the sender's clock, integer milliseconds since the epoch)
+and `epk` (the message's ephemeral public key, base64 SPKI on P-256). All four
+are stored and handed back in `extra` unchanged, because the recipient
+derives the message key with `epk` and authenticates the ciphertext against
+`v4|dm|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>|<epk>`. The server
+answers `message_error` for a missing or malformed envelope, for `v` other
+than 4 ("Unsupported encryption version"; v1 to v3 are retired), for an `epk`
+that is not a point on P-256 or is the sender's own long-term key, for a `sent_at`
 that is not an integer or is more than five minutes from the server's clock
 ("This device's clock is more than 5 minutes off"), and for a `msg_uuid` already used in the
 conversation in either direction ("This message was already delivered"). A
@@ -190,8 +192,8 @@ demonstrate the difference side by side.
 PNG between 8 and 1600 px a side and at most 3 MB; the server stores those
 bytes unchanged, records its HMAC and runs the detector on it, and refuses one
 whose histogram is far from uniform (it is not a share). `envelope` is the E2EE
-v3 ciphertext of `{share2_png_b64, share1_sha256, width, height}`, at most
-4.5 million characters, with the same `iv` / `v` / `msg_uuid` / `sent_at` rules as a text
+v4 ciphertext of `{share2_png_b64, share1_sha256, width, height}`, at most
+4.5 million characters, with the same `iv` / `v` / `msg_uuid` / `sent_at` / `epk` rules as a text
 message. It is stored as the message `content`, so the recipient does not have
 to be online. A payload that also carries `image` or any plaintext Share 2
 field is refused, not stripped.

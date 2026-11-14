@@ -148,7 +148,7 @@ export function forgetShare2(messageId) {
 
 /**
  * Is this a share the sender's browser split (Share 2 in an E2EE envelope)?
- * Any protocol version counts: a v2 share from before the v3 upgrade has the
+ * Any protocol version counts: a share from before the last upgrade has the
  * same shape, and must be reported as "sent before an update" rather than
  * mistaken for the old server-split kind.
  */

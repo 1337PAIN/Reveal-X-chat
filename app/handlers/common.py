@@ -15,7 +15,11 @@ import secrets
 import threading
 import time
 
+import binascii
+
 import cv2
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import load_der_public_key
 from flask import abort, jsonify, render_template, request, send_file, redirect, url_for
 from flask_socketio import emit
 import numpy as np
@@ -334,6 +338,7 @@ def client_message(message, current_user_id=None):
             'v': extra.get('v'),
             'msg_uuid': extra.get('msg_uuid'),
             'sent_at': extra.get('sent_at'),
+            'epk': extra.get('epk'),
         }
     else:
         extra = msg_dict.get('extra', {})
@@ -349,6 +354,7 @@ def client_message(message, current_user_id=None):
             'v': extra.get('v'),
             'msg_uuid': extra.get('msg_uuid'),
             'sent_at': extra.get('sent_at'),
+            'epk': extra.get('epk'),
         }
 
     return msg_dict
@@ -622,8 +628,11 @@ def _disconnect_user_sessions(user_id, reason):
 
 
 #: E2EE protocol version, the only one accepted and the only one the client
-#: opens. v1 and v2 rows still on the server expire within the hour.
-E2EE_PROTOCOL = 3
+#: opens. Rows of older versions still on the server expire within the hour.
+E2EE_PROTOCOL = 4
+#: Base64 SPKI of a P-256 public key is 124 characters; anything longer is
+#: not one, and is refused before it is decoded.
+E2EE_MAX_EPK_LENGTH = 200
 #: How far a message's sent_at (the sender's clock) may be from the server's.
 #: The client's check of the *authenticated* sent_at is the security boundary;
 #: this only refuses obviously wrong values at the door.
@@ -632,20 +641,44 @@ _MSG_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 DUPLICATE_MESSAGE_ERROR = 'This message was already delivered'
 
 
+def _ephemeral_key_problem(epk, sender_id):
+    """Why `epk` is not an acceptable v4 ephemeral key, or None.
+
+    It must be base64 SPKI of a point on P-256, which is what the browser can
+    import. It must also not be the sender's own long-term key: sending that
+    would quietly turn v4 back into a static-static scheme with no forward
+    secrecy, and an honest client never does.
+    """
+    if not isinstance(epk, str) or not epk or len(epk) > E2EE_MAX_EPK_LENGTH:
+        return 'Invalid encrypted payload'
+    try:
+        key = load_der_public_key(base64.b64decode(epk, validate=True))
+    except (binascii.Error, ValueError, TypeError):
+        return 'Invalid encrypted payload'
+    if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(key.curve, ec.SECP256R1):
+        return 'Invalid encrypted payload'
+    sender = chat_room.get_user(sender_id) or {}
+    if sender.get('public_key') and sender['public_key'].strip() == epk:
+        return 'Invalid encrypted payload'
+    return None
+
+
 def _e2ee_envelope(data, sender_id, recipient_id):
-    """Validate the v3 envelope of an encrypted send.
+    """Validate the v4 envelope of an encrypted send.
 
     Returns (fields_to_store, error). The server cannot check the ciphertext,
     but it can make sure the values the recipient authenticates it with --
-    `v`, `msg_uuid` and `sent_at` -- are present, well formed, and (for
-    msg_uuid) unused in this conversation. v1 and v2 sends are refused: v1
-    used one key for both directions, and v2 bound neither the conversation
-    nor the time, so a stored ciphertext could be replayed later as new.
+    `v`, `msg_uuid`, `sent_at` and `epk` -- are present, well formed, and
+    (for msg_uuid) unused in this conversation. Older versions are refused:
+    v1 used one key for both directions, v2 bound neither the conversation nor
+    the time, and v3 derived every message key from the two long-term keys,
+    so a key taken later opened every stored message. v4's per-message key
+    `epk` is what gives forward secrecy for the sender.
 
     sent_at must be an integer within E2EE_MAX_CLOCK_SKEW_MS of this clock.
-    That is a sanity check on an honest sender, not a defence: the server is
+    These are sanity checks on an honest sender, not a defence: the server is
     the party E2EE does not trust, and the recipient's browser re-checks the
-    authenticated value itself.
+    authenticated values itself.
     """
     version = data.get('v')
     if version != E2EE_PROTOCOL or isinstance(version, bool):
@@ -658,9 +691,13 @@ def _e2ee_envelope(data, sender_id, recipient_id):
         return None, 'Invalid encrypted payload'
     if abs(sent_at - int(time.time() * 1000)) > E2EE_MAX_CLOCK_SKEW_MS:
         return None, "This device's clock is more than 5 minutes off. Correct it and resend."
+    epk = data.get('epk')
+    problem = _ephemeral_key_problem(epk, sender_id)
+    if problem:
+        return None, problem
     if chat_room.has_message_uuid(sender_id, recipient_id, msg_uuid):
         return None, DUPLICATE_MESSAGE_ERROR
-    return {'v': E2EE_PROTOCOL, 'msg_uuid': msg_uuid, 'sent_at': sent_at}, None
+    return {'v': E2EE_PROTOCOL, 'msg_uuid': msg_uuid, 'sent_at': sent_at, 'epk': epk}, None
 
 
 def _share_hmac(image):
