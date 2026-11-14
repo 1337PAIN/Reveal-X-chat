@@ -43,3 +43,31 @@ test('Tab out of the end of the dialog wraps to its first control', () => {
 test('Shift+Tab out of the start wraps to its last control, not the page behind', () => {
     assert.equal(redirect({ dialogOpen: true, insideDialog: false, insideLive: false, backwards: true }), 'last');
 });
+
+// Opening and closing. Settings opened with focus left on the Settings
+// button behind it, and closing it dropped focus to <body>, so the next Tab
+// started again from the top of the page.
+
+const { focusAction } = window.revealxModalFocus;
+
+test('a dialog that opens without taking focus is given it', () => {
+    assert.equal(focusAction({ shown: true, focusInside: false, focusNowhere: false, hasOpener: true }), 'enter');
+});
+
+test('a dialog that already focused something itself is left alone', () => {
+    // askConfirm puts focus on Cancel; that choice is deliberate.
+    assert.equal(focusAction({ shown: true, focusInside: true, focusNowhere: false, hasOpener: true }), null);
+});
+
+test('closing hands focus back to whatever opened the dialog', () => {
+    assert.equal(focusAction({ shown: false, focusInside: false, focusNowhere: true, hasOpener: true }), 'return');
+    assert.equal(focusAction({ shown: false, focusInside: true, focusNowhere: false, hasOpener: true }), 'return');
+});
+
+test('closing leaves focus alone when the code that closed it already placed it', () => {
+    assert.equal(focusAction({ shown: false, focusInside: false, focusNowhere: false, hasOpener: true }), null);
+});
+
+test('a dialog open from the start (sign-in) has no opener to go back to', () => {
+    assert.equal(focusAction({ shown: false, focusInside: false, focusNowhere: true, hasOpener: false }), null);
+});

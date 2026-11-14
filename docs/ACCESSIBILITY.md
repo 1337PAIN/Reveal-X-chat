@@ -265,7 +265,11 @@ Not measured by the script above, but present:
   and an observer that set `inert` ran after a closing dialog had already
   handed focus back to its trigger, which was still inert, so focus was lost
   (`modal-focus.js`, `tests/js/modal-focus.test.mjs`,
-  `tests/test_modal_focus.py`).
+  `tests/test_modal_focus.py`). A dialog that opens without placing focus
+  itself (settings did not) is given it, on its first control, and one that
+  closes with focus lost -- inside it, or fallen to `<body>` -- hands it back
+  to whatever opened it. A dialog that chose its own focus, as the delete
+  confirmation does with Cancel, is left alone.
 - **Nothing empty is drawn as if it were content.** The reconstruction
   previews were `<img src="">` -- a broken-image icon whose alt text a screen
   reader announced -- until something loaded; they are now hidden and replaced

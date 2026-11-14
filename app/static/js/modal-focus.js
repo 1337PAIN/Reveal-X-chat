@@ -44,6 +44,25 @@
         return move.backwards ? 'last' : 'first';
     }
 
+    /**
+     * What to do with focus when a dialog has just opened or closed.
+     * @param {{shown: boolean, focusInside: boolean, focusNowhere: boolean,
+     *          hasOpener: boolean}} change
+     * @returns {'enter'|'return'|null}
+     */
+    function focusAction(change) {
+        if (change.shown) return change.focusInside ? null : 'enter';
+        // Only when focus was lost with the dialog (it was inside, or fell to
+        // <body>): code that closed a dialog and placed focus itself, as
+        // askConfirm does, is left alone.
+        if (change.hasOpener && (change.focusInside || change.focusNowhere)) return 'return';
+        return null;
+    }
+
+    function rendered(el) {
+        return el.getClientRects().length > 0;
+    }
+
     function isShown(el) {
         if (el.hidden) return false;
         const style = window.getComputedStyle(el);
@@ -73,8 +92,7 @@
             // getClientRects is empty for anything not rendered, including a
             // control whose section is hidden (the Firebase sign-in when it
             // is not configured); focusing one of those silently does nothing.
-            const inside = Array.from(top.querySelectorAll(FOCUSABLE))
-                .filter((el) => el.getClientRects().length > 0);
+            const inside = Array.from(top.querySelectorAll(FOCUSABLE)).filter(rendered);
             const goal = where === 'last' ? inside[inside.length - 1] : inside[0];
             if (goal) goal.focus();
             else {
@@ -85,7 +103,56 @@
         });
     }
 
-    window.revealxModalFocus = { topDialog, redirect };
+    /**
+     * Give a dialog focus when it opens and hand it back when it closes.
+     *
+     * Settings opened with focus still on the Settings button behind it, and
+     * closing it dropped focus to <body>, so the next Tab started again from
+     * the top of the page. A MutationObserver runs after the code that
+     * opened or closed the dialog, so anything that code did with focus has
+     * already happened and is respected (focusAction).
+     */
+    function followDialogs() {
+        const wasShown = new WeakMap();
+        const openers = new WeakMap();
 
-    if (window.document && typeof document.addEventListener === 'function') watch();
+        function check(dialog) {
+            const shown = isShown(dialog);
+            if (wasShown.get(dialog) === shown) return;
+            wasShown.set(dialog, shown);
+            const active = document.activeElement;
+            if (shown && active && active !== document.body && !dialog.contains(active)) {
+                openers.set(dialog, active);
+            }
+            const opener = openers.get(dialog);
+            const action = focusAction({
+                shown,
+                focusInside: Boolean(active && dialog.contains(active)),
+                focusNowhere: !active || active === document.body,
+                hasOpener: Boolean(opener && opener.isConnected && rendered(opener)),
+            });
+            if (action === 'enter') {
+                const first = Array.from(dialog.querySelectorAll(FOCUSABLE)).find(rendered);
+                if (first) first.focus();
+            } else if (action === 'return') {
+                opener.focus();
+            }
+            if (!shown) openers.delete(dialog);
+        }
+
+        const observer = new MutationObserver((records) => {
+            records.forEach((record) => check(record.target));
+        });
+        document.querySelectorAll('[aria-modal="true"]').forEach((dialog) => {
+            wasShown.set(dialog, isShown(dialog));
+            observer.observe(dialog, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+        });
+    }
+
+    window.revealxModalFocus = { topDialog, redirect, focusAction };
+
+    if (window.document && typeof document.addEventListener === 'function') {
+        watch();
+        if (typeof MutationObserver === 'function') followDialogs();
+    }
 }());
