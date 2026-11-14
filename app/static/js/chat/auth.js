@@ -282,8 +282,11 @@ socket.on('force_signed_out', (data) => {
     // An admin disabled, deleted, or reset the password on this account. The
     // server has already dropped the session; this only explains why.
     localStorage.removeItem('revealx_username');
-    alert(data && data.reason ? data.reason : 'Your session was ended by an administrator.');
-    window.location.reload();
+    // Read before the reload, so it is acknowledged rather than flashed.
+    window.revealxDialogs.showNotice({
+        title: 'You have been signed out',
+        body: data && data.reason ? data.reason : 'Your session was ended by an administrator.',
+    }).then(() => window.location.reload());
 });
 
 /**

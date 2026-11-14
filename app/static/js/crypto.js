@@ -66,7 +66,7 @@ async function reconstructSharesLocally(share1Url, share2Live) {
         
         return reconstructed;
     } catch (error) {
-        alert('Error: ' + error.message);
+        window.revealxDialogs.toast('Could not rebuild the image: ' + error.message, { kind: 'error' });
         throw error;
     } finally {
         if (reconstructBtn) {

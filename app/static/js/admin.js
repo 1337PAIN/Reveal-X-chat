@@ -115,10 +115,13 @@ import { askSecret } from './chat/settings.js';
             addButton('Approve', 'btn-primary', function () {
                 socket.emit('admin_set_state', { user_id: account.id, state: 'active' });
             });
-            addButton('Reject', 'btn-danger', function () {
-                if (confirm('Reject and delete the request from "' + account.username + '"?')) {
-                    socket.emit('admin_delete_account', { user_id: account.id });
-                }
+            addButton('Reject', 'btn-danger', async function () {
+                const agreed = await window.revealxDialogs.askConfirm({
+                    title: 'Reject this request?',
+                    body: 'The request from "' + account.username + '" is deleted.',
+                    confirmLabel: 'Reject',
+                });
+                if (agreed) socket.emit('admin_delete_account', { user_id: account.id });
             });
         } else if (!isPendingList) {
             const allowed = canManage(account);
@@ -176,10 +179,13 @@ import { askSecret } from './chat/settings.js';
                 }
             }
 
-            gated('Delete', 'btn-danger', function () {
-                if (confirm('Delete "' + account.username + '" and all of their messages? This cannot be undone.')) {
-                    socket.emit('admin_delete_account', { user_id: account.id });
-                }
+            gated('Delete', 'btn-danger', async function () {
+                const agreed = await window.revealxDialogs.askConfirm({
+                    title: 'Delete this account?',
+                    body: '"' + account.username + '" and all of their messages are deleted. This cannot be undone.',
+                    confirmLabel: 'Delete account',
+                });
+                if (agreed) socket.emit('admin_delete_account', { user_id: account.id });
             });
         }
 

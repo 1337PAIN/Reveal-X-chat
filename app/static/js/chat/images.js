@@ -33,7 +33,7 @@ registerLate({ closeImagePreview });
 
 shareImageBtn.addEventListener('click', () => {
     if (!state.selectedRecipientId) {
-        alert('Select an account first');
+        window.revealxDialogs.toast('Select an account first.');
         return;
     }
     imageInput.click();
@@ -44,7 +44,7 @@ imageInput.addEventListener('change', (event) => {
     if (!file || !state.selectedRecipientId) return;
 
     if (!file.type.startsWith('image/')) {
-        alert('Choose a valid image file');
+        window.revealxDialogs.toast('Choose an image file.', { kind: 'error' });
         return;
     }
 

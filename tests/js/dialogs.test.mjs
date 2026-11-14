@@ -124,3 +124,50 @@ test('a message menu opens, reports its state and closes on Escape', () => {
     assert.equal(trigger.getAttribute('aria-expanded'), 'false');
     assert.equal(doc.activeElement, trigger, 'and back to the button');
 });
+
+// ----------------------------------------------------------------------
+// Toasts and notices: what alert() was used for
+// ----------------------------------------------------------------------
+
+function toastSetup() {
+    const created = [];
+    const body = { children: [], appendChild(el) { this.children.push(el); return el; } };
+    const nodes = {};
+    for (const id of ['confirmDialog', 'confirmDialogTitle', 'confirmDialogBody',
+        'confirmDialogOk', 'confirmDialogCancel']) nodes[id] = element(id);
+    const docListeners = {};
+    doc = {
+        activeElement: null,
+        body,
+        getElementById: (id) => nodes[id] || created.find((e) => e.id === id) || null,
+        createElement: () => { const el = element(''); created.push(el); return el; },
+        addEventListener(kind, fn) { (docListeners[kind] ||= new Set()).add(fn); },
+        removeEventListener(kind, fn) { if (docListeners[kind]) docListeners[kind].delete(fn); },
+    };
+    const window = makeWindow({ setTimeout: () => 0, clearTimeout: () => {} });
+    loadBrowserScript(join(STATIC_JS, 'dialogs.js'), { window, document: doc, setTimeout: () => 0, clearTimeout: () => {} });
+    return { api: window.revealxDialogs, nodes, created };
+}
+
+test('a toast is text in a live region: polite for notices, assertive for errors', () => {
+    const { api, created } = toastSetup();
+    api.toast('<b>Saved</b>');
+    const region = created.find((e) => e.id === 'appToast');
+    assert.ok(region, 'no toast region');
+    assert.equal(region.textContent, '<b>Saved</b>');
+    assert.equal(region.getAttribute('role'), 'status');
+    assert.equal(region.getAttribute('aria-live'), 'polite');
+    api.toast('Could not send', { kind: 'error' });
+    assert.equal(region.getAttribute('role'), 'alert');
+    assert.equal(region.getAttribute('aria-live'), 'assertive');
+});
+
+test('a notice has only an OK button and resolves when it is pressed', async () => {
+    const { api, nodes } = toastSetup();
+    const seen = api.showNotice({ title: 'Signed out', body: 'An administrator ended this session.' });
+    assert.equal(nodes.confirmDialogCancel.hidden, true, 'nothing to cancel');
+    assert.equal(nodes.confirmDialogOk.textContent, 'OK');
+    nodes.confirmDialogOk.dispatch('click');
+    assert.equal(await seen, true);
+    assert.equal(nodes.confirmDialogCancel.hidden, false, 'restored for the next question');
+});

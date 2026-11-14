@@ -45,7 +45,7 @@ def test_plaintext_is_only_sent_after_the_policy_says_so(signature):
 def test_consent_is_per_conversation_and_asked_for():
     helper = body_of('async function decideHowToSend(')
     assert "decision.action === 'confirm-plaintext'" in helper
-    assert 'confirm(' in helper
+    assert 'revealxDialogs.askConfirm(' in helper, 'asked in the app, not with confirm()'
     assert 'plaintextConsent.add(recipientId)' in helper
     assert 'plaintextConsent.has(recipientId)' in helper
 

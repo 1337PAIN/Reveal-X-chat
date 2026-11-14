@@ -11,6 +11,10 @@
  * the menu, focus moves into it when it opens, and Escape or a click outside
  * closes it and returns focus to the button.
  *
+ * showNotice() is the same dialog with only OK, for a message that must be
+ * read before what happens next; toast() puts a short message in a live
+ * region -- the two together replace every alert().
+ *
  * Text goes in as textContent, never markup. A classic script, like
  * sanitize.js, so tests/js/dialogs.test.mjs loads the shipped file.
  */
@@ -98,5 +102,45 @@
         return { open, close };
     }
 
-    window.revealxDialogs = { askConfirm, wireMenu };
+    /**
+     * A message that must be read before something happens next (a forced
+     * sign-out before the page reloads): the confirmation dialog with only
+     * an OK button. Resolves when it is acknowledged.
+     */
+    function showNotice(options) {
+        const opts = options || {};
+        const cancel = document.getElementById('confirmDialogCancel');
+        if (cancel) cancel.hidden = true;
+        return askConfirm({ title: opts.title, body: opts.body, confirmLabel: opts.okLabel || 'OK' })
+            .then(() => {
+                if (cancel) cancel.hidden = false;
+                return true;
+            });
+    }
+
+    /**
+     * A short message in a live region, for what alert() was used for.
+     * Notices are polite (role=status) so they do not interrupt; errors are
+     * assertive (role=alert). Text only, and gone after a few seconds.
+     */
+    let toastTimer = 0;
+    function toast(message, options) {
+        const kind = (options && options.kind) || 'info';
+        let region = document.getElementById('appToast');
+        if (!region) {
+            region = document.createElement('div');
+            region.id = 'appToast';
+            region.className = 'app-toast';
+            document.body.appendChild(region);
+        }
+        const error = kind === 'error';
+        region.setAttribute('role', error ? 'alert' : 'status');
+        region.setAttribute('aria-live', error ? 'assertive' : 'polite');
+        region.className = `app-toast visible ${error ? 'error' : 'info'}`;
+        region.textContent = String(message);
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { region.className = 'app-toast'; }, 6000);
+    }
+
+    window.revealxDialogs = { askConfirm, showNotice, toast, wireMenu };
 }());

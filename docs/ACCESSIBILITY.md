@@ -200,6 +200,13 @@ Not measured by the script above, but present:
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
+- **No native `alert()`, `confirm()` or `prompt()`.** They block the page,
+  cannot be themed, and some screen readers announce them as browser alerts
+  unrelated to the app. Questions use the in-app dialog (`askConfirm`),
+  must-read messages a one-button notice (`showNotice`), and everything else
+  a toast in a live region -- polite for notices, assertive for errors
+  (`dialogs.js`; `tests/test_no_native_dialogs.py` scans every shipped
+  script).
 - **Icon-only buttons have names.** A button is named from its content
   before its `title`, so "⚙️" was read as "gear" rather than "Settings"; the
   same went for rebuild, theme, keys, camera and microphone. Each now has an

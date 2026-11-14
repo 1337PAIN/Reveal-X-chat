@@ -220,14 +220,19 @@ function closeKeyManagerModal() {
 const regenerateKeyBtn = document.getElementById('regenerateKeyBtn');
 if (regenerateKeyBtn) {
     regenerateKeyBtn.addEventListener('click', async () => {
-        if (!confirm('Generate a new key pair? Messages already in this chat were encrypted to your old key and will no longer open.')) {
-            return;
-        }
+        const agreed = await window.revealxDialogs.askConfirm({
+            title: 'Generate a new key pair?',
+            body: 'Messages already in your chats were encrypted to your current key and will no longer open.',
+            confirmLabel: 'Generate new keys',
+        });
+        if (!agreed) return;
         announceToScreenReader('Regenerating encryption key pair...');
         const publicKey = await initE2EEKeys({ regenerate: true });
-        alert(publicKey
-            ? 'New ECDH key pair generated and published.'
-            : 'Key generation failed. Messages will be sent unencrypted.');
+        if (publicKey) {
+            window.revealxDialogs.toast('New key pair generated and published.');
+        } else {
+            window.revealxDialogs.toast('Key generation failed. Nothing will be sent until encryption works again.', { kind: 'error' });
+        }
     });
 }
 

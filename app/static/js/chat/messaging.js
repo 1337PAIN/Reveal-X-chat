@@ -116,7 +116,7 @@ socket.on('typing', (data) => {
 
 socket.on('share_revoked', (data) => {
     forgetShare2(data && data.message_id);
-    alert('This encrypted share access has been revoked.');
+    window.revealxDialogs.toast('Access to that image share has been revoked.');
     if (reconstructionPanel) reconstructionPanel.classList.remove('active');
     delete state.shareAnalysis[data.message_id];
     delete state.localAnalysis[data.message_id];
@@ -194,9 +194,12 @@ async function decideHowToSend(recipientId) {
         const why = decision.reason === 'peer-has-no-key'
             ? `${user ? user.username : 'This contact'} has not set up encryption yet`
             : 'This browser cannot encrypt messages (it needs HTTPS and Web Crypto)';
-        const agreed = confirm(
-            `${why}, so messages in this conversation would be sent unencrypted ` +
-            'and the server could read them.\n\nSend unencrypted messages here?');
+        const agreed = await window.revealxDialogs.askConfirm({
+            title: 'Send without encryption?',
+            body: `${why}, so messages in this conversation would be sent unencrypted `
+                + 'and the server could read them.',
+            confirmLabel: 'Send unencrypted',
+        });
         if (!agreed) return null;
         plaintextConsent.add(recipientId);
         return 'plaintext';
@@ -222,7 +225,7 @@ async function sendMessage() {
     if (!mode) return;
 
     if (text.length > MAX_MESSAGE_LENGTH) {
-        alert(`Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`);
+        window.revealxDialogs.toast(`Messages can be up to ${MAX_MESSAGE_LENGTH} characters.`, { kind: 'error' });
         return;
     }
 
@@ -476,11 +479,11 @@ async function toggleVoiceRecording() {
     }
 
     if (!state.selectedRecipientId) {
-        alert('Select an account first');
+        window.revealxDialogs.toast('Select an account first.');
         return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
-        alert('Voice recording is not supported in this browser.');
+        window.revealxDialogs.toast('Voice recording is not supported in this browser.', { kind: 'error' });
         return;
     }
 
@@ -488,7 +491,7 @@ async function toggleVoiceRecording() {
     try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (error) {
-        alert('Microphone access was denied.');
+        window.revealxDialogs.toast('Microphone access was denied.', { kind: 'error' });
         return;
     }
 
@@ -538,7 +541,7 @@ async function toggleVoiceRecording() {
 
 async function sendVoiceMessage(blob, recipientId) {
     if (blob.size > MAX_VOICE_BYTES) {
-        alert('Voice message is too long. Keep it under a minute.');
+        window.revealxDialogs.toast('Voice message is too long. Keep it under a minute.', { kind: 'error' });
         return;
     }
     if (!connectionReady()) return;

@@ -628,9 +628,13 @@ export function displayMessage(msg) {
                 } else if (action === 'recheck') {
                     runShareAnalysis(msg, { force: true });
                 } else if (action === 'revoke') {
-                    if (confirm('Revoke access to this share? The recipient will not be able to open it.')) {
-                        socket.emit('revoke_share', { message_id: msg.id });
-                    }
+                    window.revealxDialogs.askConfirm({
+                        title: 'Revoke this image share?',
+                        body: 'The recipient will no longer be able to open it.',
+                        confirmLabel: 'Revoke',
+                    }).then((agreed) => {
+                        if (agreed) socket.emit('revoke_share', { message_id: msg.id });
+                    });
                 }
             });
         });

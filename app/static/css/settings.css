@@ -579,6 +579,42 @@ body[data-theme="light"] .lock-screen {
     .send-error-banner { transition: opacity .25s ease; transform: translateX(-50%); }
 }
 
+/* dialogs.js toast(): what alert() used to do, without blocking the page.
+   Same shape as the error banner; neutral navy for notices (white on #16203a
+   is 15.9:1), the banner's #991b1b for errors (8.3:1). */
+.app-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(140%);
+    z-index: 4000;
+    max-width: min(520px, 92vw);
+    padding: .7rem 1.1rem;
+    border-radius: var(--radius-ms);
+    background: #16203a;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    opacity: 0;
+    transition: transform .25s ease, opacity .25s ease;
+    pointer-events: none;
+}
+
+.app-toast.error {
+    background: #991b1b;
+}
+
+.app-toast.visible {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-toast { transition: opacity .25s ease; transform: translateX(-50%); }
+}
+
 /* --- Reactions ------------------------------------------------------------
    .reaction-pill and .message-reactions were already styled; these are the
    pieces that were missing along with the client code. */

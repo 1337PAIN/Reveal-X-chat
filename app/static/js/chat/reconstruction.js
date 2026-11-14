@@ -190,7 +190,7 @@ closePanel.addEventListener('click', () => {
 
 reconstructBtn.addEventListener('click', async () => {
     if (!shared.currentShares || !shared.currentShares.share1Url || !shared.currentShares.share2Live) {
-        alert('Both Share 1 and Share 2 are required to reconstruct.');
+        window.revealxDialogs.toast('Both Share 1 and Share 2 are needed to rebuild the image.', { kind: 'error' });
         return;
     }
 

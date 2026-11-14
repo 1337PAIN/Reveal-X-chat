@@ -483,7 +483,7 @@ const exportDataBtn = document.getElementById('exportDataBtn');
 if (exportDataBtn) {
     exportDataBtn.addEventListener('click', () => {
         if (!state.chatHistoryCache || state.chatHistoryCache.length === 0) {
-            alert('No chat history to export.');
+            window.revealxDialogs.toast('There is no chat history to export.');
             return;
         }
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.chatHistoryCache, null, 2));
@@ -538,10 +538,9 @@ if (clearCacheBtn) {
             }
         }
 
-        alert(cleared.length
-            ? 'Cleared ' + cleared.join(' and ') + '.\n\n'
-              + 'Your encryption key was kept -- deleting it would make every '
-              + 'message already sent to this device unreadable.'
+        window.revealxDialogs.toast(cleared.length
+            ? 'Cleared ' + cleared.join(' and ') + '. Your encryption key was kept: '
+              + 'deleting it would make every message already sent to this device unreadable.'
             : 'Nothing was cached on this device.');
         announceToScreenReader('Cached data cleared.');
     });
@@ -736,7 +735,7 @@ if (profileImageInput) {
         if (!file) return;
 
         if (file.size > 512 * 1024) {
-            alert('Profile image must be smaller than 512 KB');
+            window.revealxDialogs.toast('Profile photos must be smaller than 512 KB.', { kind: 'error' });
             return;
         }
 
