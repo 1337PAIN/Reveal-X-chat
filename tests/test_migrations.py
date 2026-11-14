@@ -8,6 +8,7 @@ no schema_version table at all, upgrades with its data intact.
 """
 
 import sqlite3
+from contextlib import closing
 
 import pytest
 
@@ -29,12 +30,12 @@ EXPECTED = {
 
 
 def columns(path, table):
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn, conn:
         return {row[1] for row in conn.execute(f'PRAGMA table_info({table})')}
 
 
 def versions(path):
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn, conn:
         return [row[0] for row in conn.execute('SELECT version FROM schema_version ORDER BY version')]
 
 
@@ -67,7 +68,7 @@ def test_starting_again_applies_nothing(tmp_path):
 
 def test_a_pre_versioning_database_of_the_oldest_shape_upgrades_with_its_data(tmp_path):
     path = tmp_path / 'old.sqlite'
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn, conn:
         conn.execute("CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, "
                      "password_hash TEXT NOT NULL, created_at TEXT NOT NULL)")
         conn.execute("CREATE TABLE messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, "
@@ -83,7 +84,7 @@ def test_a_pre_versioning_database_of_the_oldest_shape_upgrades_with_its_data(tm
 
     for table, expected in EXPECTED.items():
         assert expected <= columns(path, table), table
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn, conn:
         assert conn.execute("SELECT username, account_state, role FROM users").fetchone() == \
             ('veteran', 'active', 'user'), 'an old account must not be locked out'
         assert conn.execute("SELECT content FROM messages").fetchone() == ('kept',)
@@ -94,7 +95,7 @@ def test_a_current_database_from_before_this_file_upgrades_cleanly(tmp_path):
     """Built by the old init_db: every column present, no schema_version."""
     store, path = open_store(tmp_path)
     user, _ = store.create_user('existing', 'correct-horse-1')
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn, conn:
         conn.execute('DROP TABLE schema_version')
 
     store.init_db()
