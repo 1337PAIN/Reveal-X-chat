@@ -918,8 +918,10 @@ body::before {
     position: relative;
 }
 
+/* Opaque: --bg-secondary is 6% white in the glass theme, and the menu sits
+   over the bubble above, so its text floated with no background at all. */
 .message-menu {
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
     border: 1px solid var(--glass-border-strong, var(--border));
     border-radius: var(--radius-sm, 8px);
     box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
@@ -955,6 +957,17 @@ body::before {
 
 .message-menu-item:hover {
     background: var(--glass-2);
+}
+
+/* --bg-primary is mid-blue in the light theme; the menu needs a near-white
+   surface for AAA text. #16203a is 14.9:1 on it and #991b1b is 7.69:1
+   (--danger, #dc2626, would be 3.1:1). */
+body[data-theme="light"] .message-menu {
+    background: #f4f6fb;
+}
+
+body[data-theme="light"] .message-menu-item.danger {
+    color: #991b1b;
 }
 
 .btn-message-action {

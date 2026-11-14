@@ -55,3 +55,14 @@ def test_delete_asks_in_the_app_not_with_confirm():
                        'confirmDialogOk', 'confirmDialogCancel'):
         assert f'id="{element_id}"' in INDEX
     assert INDEX.index('js/dialogs.js') < INDEX.index('js/chat/main.js')
+
+
+def test_the_menu_has_an_opaque_surface_in_both_themes():
+    """Found on screen: the menu used --bg-secondary, which is 6% white in the
+    glass theme, so "Delete for everyone" floated over the bubble above with
+    no background at all. Opaque surfaces, with AAA text in both themes
+    (dark: #fb7185 on #070b18 is 7.29:1; light: #991b1b on #f4f6fb is 7.69:1)."""
+    assert 'background: var(--bg-primary)' in rule(CSS, '.message-menu')
+    light = rule(CSS, 'body[data-theme="light"] .message-menu')
+    assert 'background: #f4f6fb' in light
+    assert 'color: #991b1b' in rule(CSS, 'body[data-theme="light"] .message-menu-item.danger')
