@@ -29,11 +29,32 @@ from attacks import tamper_share
 from tamper_detector import FEATURE_NAMES, TamperDetector
 
 
-def build_dataset(samples: int = 120, size: int = 96, seed: int = 42):
+ATTACKS = ["block", "noise", "blur", "brightness", "crop", "scratch", "jpeg"]
+
+# The shipped model's hyperparameters. scripts/evaluate_tamper_detector.py fits
+# fresh models with these inside its folds, so the two cannot drift apart.
+MODEL_PARAMS = dict(
+    n_estimators=45,
+    max_depth=10,
+    min_samples_leaf=2,
+    random_state=7,
+    class_weight="balanced",
+    n_jobs=1,
+)
+
+
+def make_model():
+    return RandomForestClassifier(**MODEL_PARAMS)
+
+
+def build_dataset(samples: int = 120, size: int = 96, seed: int = 42, return_attacks: bool = False):
+    """Features and labels; with return_attacks, also each row's attack name
+    ("clean" for a clean share), which the evaluation needs for per-attack
+    recall. The rows are the same either way."""
     rng = np.random.default_rng(seed)
     detector = TamperDetector(model_path="__missing__.joblib")
-    attacks = ["block", "noise", "blur", "brightness", "crop", "scratch", "jpeg"]
-    X, y = [], []
+    attacks = ATTACKS
+    X, y, names = [], [], []
 
     for i in range(samples):
         # Share 1 is a uniform random mask, so it does not depend on the image
@@ -44,27 +65,24 @@ def build_dataset(samples: int = 120, size: int = 96, seed: int = 42):
         share1 = rng.integers(0, 256, size=(size, size), dtype=np.uint8)
         X.append(detector.extract_features(share1))
         y.append(0)
+        names.append("clean")
 
         attack = attacks[i % len(attacks)]
         strength = float(rng.uniform(0.18, 0.55))
         tampered = tamper_share(share1, attack=attack, strength=strength, seed=int(rng.integers(0, 1_000_000)))
         X.append(detector.extract_features(tampered))
         y.append(1)
+        names.append(attack)
 
+    if return_attacks:
+        return np.asarray(X), np.asarray(y), np.asarray(names)
     return np.asarray(X), np.asarray(y)
 
 
 def main():
     X, y = build_dataset()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=7, stratify=y)
-    model = RandomForestClassifier(
-        n_estimators=45,
-        max_depth=10,
-        min_samples_leaf=2,
-        random_state=7,
-        class_weight="balanced",
-        n_jobs=1,
-    )
+    model = make_model()
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
