@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v42-share-wording';
+const CACHE_NAME = 'revealx-cache-v43-connection-banner';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -47,6 +47,7 @@ const ASSETS_TO_CACHE = [
     '/static/js/dialogs.js',
     '/static/js/composer.js',
     '/static/js/chips.js',
+    '/static/js/connection.js',
     '/static/js/firebase-auth.js',
     '/static/js/tamper-onnx.js',
     '/static/js/admin.js',

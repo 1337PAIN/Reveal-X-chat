@@ -76,6 +76,9 @@ export const state = {
     resumeToken: null,
     resuming: false,
     hasConnected: false,
+    // Set when the server answered auth_required and the session could not
+    // be resumed; the connection banner says "Signed out" until a sign-in.
+    signedOut: false,
 };
 
 // UI Element Mappings

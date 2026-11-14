@@ -4,6 +4,7 @@
 import { late } from './late.js';
 import {
     reconstructionPanel,
+    socket,
     state,
 } from './core.js';
 
@@ -98,6 +99,24 @@ export function announceToScreenReader(text) {
     if (sr) {
         sr.textContent = text;
     }
+}
+
+/**
+ * Show or hide the connection banner for the socket and session as they are
+ * now. The wording lives in connection.js (tested on its own); this only puts
+ * it on the page. A polite status region, so a screen reader hears
+ * "Reconnecting..." without it cutting across whatever is being read.
+ */
+export function updateConnectionBanner() {
+    const banner = document.getElementById('connectionBanner');
+    if (!banner || !window.revealxConnection) return;
+    const view = window.revealxConnection.bannerFor({
+        connected: socket.connected,
+        signedOut: state.signedOut,
+    });
+    banner.textContent = view.text;
+    banner.dataset.kind = view.kind;
+    banner.hidden = !view.visible;
 }
 
 // Escape modals using Keyboard

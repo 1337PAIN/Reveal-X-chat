@@ -615,6 +615,35 @@ body[data-theme="light"] .lock-screen {
     .app-toast { transition: opacity .25s ease; transform: translateX(-50%); }
 }
 
+/* Connection banner (basics.js updateConnectionBanner). A fixed strip at the
+   top rather than a toast: it stays for as long as the condition does.
+   White on #16203a is 16.1:1 (Reconnecting...); white on #78350f is 9.1:1
+   (Signed out) -- AAA in both themes, since the strip sets its own colours. */
+.connection-banner {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4500;
+    max-width: min(520px, 92vw);
+    padding: .5rem 1rem;
+    border-radius: 0 0 var(--radius-ms) var(--radius-ms);
+    background: #16203a;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+}
+
+.connection-banner[data-kind="warning"] {
+    background: #78350f;
+}
+
+.connection-banner[hidden] {
+    display: none;
+}
+
 /* --- Reactions ------------------------------------------------------------
    .reaction-pill and .message-reactions were already styled; these are the
    pieces that were missing along with the client code. */

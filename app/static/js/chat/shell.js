@@ -19,6 +19,9 @@ import {
     userSearchInput,
 } from './core.js';
 import {
+    updateConnectionBanner,
+} from './basics.js';
+import {
     logoutUser,
 } from './session.js';
 import {
@@ -276,12 +279,14 @@ socket.on('connect', () => {
         socket.emit('resume_session', { token: state.resumeToken });
     }
     state.hasConnected = true;
+    updateConnectionBanner();
 });
 
 socket.on('disconnect', () => {
     state.reconnectAttempts++;
     const countEl = document.getElementById('reconnectCount');
     if (countEl) countEl.textContent = ` (retrying ${state.reconnectAttempts}...)`;
+    updateConnectionBanner();
 });
 
 // Set default chat placeholder

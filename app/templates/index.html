@@ -661,6 +661,10 @@
         <button id="startupFailureReload" class="btn btn-primary" type="button">Reload</button>
     </div>
 
+    <!-- Connection banner: "Reconnecting..." / "Signed out - sign in again".
+         Text and visibility come from js/connection.js via basics.js. -->
+    <div id="connectionBanner" class="connection-banner" role="status" aria-live="polite" hidden></div>
+
     <!-- Hidden screen reader announcements -->
     <div id="srAnnouncements" class="sr-only" aria-live="assertive" aria-atomic="true" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;"></div>
 
@@ -676,6 +680,7 @@
     <script src="{{ asset('js/dialogs.js') }}"></script>
     <script src="{{ asset('js/composer.js') }}"></script>
     <script src="{{ asset('js/chips.js') }}"></script>
+    <script src="{{ asset('js/connection.js') }}"></script>
     <!-- In-browser tamper detection. Registers window.revealxTamperML but does
          not download the ~11 MB wasm runtime until something asks for a verdict. -->
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>

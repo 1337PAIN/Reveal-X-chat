@@ -234,6 +234,15 @@ Not measured by the script above, but present:
   a toast in a live region -- polite for notices, assertive for errors
   (`dialogs.js`; `tests/test_no_native_dialogs.py` scans every shipped
   script).
+- **A dropped connection is said in words.** It used to show only as a
+  retry count tucked into the header. A banner at the top now reads
+  "Reconnecting..." while the socket is down, and "Signed out - sign in
+  again" when the server answered `auth_required` and the session could not
+  be resumed; it goes once the session is back. It is a polite status region,
+  so it does not interrupt what a screen reader is reading. White on
+  `#16203a` (16.1:1) and on `#78350f` (9.1:1) in both themes
+  (`connection.js`, `tests/js/connection.test.mjs`,
+  `tests/test_connection_banner.py`).
 - **Icon-only buttons have names.** A button is named from its content
   before its `title`, so "⚙️" was read as "gear" rather than "Settings"; the
   same went for rebuild, theme, keys, camera and microphone. Each now has an

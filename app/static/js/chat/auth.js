@@ -17,6 +17,9 @@ import {
     usernameInput,
 } from './core.js';
 import {
+    updateConnectionBanner,
+} from './basics.js';
+import {
     resetInactivityTimers,
 } from './session.js';
 import {
@@ -191,6 +194,8 @@ socket.on('auth_success', (data) => {
     state.currentUser = data.user;
     if (data.resume_token) state.resumeToken = data.resume_token;
     state.resuming = false;
+    state.signedOut = false;
+    updateConnectionBanner();
     const totpChallenge = document.getElementById('totpModal');
     if (totpChallenge) totpChallenge.classList.add('hidden');
     localStorage.setItem('revealx_username', state.currentUser.username);
@@ -232,6 +237,8 @@ function showSignIn(reason) {
     late.setChatEnabled(false);
     authModal.style.display = '';
     authError.textContent = reason || 'Please sign in again.';
+    state.signedOut = true;
+    updateConnectionBanner();
 }
 
 // The server sends this from every handler that needs a session, where it
