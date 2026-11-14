@@ -398,6 +398,10 @@ Not measured by the script above, but present:
   not offline, so an "away" contact showed green beside an amber pip. Your
   own avatar shows your initial until there is a photo, as contacts do; it
   was an empty circle (`tests/test_presence_and_own_avatar.py`).
+- **The Admin button says what its number means.** The pending-approval
+  badge made it read "Admin 3"; the badge is `aria-hidden` and the name is
+  "Admin, 3 accounts waiting for approval", still starting with the visible
+  word (`tests/test_admin_button_name.py`).
 - **Settings are sections a screen reader can jump between.** Each group
   (Profile, Security, Preferences, Data & Storage, Account) is a `<section>`
   named by its heading. "Delete Account" used to sit in Data & Storage

@@ -201,6 +201,14 @@ import { askSecret } from './chat/settings.js';
             adminPendingBadge.textContent = String(pending.length);
             adminPendingBadge.classList.toggle('hidden', pending.length === 0);
         }
+        // The badge is aria-hidden; the name says what its number means
+        // ("Admin 3" told nobody three of what), starting with the visible
+        // word so speech users can say what they see.
+        if (adminBtn) {
+            adminBtn.setAttribute('aria-label', pending.length
+                ? `Admin, ${pending.length} accounts waiting for approval`
+                : 'Admin');
+        }
         const count = document.getElementById('adminPendingCount');
         if (count) count.textContent = String(pending.length);
 
