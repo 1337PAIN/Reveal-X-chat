@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v39-composer-counter';
+const CACHE_NAME = 'revealx-cache-v40-send-cooldown';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever

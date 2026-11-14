@@ -248,28 +248,24 @@ async function sendMessage() {
         return;
     }
 
-    // Enforce Send Cooldown Counter Rate Limit feedback
+    // A two-second pause between sends. The label used to become a countdown
+    // ("2s", "1s") and the button was disabled: a screen reader announced a
+    // button called "2s", and disabling it threw keyboard focus out of the
+    // composer. It stays "Send", marked aria-disabled with a visual state,
+    // and a press during the pause is explained rather than ignored.
     if (state.sendCooldownActive) {
-        announceToScreenReader('Rate limit cooldown active. Please wait.');
+        announceToScreenReader('Wait a moment before sending again.');
         return;
     }
 
     state.sendCooldownActive = true;
-    sendBtn.disabled = true;
-    let cd = 2;
-    sendBtn.textContent = `${cd}s`;
-    
-    const cdInterval = setInterval(() => {
-        cd--;
-        if (cd <= 0) {
-            clearInterval(cdInterval);
-            state.sendCooldownActive = false;
-            sendBtn.disabled = false;
-            sendBtn.textContent = 'Send';
-        } else {
-            sendBtn.textContent = `${cd}s`;
-        }
-    }, 1000);
+    sendBtn.setAttribute('aria-disabled', 'true');
+    sendBtn.classList.add('cooling');
+    setTimeout(() => {
+        state.sendCooldownActive = false;
+        sendBtn.removeAttribute('aria-disabled');
+        sendBtn.classList.remove('cooling');
+    }, 2000);
 
     if (late.getPref('typingIndicators')) {
         socket.emit('typing', {

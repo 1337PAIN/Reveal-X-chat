@@ -2228,3 +2228,33 @@ body[data-theme="light"] .message-menu-item.danger {
     color: var(--text-primary);
     font-weight: 700;
 }
+
+
+/* The send cooldown (messaging.js): the button keeps its label and focus,
+   dims, and a bar runs along its bottom edge for the two seconds. */
+.btn-send.cooling {
+    cursor: progress;
+    opacity: .7;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-send.cooling::after {
+    animation: send-cooldown 2s linear forwards;
+    background: currentColor;
+    bottom: 0;
+    content: '';
+    height: 3px;
+    left: 0;
+    position: absolute;
+    width: 100%;
+}
+
+@keyframes send-cooldown {
+    from { transform: scaleX(1); transform-origin: left; }
+    to { transform: scaleX(0); transform-origin: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .btn-send.cooling::after { animation: none; }
+}

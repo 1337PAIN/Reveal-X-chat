@@ -200,6 +200,12 @@ Not measured by the script above, but present:
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
+- **Send keeps its name during the two-second cooldown.** The label used to
+  become a countdown ("2s", "1s") and the button was disabled, so a screen
+  reader announced a button called "2s" and keyboard focus fell out of the
+  composer. It now stays "Send" with `aria-disabled` and a dimmed state with a
+  draining bar (still under reduced motion), and a press during the pause is
+  explained (`tests/test_send_cooldown.py`).
 - **The composer's limit is the real one, and it says so near the end.** Its
   `maxlength` was 500 while the server allows 2,000, so long messages were cut
   off without a word. A counter appears for the last 200 characters and is
