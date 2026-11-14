@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v35-message-menu';
+const CACHE_NAME = 'revealx-cache-v36-placeholders';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -57,6 +57,7 @@ const ASSETS_TO_CACHE = [
     '/static/models/tamper_detector.onnx',
     '/static/models/tamper_detector.meta.json',
     '/static/css/rx_lab.css',
+    '/static/js/lab-format.js',
     '/static/js/rx_lab.js',
     '/static/Xlogo.png',
     '/static/icon-192.png',

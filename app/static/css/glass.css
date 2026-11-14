@@ -460,6 +460,13 @@ body[data-theme="light"] .modal {
     border-radius: var(--radius-md);
 }
 
+/* Only the recipient runs the checks, so the sender's bubble has no panel at
+   all; one that is still empty (before the first result) takes no space
+   rather than showing a blank glass box. */
+.tamper-panel:empty {
+    display: none;
+}
+
 .tamper-panel {
     -webkit-backdrop-filter: blur(var(--blur-sm));
     backdrop-filter: blur(var(--blur-sm));

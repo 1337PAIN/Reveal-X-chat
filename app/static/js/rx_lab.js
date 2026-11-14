@@ -170,6 +170,12 @@ function renderResults(data) {
     document.getElementById('psnrEnhanced').textContent = `${data.metrics.enhanced.psnr} dB${fallbackNote}`;
     document.getElementById('ssimEnhanced').textContent = `${data.metrics.enhanced.ssim}${fallbackNote}`;
 
+    // The Enhanced card shows the plain reconstruction when enhancement was
+    // skipped, so its title and caption have to say so (lab-format.js).
+    const enhanced = window.revealxLabFormat.enhancedCaption(data.metrics);
+    document.getElementById('enhancedTitle').textContent = enhanced.title;
+    document.getElementById('enhancedCaption').textContent = enhanced.caption;
+
     const fallbackEl = document.getElementById('fallbackNote');
     if (fallbackEl) {
         fallbackEl.textContent = data.metrics.quality_safe_fallback

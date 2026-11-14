@@ -200,6 +200,13 @@ Not measured by the script above, but present:
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
+- **Nothing empty is drawn as if it were content.** The reconstruction
+  previews were `<img src="">` -- a broken-image icon whose alt text a screen
+  reader announced -- until something loaded; they are now hidden and replaced
+  by "Not loaded yet" / "Not reconstructed yet". The sender's share bubble no
+  longer draws an empty tamper panel, and /lab's "Enhanced output" card says
+  when it is showing the plain reconstruction instead
+  (`tests/test_placeholders.py`, `tests/js/lab-format.test.mjs`).
 - **Message actions are big enough to hit.** React and "More actions" are at
   least 24 × 24px everywhere (WCAG 2.5.8) and 44 × 44px on touch screens,
   from padding rather than a larger glyph. React used to be about 21 × 17px

@@ -101,7 +101,7 @@
             <article class="image-card"><h3>Share 2</h3><img id="imgShare2" alt="Share 2"><p>Second share required for reconstruction.</p></article>
             <article class="image-card"><h3>Tamper heatmap</h3><img id="imgHeatmap" alt="Tamper heatmap"><p>Bright regions are statistically suspicious.</p></article>
             <article class="image-card"><h3>Reconstructed</h3><img id="imgReconstructed" alt="Reconstructed image"><p>XOR result from received Share 1 and Share 2.</p></article>
-            <article class="image-card"><h3>Enhanced output</h3><img id="imgEnhanced" alt="Enhanced image"><p>Denoised and sharpened output for quality comparison.</p></article>
+            <article class="image-card"><h3 id="enhancedTitle">Enhanced output</h3><img id="imgEnhanced" alt="Enhanced image"><p id="enhancedCaption">Denoised and sharpened output for quality comparison.</p></article>
             <article class="image-card metric-card"><h3>Model explanation</h3><ul id="explanationList"><li>Run analysis to view reasoning.</li></ul></article>
         </section>
 
@@ -123,6 +123,7 @@
     </main>
 
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>
+    <script src="{{ asset('js/lab-format.js') }}"></script>
     <script src="{{ asset('js/rx_lab.js') }}"></script>
 </body>
 </html>

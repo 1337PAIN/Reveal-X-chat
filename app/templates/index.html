@@ -164,7 +164,8 @@
                     <div class="share-display">
                         <div class="share-box">
                             <h4>Share 1</h4>
-                            <img id="share1Preview" src="" alt="Share 1">
+                            <img id="share1Preview" class="preview-img" src="" alt="Share 1">
+                            <p class="preview-placeholder">Not loaded yet</p>
                             <div class="share-box-actions">
                                 <button id="selectShare1Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
                                 <input type="file" id="share1Input" accept="image/*" hidden>
@@ -173,7 +174,8 @@
                         </div>
                         <div class="share-box">
                             <h4>Share 2</h4>
-                            <img id="share2Preview" src="" alt="Share 2">
+                            <img id="share2Preview" class="preview-img" src="" alt="Share 2">
+                            <p class="preview-placeholder">Not loaded yet</p>
                             <div class="share-box-actions">
                                 <button id="selectShare2Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
                                 <input type="file" id="share2Input" accept="image/*" hidden>
@@ -181,19 +183,18 @@
                             </div>
                         </div>
                     </div>
-                    <!-- [MODIFIED] Added loading state to reconstruct button -->
                     <button id="reconstructBtn" class="btn btn-reconstruct" aria-label="Reconstruct image">
                         <span id="reconstructBtnText">Reconstruct Image</span>
                         <span id="reconstructBtnSpinner" class="spinner hidden" aria-label="Loading"></span>
                     </button>
                     <div class="reconstructed-display">
                         <h4>Reconstructed</h4>
-                        <img id="reconstructedPreview" src="" alt="Reconstructed">
+                        <img id="reconstructedPreview" class="preview-img" src="" alt="Reconstructed">
+                        <p class="preview-placeholder">Not reconstructed yet</p>
                         <button id="downloadReconstructedBtn" class="btn btn-secondary" disabled>
                             Download
                         </button>
                         <div class="reconstructed-meta">
-                            <!-- [NEW] Expiry timer and warning -->
                             <span id="reconstructionWarning" class="warning-text"></span>
                             <span id="expiryTimer" class="expiry-timer"></span>
                         </div>

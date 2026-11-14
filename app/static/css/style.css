@@ -2166,3 +2166,22 @@ body::before {
         justify-content: center;
     }
 }
+
+
+/* Reconstruction previews start as <img src="">, which drew a broken-image
+   icon under a heading that implied an image was there. Until one has a
+   source it is hidden and a plain line says what is missing. */
+.preview-img[src=""],
+.preview-img:not([src]) {
+    display: none;
+}
+
+.preview-placeholder {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 8px 0;
+}
+
+.preview-img[src]:not([src=""]) + .preview-placeholder {
+    display: none;
+}

@@ -599,7 +599,7 @@ export function displayMessage(msg) {
                     ${oneTimeNotice}
                     <div class="share-expiry">${expiryText}</div>
                 </div>
-                <div class="tamper-panel" data-role="tamper-panel"></div>
+                ${!isSent ? '<div class="tamper-panel" data-role="tamper-panel"></div>' : ''}
                 <div class="share-actions">
                     ${!isSent ? `<button class="share-action primary" type="button" data-action="reconstruct" ${hasShare1 && hasLiveShare2 ? '' : 'disabled'}>Reconstruct</button>` : ''}
                     ${!isSent && hasShare1 ? '<button class="share-action" type="button" data-action="recheck">Re-check integrity</button>' : ''}
