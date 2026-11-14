@@ -7,10 +7,18 @@ be allowed to regress -- that a database created by an older Reveal-X, with
 no schema_version table at all, upgrades with its data intact.
 """
 
+import os
 import sqlite3
 from contextlib import closing
 
 import pytest
+
+# These build SQLite files of every historical shape and upgrade them; the
+# shared PostgreSQL database cannot be put back into a pre-versioning state
+# per test. The PostgreSQL job still runs every migration, at import.
+pytestmark = pytest.mark.skipif(
+    bool(os.environ.get('DATABASE_URL')),
+    reason='builds and upgrades SQLite files of historical shapes; SQLite-only')
 
 from app import migrations
 from app.models import ChatRoom

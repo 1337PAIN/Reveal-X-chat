@@ -266,6 +266,9 @@ before versioning has no `schema_version` table; it replays every step, and
 each step finds its work already done and skips it, so an upgrade from any
 earlier Reveal-X keeps its accounts and messages
 (`tests/test_migrations.py` builds both kinds and upgrades them).
+Those upgrade tests are SQLite files; on PostgreSQL, CI applies every
+migration to a fresh PostgreSQL 16 database and runs the full suite on it
+(the `postgres` job in `.github/workflows/ci.yml`).
 
 Start one process first after an upgrade. Two processes migrating the same
 database at the same moment is not guarded against.

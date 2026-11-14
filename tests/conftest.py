@@ -15,8 +15,50 @@ sys.path.insert(0, str(ROOT))
 # tests/test_sweeper.py starts its own when it needs one.
 os.environ.setdefault('REVEALX_SWEEPER', 'off')
 
+# With DATABASE_URL set (the PostgreSQL CI job) every test shares one real
+# database, so the per-test temporary SQLite file no longer isolates anything.
+# Instead every table but schema_version is emptied before and after each test.
+#
+# The first truncation has to happen here, before `from app import ...`:
+# importing the app constructs the ChatRoom, which runs init_db, and init_db
+# refuses to start when it finds encrypted TOTP secrets it cannot read -- which
+# is exactly what a previous run's test_totp_at_rest leaves behind.
+USING_POSTGRES = bool(os.environ.get('DATABASE_URL'))
+
+
+def _truncate_postgres():
+    import psycopg2
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT tablename FROM pg_tables "
+                "WHERE schemaname = current_schema() AND tablename <> 'schema_version'"
+            )
+            tables = [row[0] for row in cur.fetchall()]
+            if tables:
+                cur.execute('TRUNCATE {} RESTART IDENTITY CASCADE'.format(
+                    ', '.join('"{}"'.format(name) for name in tables)))
+    finally:
+        conn.close()
+
+
+if USING_POSTGRES:
+    _truncate_postgres()
+
 from app import app as flask_app  # noqa: E402
 from app.models import chat_room  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _empty_postgres():
+    """PostgreSQL only: no rows leak from one test into the next."""
+    if not USING_POSTGRES:
+        yield
+        return
+    _truncate_postgres()
+    yield
+    _truncate_postgres()
 
 
 @pytest.fixture(autouse=True)

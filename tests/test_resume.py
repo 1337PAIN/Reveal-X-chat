@@ -155,7 +155,9 @@ def test_an_expired_token_is_refused(store):
 def test_tokens_expire_after_twelve_hours(store):
     sock, payload = sign_in(store)
     with store._connect() as db:
-        expires = db.execute("SELECT expires_at FROM resume_tokens").fetchone()[0]
+        # By name: sqlite3.Row and psycopg2's RealDictCursor rows both allow it,
+        # and only SQLite's allows an index.
+        expires = db.execute("SELECT expires_at FROM resume_tokens").fetchone()['expires_at']
     lifetime = datetime.fromisoformat(expires) - datetime.utcnow()
     assert timedelta(hours=11, minutes=59) < lifetime <= timedelta(hours=12)
     sock.disconnect()

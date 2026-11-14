@@ -11,6 +11,7 @@ immediately when it is empty rather than waiting, so a semaphore in front of
 it makes threads queue for a connection instead of erroring under load.
 """
 
+import os
 import threading
 import time
 
@@ -20,6 +21,8 @@ from app import models
 from app.models import ChatRoom
 
 
+@pytest.mark.skipif(bool(os.environ.get('DATABASE_URL')),
+                    reason='WAL and busy_timeout are SQLite settings; the store is PostgreSQL here')
 def test_sqlite_connections_use_wal_and_wait_for_locks(store):
     with store._connect() as db:
         assert db.execute('PRAGMA journal_mode').fetchone()[0].lower() == 'wal'

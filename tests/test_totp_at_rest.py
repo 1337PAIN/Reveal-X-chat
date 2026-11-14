@@ -27,7 +27,8 @@ OTHER_KEY = base64.b64encode(b'z' * 32).decode()
 
 def raw_secret(store, user_id):
     with store._connect() as db:
-        return db.execute("SELECT totp_secret FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+        # By name, so it reads the same on SQLite and PostgreSQL.
+        return db.execute("SELECT totp_secret FROM users WHERE id = ?", (user_id,)).fetchone()['totp_secret']
 
 
 @pytest.fixture
