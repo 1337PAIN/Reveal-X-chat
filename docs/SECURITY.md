@@ -171,6 +171,11 @@ is the entire point of having it.
   id. A member disabled after joining a group stays a member and gets nothing
   until reinstated. An inactive id is refused exactly as an unknown one is
   (`test_active_targets.py`).
+- **Group conversations are off by default.** They have no client -- no page
+  in the app uses them -- so in a default deployment every `group_*` event is
+  refused before it touches the database (`handlers/groups.py`,
+  `groups_required`; `tests/test_groups_flag.py`). `REVEALX_GROUPS=true`
+  turns them on; the rules above then apply to them.
 - Every message read goes through `get_message_for_user`, which filters on
   `sender_id OR recipient_id`. Knowing a message id is not access.
 - Revoking, deleting and reading are each tested from the perspective of an

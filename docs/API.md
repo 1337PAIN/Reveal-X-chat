@@ -223,6 +223,13 @@ that asked.
 
 ### Groups
 
+**Off by default, and there is no client for them.** Group conversations exist
+only on the server: no page in the app creates, opens or sends to a group.
+Unless `REVEALX_GROUPS=true` is set, every event below is refused with
+`group_error` "Group conversations are not enabled on this server" before it
+reads or writes anything. The handlers stay registered either way, so the
+event count above does not change with the flag.
+
 | Event | In | Out |
 | --- | --- | --- |
 | `group_create` | `name`, `description`, `member_ids` | `group_created`, `group_updated` to each member |

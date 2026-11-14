@@ -15,6 +15,32 @@ from app.handlers.common import *  # noqa: F401,F403
 
 MAX_GROUP_PAYLOADS = 64
 
+GROUPS_DISABLED_MESSAGE = 'Group conversations are not enabled on this server'
+
+
+def groups_enabled():
+    """REVEALX_GROUPS turns group conversations on; they are off by default.
+
+    Groups exist only on the server -- no page in the app creates, opens or
+    sends to one. A handler nothing legitimate calls is still attack surface,
+    reachable by anyone with a socket, so a default deployment refuses every
+    group_* event. Read per call rather than at import, so the handlers stay
+    registered (the documented event count is the same either way) and the
+    tests can switch it.
+    """
+    return os.environ.get('REVEALX_GROUPS', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def groups_required(handler):
+    """Refuse a group event, before anything else runs, when groups are off."""
+    @functools.wraps(handler)
+    def wrapper(*args, **kwargs):
+        if not groups_enabled():
+            emit('group_error', {'error': GROUPS_DISABLED_MESSAGE}, to=request.sid)
+            return None
+        return handler(*args, **kwargs)
+    return wrapper
+
 
 def _group_actor(group_id):
     """The signed-in caller, if they are a member of this group."""
@@ -65,6 +91,7 @@ def _group_notice(group_id, text, extra_user_ids=()):
 
 
 @socketio.on('group_create')
+@groups_required
 @session_required
 def handle_group_create(data):
     user = chat_room.get_session_user(request.sid)
@@ -86,6 +113,7 @@ def handle_group_create(data):
 
 
 @socketio.on('group_list')
+@groups_required
 @session_required
 def handle_group_list():
     user = chat_room.get_session_user(request.sid)
@@ -96,6 +124,7 @@ def handle_group_list():
 
 
 @socketio.on('group_open')
+@groups_required
 @session_required
 def handle_group_open(data):
     data = data or {}
@@ -114,6 +143,7 @@ def handle_group_open(data):
 
 
 @socketio.on('group_send')
+@groups_required
 @session_required
 def handle_group_send(data):
     """One ciphertext per member, encrypted client-side under each member's
@@ -176,6 +206,7 @@ def handle_group_send(data):
 
 
 @socketio.on('group_add_members')
+@groups_required
 @session_required
 def handle_group_add_members(data):
     data = data or {}
@@ -200,6 +231,7 @@ def handle_group_add_members(data):
 
 
 @socketio.on('group_remove_member')
+@groups_required
 @session_required
 def handle_group_remove_member(data):
     data = data or {}
@@ -226,6 +258,7 @@ def handle_group_remove_member(data):
 
 
 @socketio.on('group_set_role')
+@groups_required
 @session_required
 def handle_group_set_role(data):
     data = data or {}
@@ -251,6 +284,7 @@ def handle_group_set_role(data):
 
 
 @socketio.on('group_update_info')
+@groups_required
 @session_required
 def handle_group_update_info(data):
     data = data or {}
@@ -273,6 +307,7 @@ def handle_group_update_info(data):
 
 
 @socketio.on('group_update_settings')
+@groups_required
 @session_required
 def handle_group_update_settings(data):
     data = data or {}
@@ -295,6 +330,7 @@ def handle_group_update_settings(data):
 
 
 @socketio.on('group_leave')
+@groups_required
 @session_required
 def handle_group_leave(data):
     data = data or {}

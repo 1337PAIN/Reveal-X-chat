@@ -124,7 +124,8 @@ def test_images_are_refused_before_any_work_is_done(pair, store, clock, monkeypa
     assert too_fast(a, 'image_error')
 
 
-def test_group_sends_draw_on_the_text_bucket(pair, store, clock):
+def test_group_sends_draw_on_the_text_bucket(pair, store, clock, monkeypatch):
+    monkeypatch.setenv('REVEALX_GROUPS', 'true')  # off by default; see test_groups_flag.py
     a, b, alice, bob = pair
     group, _ = store.create_group(alice['id'], 'team', '', [bob['id']])
     burst = routes.SEND_LIMITS['message'][0]

@@ -232,6 +232,7 @@ pip install -r requirements.lock
 | `REVEALX_ADMIN_USER` / `REVEALX_ADMIN_PASSWORD` | Bootstraps the superadmin on first start |
 | `DATABASE_URL` | PostgreSQL DSN. Unset uses SQLite, in WAL mode with a 5-second busy timeout (so expect `reveal_x.db-wal` and `-shm` beside the database; back up all three, or stop the app first) |
 | `REVEALX_PG_POOL_MAX` | PostgreSQL only: connections kept in the pool (default 20). Threads beyond that wait up to 30 s for one rather than failing. Keep it under the server's connection limit |
+| `REVEALX_GROUPS` | `true` turns on the server-side group conversation events. **Off by default**: there is no client for groups, so a deployment that leaves it unset refuses every `group_*` event |
 | `FIREBASE_*` | Google sign-in — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md) |
 
 ### `REVEALX_TRUST_PROXY` and login throttling

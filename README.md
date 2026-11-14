@@ -81,6 +81,7 @@ Full numbers, the tool, and its known limits: [docs/ACCESSIBILITY.md](docs/ACCES
 
 - User registration and login.
 - Private one-to-one messaging with Flask-SocketIO.
+- Group conversations exist on the server only, with **no client**, and are **off by default**: every `group_*` event is refused unless `REVEALX_GROUPS=true` is set (see [docs/API.md](docs/API.md#groups)). No page in the app creates or opens a group.
 - **End-to-end encrypted text and voice messages** (see section 2).
 - Voice notes recorded in-browser with `MediaRecorder`, capped at 60 seconds and 2 MB.
 - Typing indicators, read receipts, emoji reactions, forwarding, deletion, profile image support, and responsive UI.
@@ -760,6 +761,7 @@ REVEAL_X_COOKIE_SECURE=true
 REVEAL_X_FORCE_HTTPS=true
 REVEAL_X_ADHOC_SSL=true
 DATABASE_URL=postgresql://...                # falls back to SQLite when unset
+REVEALX_GROUPS=true                          # server-side group events; off by default, no client
 PORT=5000
 FLASK_DEBUG=true
 ```

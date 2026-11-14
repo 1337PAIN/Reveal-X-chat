@@ -29,7 +29,10 @@ def last(client, name):
 
 
 @pytest.fixture(autouse=True)
-def _clean():
+def _clean(monkeypatch):
+    # Groups are off by default (tests/test_groups_flag.py); these test the
+    # feature itself, so turn it on.
+    monkeypatch.setenv('REVEALX_GROUPS', 'true')
     _received.clear()
     yield
     _received.clear()
