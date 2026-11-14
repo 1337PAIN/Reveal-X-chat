@@ -159,9 +159,6 @@ def test_no_page_loads_a_stylesheet_from_another_origin(template):
 
 
 @pytest.mark.parametrize('path', [
-    'vendor/fontawesome/css/all.min.css',
-    'vendor/fontawesome/webfonts/fa-solid-900.woff2',
-    'vendor/fontawesome/webfonts/fa-regular-400.woff2',
     'vendor/inter/inter.css',
     'vendor/inter/files/inter-latin-400-normal.woff2',
     'vendor/inter/files/inter-latin-700-normal.woff2',
@@ -172,7 +169,7 @@ def test_the_fonts_are_vendored_and_served(client, path):
 
 
 def test_every_font_the_vendored_css_names_is_present():
-    for css in ('vendor/fontawesome/css/all.min.css', 'vendor/inter/inter.css'):
+    for css in ('vendor/inter/inter.css',):
         text = (STATIC / css).read_text(encoding='utf-8')
         for ref in re.findall(r'url\(([^)]+\.woff2)\)', text):
             target = (STATIC / css).parent / ref.strip('\'"')
@@ -206,3 +203,22 @@ def test_chat_modules_are_always_revalidated(client, path):
     response = client.get(path)
     assert response.status_code == 200
     assert response.headers.get('Cache-Control') == 'no-cache'
+
+
+def test_font_awesome_is_gone():
+    """Font Awesome was loaded -- about 400 KB of CSS and fonts -- for one
+    icon, fa-wifi-slash on the offline indicator, which its free set does not
+    contain, so the indicator drew an empty box. That icon is an inline SVG
+    now, and nothing else used the library."""
+    index = (ROOT / 'app' / 'templates' / 'index.html').read_text(encoding='utf-8')
+    sw = (STATIC / 'sw.js').read_text(encoding='utf-8')
+    assert 'fontawesome' not in index and 'fontawesome' not in sw
+    assert not re.search(r'class="[^"]*fa[srb]?', index)
+    assert not (STATIC / 'vendor' / 'fontawesome').exists()
+
+
+def test_the_offline_indicator_draws_its_own_icon():
+    index = (ROOT / 'app' / 'templates' / 'index.html').read_text(encoding='utf-8')
+    start = index.index('id="offlineIndicator"')
+    indicator = index[start:index.index('</div>', start)]
+    assert '<svg' in indicator and 'aria-label="Offline"' in indicator

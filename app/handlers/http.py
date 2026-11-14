@@ -341,7 +341,7 @@ def add_security_headers(response):
         # 'wasm-unsafe-eval' lets onnxruntime-web compile the tamper-detection
         # model. It permits WebAssembly compilation only -- unlike
         # 'unsafe-eval' it does not re-enable eval() or new Function().
-        # socket.io, DOMPurify, Font Awesome and Inter are all served from
+        # socket.io, DOMPurify and Inter are all served from
         # /static/vendor now, so their CDNs are no longer allowed: an origin in
         # the policy that nothing loads from is an origin an injected tag can.
         "script-src 'self' 'wasm-unsafe-eval' "

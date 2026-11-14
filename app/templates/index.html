@@ -24,9 +24,8 @@
 
     <!-- DOMPurify, behind sanitize.js, for the few places that must render markup. -->
     <script src="{{ asset('vendor/dompurify/purify.min.js') }}"></script>
-    <!-- Font Awesome and Inter are vendored: a stylesheet request to Google or
-         Cloudflare on every load tells them who opened the app, and when. -->
-    <link rel="stylesheet" href="{{ asset('vendor/fontawesome/css/all.min.css') }}">
+    <!-- Inter is vendored: a stylesheet request to Google on every load tells
+         them who opened the app, and when. -->
     <link rel="stylesheet" href="{{ asset('vendor/inter/inter.css') }}">
     <link rel="stylesheet" href="{{ asset('css/style.css') }}">
     <link rel="stylesheet" href="{{ asset('css/glass.css') }}">
@@ -46,7 +45,14 @@
             </div>
             <div class="header-info">
                 <div id="offlineIndicator" class="offline-indicator" title="Offline" aria-live="polite">
-                    <i class="fas fa-wifi-slash"></i>
+                    <!-- Drawn here rather than from an icon font: Font Awesome was
+                         loaded for this one icon, which its free set lacks. -->
+                    <svg role="img" aria-label="Offline" width="14" height="14" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                        <path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5.2 12.3a10 10 0 0 1 13.6 0"/>
+                        <path d="M8.5 15.8a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/>
+                        <path d="M3 3l18 18"/>
+                    </svg>
                     <span id="reconnectCount" class="reconnect-count" aria-live="polite"></span>
                 </div>
                 <button id="installAppBtn" class="icon-btn hidden" type="button"

@@ -63,7 +63,7 @@ test('no CDN is handled any more, fonts included', () => {
 });
 
 test('the vendored fonts are cached from our own origin', () => {
-    assert.equal(get('http://localhost:5000/static/vendor/fontawesome/css/all.min.css'), true);
+    assert.equal(get('http://localhost:5000/static/vendor/inter/inter.css'), true);
     assert.equal(get('http://localhost:5000/static/vendor/inter/files/inter-latin-400-normal.woff2'), true);
 });
 

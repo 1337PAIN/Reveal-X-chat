@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v53-no-markers';
+const CACHE_NAME = 'revealx-cache-v54-no-icon-font';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -13,9 +13,6 @@ const ASSETS_TO_CACHE = [
     // the app from starting.
     '/static/vendor/socketio/socket.io.min.js',
     '/static/vendor/dompurify/purify.min.js',
-    '/static/vendor/fontawesome/css/all.min.css',
-    '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
-    '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
     '/static/vendor/inter/inter.css',
     '/static/vendor/inter/files/inter-latin-400-normal.woff2',
     '/static/vendor/inter/files/inter-latin-500-normal.woff2',

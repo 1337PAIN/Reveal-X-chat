@@ -269,6 +269,11 @@ Not measured by the script above, but present:
   none of which had a reduced-motion override, so a busy chat was never still
   (`tests/test_reduced_motion_entrances.py`). The spinner keeps its existing
   cross-fade substitute.
+- The offline indicator shows a crossed-out wifi icon, drawn as inline SVG
+  and named "Offline". It used to ask Font Awesome for `fa-wifi-slash`,
+  which the free set does not have, so it showed an empty box; the library
+  (about 400 KB of CSS and fonts, used for nothing else) is gone
+  (`tests/test_startup_path.py`).
 - Responsive down to 375px with 44px minimum touch targets. A bubble's meta
   row wraps: on a share it carries the "Opens once" chip, the time, the
   status and two 44px buttons, about 320px, and on a phone it used to spill
