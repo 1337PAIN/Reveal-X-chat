@@ -142,7 +142,7 @@ confirmImageBtn.addEventListener('click', async () => {
     if (!state.pendingImage || !state.selectedRecipientId) return;
 
     confirmImageBtn.disabled = true;
-    confirmImageBtn.textContent = 'Splitting & Encrypting...';
+    confirmImageBtn.textContent = 'Splitting...';
     try {
         await sendImageShare(state.selectedRecipientId, state.pendingImage.dataUrl);
     } catch (error) {
@@ -157,6 +157,6 @@ function closeImagePreview() {
     imagePreview.src = '';
     state.pendingImage = null;
     confirmImageBtn.disabled = false;
-    confirmImageBtn.textContent = 'Encrypt & Send';
+    confirmImageBtn.textContent = 'Split & Send';
 }
 

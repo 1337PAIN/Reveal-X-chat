@@ -204,7 +204,7 @@ def handle_forward(data):
 
     source = chat_room.get_message_for_user(message_id, current_user['id'])
     if not source or source['type'] == 'share':
-        emit('message_error', {'error': 'Encrypted image shares cannot be forwarded'})
+        emit('message_error', {'error': 'Image shares cannot be forwarded'})
         return
     if source.get('encrypted'):
         # Ciphertext is bound to one conversation's derived key, so forwarding

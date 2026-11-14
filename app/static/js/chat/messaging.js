@@ -358,7 +358,7 @@ function markConversationRead(senderId) {
 
 /** Decide and raise the alert for an incoming message. */
 async function notifyForIncoming(msg) {
-    let preview = 'Sent an encrypted share';
+    let preview = 'Image share';
     let searchable = '';
 
     if (msg.type === 'voice') {

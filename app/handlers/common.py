@@ -384,7 +384,7 @@ def reply_preview(message):
         return None
     content = message['content']
     if message['type'] == 'share':
-        content = 'Encrypted image'
+        content = 'Image share'
     elif message['type'] == 'voice':
         content = 'Voice message'
     elif message.get('encrypted'):

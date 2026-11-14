@@ -594,8 +594,12 @@ export function displayMessage(msg) {
 
 
 
+        // Said as plain words, and set as text below: the recipient's name is
+        // another user's input and must not be interpolated into markup.
+        const recipient = state.users.find(u => u.id === msg.recipient_id);
+        const recipientName = recipient ? recipient.username : 'the recipient';
         const statusMessage = isSent
-            ? 'You sent encrypted shares. The sender cannot reconstruct.'
+            ? `Only ${recipientName} can rebuild this image. You can revoke it until they open it.`
             : isClientSplitShare(msg)
               ? 'Share 2 arrived end-to-end encrypted. Verify and reconstruct locally.'
               : hasLiveShare2
@@ -606,13 +610,13 @@ export function displayMessage(msg) {
             <div class="message-username">${isSent ? 'You' : sanitizedUsername}</div>
             <div class="message-content">
                 <div class="encrypted-image-notice">
-                    ${statusMessage}
+                    <span class="share-status"></span>
                 </div>
                 ${!isSent ? '<div class="tamper-panel" data-role="tamper-panel"></div>' : ''}
                 <div class="share-actions">
                     ${!isSent ? `<button class="share-action primary" type="button" data-action="reconstruct" ${hasShare1 && hasLiveShare2 ? '' : 'disabled'}>Reconstruct</button>` : ''}
                     ${!isSent && hasShare1 ? '<button class="share-action" type="button" data-action="recheck">Re-check integrity</button>' : ''}
-                    ${isSent ? '<button class="share-action btn-danger" type="button" data-action="revoke">Revoke Share</button>' : ''}
+                    ${isSent ? '<button class="share-action secondary" type="button" data-action="revoke">Revoke</button>' : ''}
                 </div>
             </div>
             <div class="message-meta">
@@ -630,6 +634,7 @@ export function displayMessage(msg) {
             <div class="message-reactions"></div>
         `;
 
+        messageDiv.querySelector('.share-status').textContent = statusMessage;
         messageDiv.querySelectorAll('.share-action').forEach(button => {
             button.addEventListener('click', () => {
                 const action = button.dataset.action;
