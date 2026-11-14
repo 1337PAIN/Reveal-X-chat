@@ -396,3 +396,9 @@ Not measured by the script above, but present:
   not offline, so an "away" contact showed green beside an amber pip. Your
   own avatar shows your initial until there is a photo, as contacts do; it
   was an empty circle (`tests/test_presence_and_own_avatar.py`).
+- **Avatar initials and unread counts are readable.** Both were white on a
+  translucent light-blue to aqua gradient: 1.4:1 to 3.0:1 once composited,
+  below AA. The contrast sweep never measured them -- the initials are
+  `aria-hidden` and the badge only exists while something is unread. The
+  gradient is now opaque `#1e3a8a` to `#115e59`, where white is 10.4:1 and
+  7.6:1 (`tests/test_avatar_badge_contrast.py`).

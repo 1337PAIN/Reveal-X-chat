@@ -341,14 +341,17 @@ body[data-theme="light"] .users-list li.active .user-status-line {
     color: #fff;
 }
 
+/* White text on both, so the gradient is opaque and deep: white is 10.4:1
+   on #1e3a8a and 7.6:1 on #115e59 whatever the theme. The light-blue to
+   aqua it replaced was translucent and measured 1.4 to 3.0:1. */
 .avatar-dot {
-    background: linear-gradient(135deg, rgba(96, 165, 250, .9), rgba(94, 234, 212, .78));
+    background: linear-gradient(135deg, #1e3a8a, #115e59);
     box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
 
 .unread-badge {
-    background: linear-gradient(135deg, rgba(96, 165, 250, .95), rgba(94, 234, 212, .85));
-    box-shadow: 0 3px 10px rgba(96, 165, 250, .4);
+    background: linear-gradient(135deg, #1e3a8a, #115e59);
+    box-shadow: 0 3px 10px rgba(30, 58, 138, .4);
 }
 
 .profile-preview,
