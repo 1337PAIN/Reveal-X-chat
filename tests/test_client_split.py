@@ -21,6 +21,7 @@ import pytest
 
 from app import app as flask_app, socketio
 from app import routes
+from e2ee_payload import now_ms
 
 _received = {}
 
@@ -55,11 +56,11 @@ def payload(recipient_id, share1=None, **overrides):
         'envelope': base64.b64encode(os.urandom(512)).decode('ascii'),
         'iv': base64.b64encode(os.urandom(12)).decode('ascii'),
         'encrypted': True,
-        'v': 2,
+        'v': 3, 'sent_at': now_ms(),
         'msg_uuid': str(uuid.uuid4()),
     }
     body.update(overrides)
-    return body
+    return {k: v for k, v in body.items() if v is not None}
 
 
 @pytest.fixture
@@ -115,7 +116,8 @@ def test_the_recipient_gets_the_envelope_and_the_capability(pair, store):
     message = events(b, 'new_message')[0]['args'][0]
     assert message['type'] == 'share'
     assert message['content'] == body['envelope']
-    assert message['extra']['v'] == 2
+    assert message['extra']['v'] == 3
+    assert message['extra']['sent_at'] == body['sent_at']
     assert message['extra']['msg_uuid'] == body['msg_uuid']
     assert message['extra']['iv'] == body['iv']
     assert message['extra']['share1_url']
@@ -216,14 +218,16 @@ def test_an_oversized_share_is_refused_before_decoding(pair, store, monkeypatch)
 @pytest.mark.parametrize('overrides,why', [
     ({'envelope': ''}, 'no envelope'),
     ({'envelope': 'x' * (routes.MAX_SHARE_ENVELOPE_LENGTH + 1)}, 'envelope too large'),
-    ({'v': 1}, 'not v2'),
+    ({'v': 1}, 'not v3'),
+    ({'v': 2}, 'v2 is retired'),
+    ({'sent_at': None}, 'no sent_at'),
     ({'msg_uuid': 'nope'}, 'bad uuid'),
     ({'iv': ''}, 'no iv'),
     ({'share2_live': 'data:image/png;base64,AAAA'}, 'Share 2 in the clear'),
     ({'share2_b64': 'AAAA'}, 'Share 2 in the clear'),
     ({'image': 'data:image/png;base64,AAAA'}, 'the plaintext image'),
 ])
-def test_the_envelope_must_be_encrypted_v2_and_alone(pair, store, overrides, why):
+def test_the_envelope_must_be_encrypted_v3_and_alone(pair, store, overrides, why):
     a, b, alice, bob = pair
     a.emit('send_share', payload(bob['id'], **overrides))
     assert not events(b, 'new_message'), why

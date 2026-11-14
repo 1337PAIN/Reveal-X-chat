@@ -32,7 +32,7 @@ import {
 } from './presence.js';
 import {
     displayMessage,
-    e2eeContext,
+    openEncrypted,
     scrollToBottom,
 } from './render.js';
 
@@ -302,6 +302,7 @@ async function sendMessage() {
             encrypted: true,
             v: sealed.v,
             msg_uuid: sealed.msg_uuid,
+            sent_at: sealed.sent_at,
         };
     }
 
@@ -368,13 +369,10 @@ async function notifyForIncoming(msg) {
         preview = 'Voice message';
     } else if (msg.type === 'text') {
         if (msg.encrypted) {
-            const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
-            const peerKey = peerPublicKey(otherId);
-            const plaintext = peerKey
-                ? await window.revealxE2EE.decrypt(
-                    peerKey, msg.content, msg.extra && msg.extra.iv, e2eeContext(msg))
-                : null;
-            searchable = plaintext || '';
+            // Through the same checks as the transcript: a stale or replayed
+            // message must not reach a notification either.
+            const opened = await openEncrypted(msg);
+            searchable = opened.status === 'ok' ? opened.text : '';
             preview = 'Encrypted message';
         } else {
             searchable = msg.content;
@@ -590,6 +588,7 @@ async function sendVoiceMessage(blob, recipientId) {
             encrypted: true,
             v: sealed.v,
             msg_uuid: sealed.msg_uuid,
+            sent_at: sealed.sent_at,
         });
         return;
     }

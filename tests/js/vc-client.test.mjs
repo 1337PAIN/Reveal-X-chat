@@ -219,7 +219,8 @@ test('the whole path: split, seal with e2ee.js v2, open, verify, reconstruct', a
     assert.ok(!Buffer.from(sealed.ciphertext, 'base64').includes(Buffer.from(image.subarray(0, 64))));
 
     const opened = await bob.s.decrypt(alice.pub, sealed.ciphertext, sealed.iv,
-        { v: sealed.v, senderId: 'alice', recipientId: 'bob', msgUuid: sealed.msg_uuid });
+        { v: sealed.v, senderId: 'alice', recipientId: 'bob', msgUuid: sealed.msg_uuid,
+          sentAt: sealed.sent_at });
     const result = await vc.verifyAndReconstruct(prepared.share1Png, vc.openEnvelope(opened));
     assert.equal(result.hashMatches, true);
     assert.deepEqual(result.pixels, image);

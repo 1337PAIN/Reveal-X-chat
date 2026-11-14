@@ -19,6 +19,7 @@ import pytest
 
 from app import app as flask_app, socketio
 from app import routes
+from e2ee_payload import now_ms
 
 _received = {}
 
@@ -100,7 +101,7 @@ def test_voice_has_its_own_smaller_bucket(pair, store, clock):
         a.emit('send_voice', {'recipient_id': bob['id'],
                               'audio': base64.b64encode(b'\x01' * 64).decode(),
                               'iv': 'aXY=', 'mime': 'audio/webm', 'encrypted': True,
-                              'v': 2, 'msg_uuid': str(uuid.uuid4())})
+                              'v': 3, 'sent_at': now_ms(), 'msg_uuid': str(uuid.uuid4())})
     voices = [m for m in store.get_conversation(alice['id'], bob['id']) if m['type'] == 'voice']
     assert len(voices) == burst
     assert too_fast(a)

@@ -95,7 +95,7 @@ cancelImageBtn.addEventListener('click', closeImagePreview);
  *
  * The image itself used to be uploaded and split on the server, which then
  * held every picture anyone sent. Now nothing that leaves this browser is the
- * image: Share 1 is random, and Share 2 is inside an E2EE v2 message. That
+ * image: Share 1 is random, and Share 2 is inside an E2EE v3 message. That
  * needs both sides to have keys -- there is no unencrypted way to send Share 2
  * that would not hand the server the picture -- so without them this refuses.
  */
@@ -134,6 +134,7 @@ async function sendImageShare(recipientId, dataUrl) {
         encrypted: true,
         v: sealed.v,
         msg_uuid: sealed.msg_uuid,
+        sent_at: sealed.sent_at,
     });
     return true;
 }

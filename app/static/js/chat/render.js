@@ -21,7 +21,7 @@ import {
     toggleReactionPicker,
 } from './reactions.js';
 
-registerLate({ e2eeContext, filterVisibleMessages });
+registerLate({ e2eeContext, openEncrypted, filterVisibleMessages });
 
 // ==========================================
 // 10. Message Feeds Rendering & Virtual Scrolling
@@ -109,41 +109,46 @@ function localTimeLabel(msg) {
 }
 
 /**
- * The E2EE v2 context for a stored message: what e2ee.js authenticates as
+ * The E2EE v3 context for a stored message: what e2ee.js authenticates as
  * AES-GCM associated data. The ids are the server's, from the row itself, so
  * a row relabelled with another sender or recipient no longer decrypts.
+ * Direct messages are conversation "dm"; "group:<id>" is reserved for when
+ * groups have a client.
  */
 export function e2eeContext(msg) {
     const extra = msg.extra || {};
     return {
         v: extra.v,
+        conversation: 'dm',
         senderId: msg.sender_id,
         recipientId: msg.recipient_id,
         msgUuid: extra.msg_uuid,
+        sentAt: extra.sent_at,
     };
 }
 
-// "<sorted user ids>|<msg_uuid>" -> the first message id seen carrying it.
-//
-// The server refuses a msg_uuid it has already stored, but the server is the
-// party E2EE does not trust. A server replaying a ciphertext has to keep its
-// msg_uuid -- it is authenticated -- so a second row with the same uuid and a
-// different id is a replay, and is not shown as a fresh message.
-const seenMessageUuids = new Map();
-
-function isReplayedMessage(msg) {
-    const extra = msg.extra || {};
-    if (extra.v !== 2 || !extra.msg_uuid) return false;
-    const key = `${[msg.sender_id, msg.recipient_id].sort().join('|')}|${extra.msg_uuid}`;
-    const first = seenMessageUuids.get(key);
-    if (!first) {
-        seenMessageUuids.set(key, msg.id);
-        return false;
-    }
-    return first !== msg.id;
+/**
+ * Open an encrypted row through e2ee.js's openMessage, which decrypts and
+ * then refuses stale, future-dated and replayed messages. The replay record
+ * is in IndexedDB, so it survives a reload; it used to be a Map here.
+ */
+export function openEncrypted(msg, options = {}) {
+    const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
+    const peerKey = peerPublicKey(otherId);
+    if (!peerKey) return Promise.resolve({ status: 'failed' });
+    const iv = msg.extra ? msg.extra.iv : null;
+    return window.revealxE2EE.openMessage(peerKey, msg.content, iv, e2eeContext(msg),
+        { messageId: msg.id, ...options });
 }
 
 const REPLAYED_NOTICE = 'Repeated message - this encrypted message was already delivered, so it is not shown again.';
+
+// What each refusal from openMessage looks like to the reader.
+export const OPEN_NOTICES = {
+    legacy: 'Sent before an update; can\'t be opened.',
+    unverifiable: 'Can\'t be verified - it was sent more than an hour ago or with a clock far from this one.',
+    replay: REPLAYED_NOTICE,
+};
 
 /** Fill a message body, decrypting first when the payload is E2EE. */
 async function fillTextContent(node, msg) {
@@ -154,25 +159,15 @@ async function fillTextContent(node, msg) {
         return;
     }
 
-    if (isReplayedMessage(msg)) {
-        node.textContent = REPLAYED_NOTICE;
-        node.classList.add('undecryptable');
-        return;
-    }
-
     node.textContent = 'Decrypting...';
-    const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
-    const peerKey = peerPublicKey(otherId);
-    const iv = msg.extra ? msg.extra.iv : null;
-    const plaintext = peerKey
-        ? await window.revealxE2EE.decrypt(peerKey, msg.content, iv, e2eeContext(msg))
-        : null;
+    const opened = await openEncrypted(msg);
 
-    if (plaintext === null) {
-        node.textContent = 'Encrypted message - cannot be opened with the current key pair.';
-        node.classList.add('undecryptable');
+    if (opened.status === 'ok') {
+        node.textContent = opened.text;
     } else {
-        node.textContent = plaintext;
+        node.textContent = OPEN_NOTICES[opened.status]
+            || 'Encrypted message - cannot be opened with the current key pair.';
+        node.classList.add('undecryptable');
     }
     filterVisibleMessages();
 }
@@ -187,31 +182,19 @@ async function fillVoiceContent(player, status, msg) {
         return;
     }
 
-    if (isReplayedMessage(msg)) {
-        player.remove();
-        if (status) {
-            status.textContent = REPLAYED_NOTICE;
-            status.classList.add('undecryptable');
-        }
-        return;
-    }
-
     if (status) status.textContent = 'Decrypting voice message...';
-    const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
-    const peerKey = peerPublicKey(otherId);
-    const iv = msg.extra ? msg.extra.iv : null;
-    const bytes = peerKey
-        ? await window.revealxE2EE.decryptBytes(peerKey, msg.content, iv, e2eeContext(msg))
-        : null;
+    const opened = await openEncrypted(msg, { binary: true });
 
-    if (!bytes) {
+    if (opened.status !== 'ok') {
         player.remove();
         if (status) {
-            status.textContent = 'Voice message - cannot be opened with the current key pair.';
+            status.textContent = OPEN_NOTICES[opened.status]
+                || 'Voice message - cannot be opened with the current key pair.';
             status.classList.add('undecryptable');
         }
         return;
     }
+    const bytes = opened.bytes;
 
     const mime = (msg.extra && msg.extra.mime) || 'audio/webm';
     const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));

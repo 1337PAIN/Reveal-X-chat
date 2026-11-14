@@ -68,7 +68,7 @@ test('an encryption failure is an error, never plaintext', () => {
     assert.equal(afterEncrypt(undefined).action, 'error');
     assert.equal(afterEncrypt(new Error('boom')).action, 'error');
     assert.equal(afterEncrypt({ ciphertext: 'x' }).action, 'error', 'no iv');
-    assert.equal(afterEncrypt({ ciphertext: 'x', iv: 'y', v: 2, msg_uuid: 'u' }).action, 'send');
+    assert.equal(afterEncrypt({ ciphertext: 'x', iv: 'y', v: 3, msg_uuid: 'u', sent_at: 1 }).action, 'send');
 });
 
 test('missing or odd inputs fail toward not sending in the clear', () => {

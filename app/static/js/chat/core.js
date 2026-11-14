@@ -146,28 +146,32 @@ export function forgetShare2(messageId) {
     share2Memory.delete(`${messageId}#envelope`);
 }
 
-/** Is this a share the sender's browser split (Share 2 in an E2EE envelope)? */
+/**
+ * Is this a share the sender's browser split (Share 2 in an E2EE envelope)?
+ * Any protocol version counts: a v2 share from before the v3 upgrade has the
+ * same shape, and must be reported as "sent before an update" rather than
+ * mistaken for the old server-split kind.
+ */
 export function isClientSplitShare(msg) {
-    return Boolean(msg && msg.type === 'share' && msg.extra && msg.extra.v === 2 && msg.content);
+    return Boolean(msg && msg.type === 'share' && msg.extra
+        && Number.isInteger(msg.extra.v) && msg.extra.v >= 2 && msg.content);
 }
 
 /**
- * Decrypt and check the envelope of a browser-split share. Kept in
- * share2Memory, like every other copy of Share 2, so logout, Clear cache,
- * delete and revoke drop it. Returns the envelope or null.
+ * Decrypt and check the envelope of a browser-split share, through the same
+ * freshness and replay checks as a text message. Kept in share2Memory, like
+ * every other copy of Share 2, so logout, Clear cache, delete and revoke drop
+ * it. Returns {envelope, status}: envelope is null unless status is 'ok'.
  */
 export async function openShareEnvelope(msg) {
     const key = `${msg.id}#envelope`;
-    if (share2Memory.has(key)) return share2Memory.get(key);
-    const otherId = msg.sender_id === state.currentUser.id ? msg.recipient_id : msg.sender_id;
-    const peerKey = late.peerPublicKey(otherId);
-    if (!peerKey) return null;
-    const text = await window.revealxE2EE.decrypt(peerKey, msg.content, msg.extra.iv, late.e2eeContext(msg));
-    if (text === null) return null;
-    const envelope = window.revealxVC.openEnvelope(text);
+    if (share2Memory.has(key)) return { envelope: share2Memory.get(key), status: 'ok' };
+    const opened = await late.openEncrypted(msg);
+    if (opened.status !== 'ok') return { envelope: null, status: opened.status };
+    const envelope = window.revealxVC.openEnvelope(opened.text);
     share2Memory.set(key, envelope);
     share2Memory.set(String(msg.id), `data:image/png;base64,${envelope.share2_png_b64}`);
-    return envelope;
+    return { envelope, status: 'ok' };
 }
 
 // A tab open across the upgrade still holds what the old build wrote.

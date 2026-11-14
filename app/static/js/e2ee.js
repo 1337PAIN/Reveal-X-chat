@@ -8,40 +8,70 @@
  *
  * The server only ever sees the public key and the ciphertext.
  *
- * Protocol v2 (current). v1 derived one key per *pair* of users and used it
- * in both directions, with no associated data. Two consequences followed:
+ * Protocol v3 (current, and the only one this file opens).
  *
- *   - Reflection. A ciphertext Alice sent Bob decrypted just as well when the
- *     server presented it to Alice as a message *from* Bob, so the server
- *     could put Alice's own words in Bob's mouth.
- *   - Replay and relabelling. Nothing bound a ciphertext to who sent it, to
- *     whom, or to which message it was, so the server could deliver it twice
- *     or attribute it to a different conversation row.
+ *   v1 derived one key per *pair* of users with no associated data, so the
+ *   server could reflect Alice's own message back to her as Bob's, or deliver
+ *   it twice. v2 fixed both directions and bound the sender, recipient and a
+ *   msg_uuid. v3 keeps that and adds two things:
  *
- * v2 derives a separate key per direction (HKDF info carries the sender's and
- * then the recipient's public key) and authenticates
- * "v2|<sender_id>|<recipient_id>|<msg_uuid>" as AES-GCM additional data. The
- * ids come from the server's row, so relabelling a row breaks the tag, and
- * msg_uuid lets a client notice the same ciphertext delivered twice.
+ *   - The conversation. AES-GCM additional data is
+ *     "v3|<conversation>|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>",
+ *     where conversation is "dm" for a direct message ("group:<id>" is
+ *     reserved). A ciphertext cannot be moved into another conversation.
+ *   - The sender's clock. sent_at is integer milliseconds from the sender,
+ *     authenticated, so openMessage can refuse anything more than 65 minutes
+ *     old or 5 minutes ahead -- a stored ciphertext cannot be replayed later
+ *     as new. Freshness proves the *sender* wrote it in that window by their
+ *     clock; it does not prove when the server delivered it.
  *
- * v1 decryption is kept for rows written before the upgrade. Messages expire
- * after an hour, so that path has nothing to open soon after deployment. New
- * messages are always v2, and v2 rows are never tried under v1.
+ *   The replay check (same msg_uuid on a second row) now lives in IndexedDB,
+ *   so a reload no longer forgets what was seen.
+ *
+ * v1 and v2 decryption is gone, not kept as a fallback: a fallback is a
+ * downgrade path. Messages expire after an hour on the server, so an hour
+ * after this is deployed no v1 or v2 row is left to open; until then such a
+ * row is shown as "sent before an update".
  */
 
 const RX_DB_NAME = 'revealx-e2ee';
 const RX_STORE = 'keypairs';
-const RX_INFO = 'reveal-x-message-key-v1';
-const RX_INFO_V2 = 'reveal-x-message-key-v2';
-const RX_PROTOCOL = 2;
+const RX_INFO_V3 = 'reveal-x-message-key-v3';
+const RX_PROTOCOL = 3;
 
-// "<version>|<sender public key>|<recipient public key>" -> CryptoKey. v1 keys
-// are direction-free and cached under "1|<peer public key>".
+// Freshness window for the authenticated sent_at. 65 minutes is the message
+// lifetime (one hour) plus five minutes of clock difference between sender
+// and reader; 5 minutes ahead allows the same difference the other way.
+const RX_MAX_AGE_MS = 65 * 60 * 1000;
+const RX_MAX_AHEAD_MS = 5 * 60 * 1000;
+
+// "<sender public key>|<recipient public key>" -> CryptoKey.
 const derivedKeyCache = new Map();
 
-function associatedData(senderId, recipientId, msgUuid) {
-    return new TextEncoder().encode(`v2|${senderId}|${recipientId}|${msgUuid}`);
+// No field may contain the separator: "a|b" + "c" and "a" + "b|c" would
+// otherwise be the same associated data for two different contexts.
+function aadField(value) {
+    const text = String(value);
+    return text.includes('|') ? null : text;
 }
+
+/** The v3 associated data, or null when a field cannot be encoded safely. */
+function associatedData(context) {
+    const conversation = context.conversation || 'dm';
+    if (conversation !== 'dm' && !/^group:[^|]+$/.test(conversation)) return null;
+    if (!Number.isSafeInteger(context.sentAt) || context.sentAt < 0) return null;
+    const fields = [context.senderId, context.recipientId, context.msgUuid].map(aadField);
+    if (fields.some((field) => field === null || field === '')) return null;
+    return new TextEncoder().encode(
+        `v3|${conversation}|${fields[0]}|${fields[1]}|${fields[2]}|${context.sentAt}`);
+}
+
+// What a reader has already been shown, keyed
+// "<conversation>|<sorted user ids>|<msg_uuid>" -> {messageId, expiresAt}. In
+// its own database for the same reason the pins are: no version upgrade of
+// the database that holds private keys.
+const RX_REPLAY_DB_NAME = 'revealx-e2ee-replay';
+const RX_REPLAY_STORE = 'seen';
 
 function newMessageUuid() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -117,6 +147,10 @@ function pinStoreRequest(mode, action) {
     return storeRequest(RX_PIN_DB_NAME, RX_PIN_STORE, mode, action);
 }
 
+function replayStoreRequest(mode, action) {
+    return storeRequest(RX_REPLAY_DB_NAME, RX_REPLAY_STORE, mode, action);
+}
+
 /** 30 decimal digits identifying one public key. */
 async function safetyHalf(publicKeyB64) {
     const cached = safetyHalfCache.get(publicKeyB64);
@@ -155,6 +189,15 @@ class E2EESession {
         this.keyPair = null;
         this.publicKey = '';
         this.available = Boolean(window.crypto && window.crypto.subtle && window.indexedDB);
+        // The replay check's in-page copy. IndexedDB is the record that
+        // survives a reload; this keeps the check working when IndexedDB is
+        // refused (some private windows) and answers repeat lookups quickly.
+        this.seenInPage = new Map();
+        this.replayStoreBroken = false;
+        this.replayPruned = null;
+        // Replay checks run one at a time: two rows with the same uuid opened
+        // concurrently must not both find "not seen yet".
+        this.replayQueue = Promise.resolve();
     }
 
     /** Load this user's key pair from IndexedDB, generating one on first use. */
@@ -265,19 +308,17 @@ class E2EESession {
     }
 
     /**
-     * Derive an AES-GCM key shared with one peer.
+     * Derive an AES-GCM key for one direction of a conversation with a peer.
      *
      * The HKDF salt is bound to both public keys (sorted, so each side computes
-     * the same value). For v2 the HKDF info additionally names the direction:
-     * sender's public key, then recipient's, so A->B and B->A are different
-     * keys and one direction's ciphertext cannot be replayed as the other's.
+     * the same value), and the HKDF info names the direction: sender's public
+     * key, then recipient's. A->B and B->A are different keys, so one
+     * direction's ciphertext cannot be replayed as the other's.
      */
-    async deriveKeyFor(peerPublicKeyB64, direction = null) {
-        if (!this.isReady() || !peerPublicKeyB64) return null;
+    async deriveKeyFor(peerPublicKeyB64, direction) {
+        if (!this.isReady() || !peerPublicKeyB64 || !direction) return null;
 
-        const cacheKey = direction
-            ? `2|${direction.senderPublicKey}|${direction.recipientPublicKey}`
-            : `1|${peerPublicKeyB64}`;
+        const cacheKey = `${direction.senderPublicKey}|${direction.recipientPublicKey}`;
         const cached = derivedKeyCache.get(cacheKey);
         if (cached) return cached;
 
@@ -297,9 +338,7 @@ class E2EESession {
 
         const pair = [this.publicKey, peerPublicKeyB64].sort().join('|');
         const salt = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(pair));
-        const info = direction
-            ? `${RX_INFO_V2}|${direction.senderPublicKey}|${direction.recipientPublicKey}`
-            : RX_INFO;
+        const info = `${RX_INFO_V3}|${direction.senderPublicKey}|${direction.recipientPublicKey}`;
 
         const hkdfKey = await window.crypto.subtle.importKey(
             'raw', sharedBits, 'HKDF', false, ['deriveKey']
@@ -327,9 +366,11 @@ class E2EESession {
     /**
      * Encrypt bytes to a peer (used directly for voice recordings).
      *
-     * `context.recipientId` is the peer's user id; `context.msgUuid` is
-     * generated when absent. Returns {ciphertext, iv, v, msg_uuid} with the
-     * binary fields in base64, or null when the peer has no key yet.
+     * `context.recipientId` is the peer's user id. `context.msgUuid` and
+     * `context.sentAt` (this clock, integer ms) are filled in when absent;
+     * `context.conversation` defaults to "dm". Returns {ciphertext, iv, v,
+     * msg_uuid, sent_at} with the binary fields in base64, or null when the
+     * peer has no key yet or a field cannot be encoded.
      */
     async encryptBytes(peerPublicKeyB64, bytes, context = {}) {
         const key = await this.deriveKeyFor(
@@ -337,50 +378,145 @@ class E2EESession {
         if (!key) return null;
 
         const msgUuid = context.msgUuid || newMessageUuid();
+        const sentAt = context.sentAt === undefined ? Date.now() : context.sentAt;
+        const additionalData = associatedData({
+            conversation: context.conversation,
+            senderId: this.userId,
+            recipientId: context.recipientId,
+            msgUuid,
+            sentAt,
+        });
+        if (!additionalData) return null;
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        // Encrypt the message before sending it to the other user.
         const ciphertext = await window.crypto.subtle.encrypt(
-            {
-                name: 'AES-GCM',
-                iv,
-                additionalData: associatedData(this.userId, context.recipientId || '', msgUuid),
-            },
-            key,
-            bytes
-        );
+            { name: 'AES-GCM', iv, additionalData }, key, bytes);
         return {
             ciphertext: bufferToBase64(ciphertext),
             iv: bufferToBase64(iv),
             v: RX_PROTOCOL,
             msg_uuid: msgUuid,
+            sent_at: sentAt,
         };
     }
 
     /**
      * Decrypt to an ArrayBuffer, or null when the payload cannot be opened.
      *
-     * `context` is rebuilt from the stored row: {v, senderId, recipientId,
-     * msgUuid}. Anything but v === 2 is a legacy v1 row.
+     * `context` is rebuilt from the stored row: {v, conversation, senderId,
+     * recipientId, msgUuid, sentAt}. Only v === 3 is ever tried. This is the
+     * cryptography alone; the chat goes through openMessage, which also
+     * checks freshness and replay.
      */
     async decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64, context = {}) {
-        if (!ciphertextB64 || !ivB64) return null;
-        const v2 = context.v === RX_PROTOCOL;
+        if (!ciphertextB64 || !ivB64 || context.v !== RX_PROTOCOL) return null;
+        const additionalData = associatedData(context);
+        if (!additionalData) return null;
         const key = await this.deriveKeyFor(
-            peerPublicKeyB64, v2 ? this.direction(peerPublicKeyB64, context.senderId) : null);
+            peerPublicKeyB64, this.direction(peerPublicKeyB64, context.senderId));
         if (!key) return null;
-
-        const params = { name: 'AES-GCM', iv: new Uint8Array(base64ToBuffer(ivB64)) };
-        if (v2) {
-            params.additionalData = associatedData(
-                context.senderId || '', context.recipientId || '', context.msgUuid || '');
-        }
         try {
-            return await window.crypto.subtle.decrypt(params, key, base64ToBuffer(ciphertextB64));
+            return await window.crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: new Uint8Array(base64ToBuffer(ivB64)), additionalData },
+                key, base64ToBuffer(ciphertextB64));
         } catch (error) {
             // Wrong key, rotated peer key, wrong direction or context, or a
             // tampered payload. AES-GCM does not say which, by design.
             return null;
         }
+    }
+
+    /**
+     * Open a stored message the way the chat must: decrypt, then check the
+     * authenticated sent_at is fresh, then check it is not a replay.
+     *
+     * Returns {status, text?, bytes?}. status is one of
+     *   'legacy'       written by v1 or v2; never decrypted
+     *   'failed'       did not authenticate (wrong key, tampered, relabelled)
+     *   'unverifiable' authentic, but sent_at is outside the freshness window
+     *   'replay'       authentic and fresh, but this uuid was already shown
+     *                  under a different row id
+     *   'ok'           with `text` (or `bytes` when options.binary)
+     * Content is handed back only with 'ok'. The order matters: the replay
+     * record is written only for a message that authenticated, so a forged
+     * row cannot poison the record of a real one.
+     */
+    async openMessage(peerPublicKeyB64, ciphertextB64, ivB64, context = {}, options = {}) {
+        if (context.v !== RX_PROTOCOL) return { status: 'legacy' };
+        const bytes = await this.decryptBytes(peerPublicKeyB64, ciphertextB64, ivB64, context);
+        if (bytes === null) return { status: 'failed' };
+
+        const now = Date.now();
+        if (now - context.sentAt > RX_MAX_AGE_MS || context.sentAt - now > RX_MAX_AHEAD_MS) {
+            return { status: 'unverifiable' };
+        }
+        if (await this.isReplay(context, options.messageId)) return { status: 'replay' };
+        return options.binary
+            ? { status: 'ok', bytes }
+            : { status: 'ok', text: new TextDecoder().decode(bytes) };
+    }
+
+    /**
+     * Has this (conversation, pair, msg_uuid) been shown under another row id?
+     *
+     * The server refuses a msg_uuid it already stored, but the server is the
+     * party E2EE does not trust. A server replaying a ciphertext has to keep
+     * its msg_uuid -- it is authenticated -- so a second row with the same
+     * uuid and a different id is a replay. The first row's id is recorded in
+     * IndexedDB until sent_at + 65 minutes; after that the message is refused
+     * as stale anyway, so pruning the entry opens no window.
+     */
+    isReplay(context, messageId) {
+        const check = async () => {
+            const pair = [context.senderId, context.recipientId].map(String).sort().join('|');
+            const key = `${context.conversation || 'dm'}|${pair}|${context.msgUuid}`;
+            const id = String(messageId);
+
+            let first = this.seenInPage.get(key);
+            if (first === undefined && !this.replayStoreBroken) {
+                try {
+                    await this.pruneReplayStore();
+                    const stored = await replayStoreRequest('readonly', (store) => store.get(key));
+                    if (stored) first = stored.messageId;
+                } catch (error) {
+                    this.replayStoreBroken = true;
+                }
+            }
+            if (first !== undefined) {
+                this.seenInPage.set(key, first);
+                return first !== id;
+            }
+
+            this.seenInPage.set(key, id);
+            if (!this.replayStoreBroken) {
+                try {
+                    await replayStoreRequest('readwrite', (store) => store.put(
+                        { key, messageId: id, expiresAt: context.sentAt + RX_MAX_AGE_MS }, key));
+                } catch (error) {
+                    this.replayStoreBroken = true;
+                }
+            }
+            return false;
+        };
+        const result = this.replayQueue.then(check);
+        this.replayQueue = result.catch(() => {});
+        return result;
+    }
+
+    /** Drop replay records past their expiry. Runs once per page load. */
+    pruneReplayStore() {
+        if (!this.replayPruned) {
+            this.replayPruned = (async () => {
+                if (!this.available) return;
+                const now = Date.now();
+                const entries = await replayStoreRequest('readonly', (store) => store.getAll());
+                for (const entry of entries || []) {
+                    if (entry && entry.key && !(entry.expiresAt > now)) {
+                        await replayStoreRequest('readwrite', (store) => store.delete(entry.key));
+                    }
+                }
+            })();
+        }
+        return this.replayPruned;
     }
 
     /** Returns {ciphertext, iv, v, msg_uuid}, or null when the peer has no key yet. */

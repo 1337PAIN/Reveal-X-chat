@@ -7,6 +7,7 @@ import uuid
 
 import cv2
 import numpy as np
+from e2ee_payload import now_ms
 
 
 def share1_png_b64(height=48, width=40, seed=11):
@@ -26,6 +27,6 @@ def share_payload(recipient_id, seed=11):
         'envelope': base64.b64encode(os.urandom(256)).decode('ascii'),
         'iv': base64.b64encode(os.urandom(12)).decode('ascii'),
         'encrypted': True,
-        'v': 2,
+        'v': 3, 'sent_at': now_ms(),
         'msg_uuid': str(uuid.uuid4()),
     }

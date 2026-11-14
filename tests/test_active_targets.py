@@ -17,6 +17,7 @@ import uuid
 import pytest
 
 from app import app as flask_app, socketio
+from e2ee_payload import now_ms
 
 _received = {}
 
@@ -46,9 +47,9 @@ def sends(recipient_id):
     return [
         ('send_message', {'recipient_id': recipient_id, 'message': 'hello'}),
         ('send_message', {'recipient_id': recipient_id, 'message': 'Y2lwaGVy', 'iv': 'aXY=',
-                          'encrypted': True, 'v': 2, 'msg_uuid': str(uuid.uuid4())}),
+                          'encrypted': True, 'v': 3, 'sent_at': now_ms(), 'msg_uuid': str(uuid.uuid4())}),
         ('send_voice', {'recipient_id': recipient_id, 'audio': base64.b64encode(b'\x01' * 64).decode(),
-                        'iv': 'aXY=', 'mime': 'audio/webm', 'encrypted': True, 'v': 2,
+                        'iv': 'aXY=', 'mime': 'audio/webm', 'encrypted': True, 'v': 3, 'sent_at': now_ms(),
                         'msg_uuid': str(uuid.uuid4())}),
     ]
 

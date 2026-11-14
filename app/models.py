@@ -885,7 +885,7 @@ class ChatRoom:
 
     def add_message(self, sender_id, recipient_id, msg_type, content, extra=None):
         """Store a direct message. Returns None when either account is gone,
-        or when an E2EE v2 msg_uuid is already used in this conversation."""
+        or when an E2EE msg_uuid is already used in this conversation."""
         self.cleanup_old_messages()
         sender = self.get_user(sender_id)
         recipient = self.get_user(recipient_id)

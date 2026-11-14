@@ -98,6 +98,9 @@ export function makeIndexedDB() {
                                     return key;
                                 }),
                                 delete: (key) => request(() => data.delete(key)),
+                                // Values only. The real getAll returns them in key
+                                // order; callers here must not depend on order.
+                                getAll: () => request(() => Array.from(data.values())),
                             };
                         },
                     };

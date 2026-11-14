@@ -54,12 +54,20 @@ function blobToDataUrl(blob) {
  * resulting data URL is reused for both the preview and the XOR - fetching it
  * again (as an <img src> would) burns the access and returns 404.
  */
+// Why Share 2 could not be used, by openMessage's status.
+const SHARE_ENVELOPE_NOTICES = {
+    legacy: 'This image was sent before an update; it can\'t be opened.',
+    unverifiable: 'This image can\'t be verified - it was sent more than an hour ago or with a clock far from this one.',
+    replay: 'This image was already delivered once, so this copy is not opened.',
+};
+
 async function openReconstruction(msg) {
     const share1Url = msg && msg.extra ? msg.extra.share1_url : null;
     let envelope = null;
+    let envelopeStatus = 'failed';
     if (isClientSplitShare(msg)) {
         try {
-            envelope = await openShareEnvelope(msg);
+            ({ envelope, status: envelopeStatus } = await openShareEnvelope(msg));
         } catch (error) {
             console.error('Share envelope could not be opened', error);
         }
@@ -85,7 +93,8 @@ async function openReconstruction(msg) {
         reconstructionPanel.classList.add('active');
         reconstructBtn.disabled = true;
         if (warning) {
-            warning.textContent = 'Share 2 could not be decrypted with the current keys, so this image cannot be reconstructed.';
+            warning.textContent = SHARE_ENVELOPE_NOTICES[envelopeStatus]
+                || 'Share 2 could not be decrypted with the current keys, so this image cannot be reconstructed.';
             warning.className = 'warning-text danger';
         }
         return;

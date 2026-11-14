@@ -56,7 +56,7 @@ The split now happens in the sender's browser (`vc-client.js`, `send_share`):
 3. Only Share 1 is uploaded. On its own it is a one-time pad, statistically
    independent of the image. The server stores it byte for byte, records its
    HMAC and runs the tamper detector on it, as it always has.
-4. Share 2 travels inside an E2EE v2 message whose plaintext is
+4. Share 2 travels inside an E2EE v3 message whose plaintext is
    `{share2_png_b64, share1_sha256, width, height}`. The server stores that
    ciphertext as the message body and cannot open it, so the recipient no
    longer has to be online.
@@ -295,15 +295,39 @@ away the image's.
 are all visible to the server and to anyone watching the network. Message
 *contents* are encrypted; the social graph is not.
 
-**Replay is detected, not prevented, against a malicious server.** Since
-protocol v2 a ciphertext is bound to its sender, recipient and `msg_uuid`, and
-each direction has its own key, so the server can no longer reflect a message
-back to its author or move it to another conversation. It can still store a
-second copy of a ciphertext under a new row id; the client recognises the
-repeated `msg_uuid` among the messages it has loaded and shows a notice in its
-place. A replay of a message that has already expired, or that the client has
-not loaded in the same tab, is not caught. v1 had none of this: one key for
-both directions and no associated data.
+**Protocol v3: what is bound, and what freshness does and does not prove.**
+Each direction of a conversation has its own key (HKDF info
+`reveal-x-message-key-v3|<sender public key>|<recipient public key>`), and
+AES-GCM authenticates
+`v3|<conversation>|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>`, where
+conversation is `dm` (`group:<id>` is reserved) and `sent_at` is the sender's
+clock in integer milliseconds (`e2ee.js`). So the server cannot reflect a
+message back to its author, move it to another conversation, relabel its
+sender, recipient or uuid, or change its time: any of those breaks the tag.
+No field may contain `|`, so two different contexts cannot encode alike.
+
+The chat opens every encrypted row through `openMessage`, in this order:
+decrypt (only `v: 3` is ever tried -- v1 and v2 decryption is removed, not
+kept as a fallback, and such a row shows *Sent before an update; can't be
+opened*); then **freshness** -- an authenticated `sent_at` more than 65
+minutes old or more than 5 minutes ahead is shown as *Can't be verified*;
+then **replay** -- the first row id seen for
+`<conversation>|<sorted user ids>|<msg_uuid>` is recorded in IndexedDB until
+`sent_at` + 65 minutes, and a second row id with the same key is shown as a
+repeated message (`tests/js/e2ee.test.mjs`, including after a reload against
+the same IndexedDB). The record is written only after the message
+authenticates, so a forged row cannot poison it, and pruning an expired
+entry opens no window because that message is by then refused as stale.
+
+What freshness proves: the *sender's* browser produced the message within
+that window by the sender's clock. What it does not prove: when the server
+delivered it, or that the sender's clock is right. A server can still hold a
+message back for up to about an hour and deliver it late, or drop it; a
+sender whose clock is wrong produces messages others see as unverifiable.
+Replay detection is per browser: a second browser of the same user keeps its
+own record. The server also refuses a `sent_at` more than five minutes from
+its own clock, but that is a sanity check on honest clients, not a defence;
+the client's check of the authenticated value is the boundary.
 
 **Plaintext is never a fallback.** Both send paths used to catch an encryption
 error, log it, and send the message unencrypted. A failure now stops the send;

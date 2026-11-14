@@ -333,6 +333,7 @@ def client_message(message, current_user_id=None):
             'iv': extra.get('iv'),
             'v': extra.get('v'),
             'msg_uuid': extra.get('msg_uuid'),
+            'sent_at': extra.get('sent_at'),
         }
     else:
         extra = msg_dict.get('extra', {})
@@ -347,6 +348,7 @@ def client_message(message, current_user_id=None):
             # so they must come back exactly as the sender wrote them.
             'v': extra.get('v'),
             'msg_uuid': extra.get('msg_uuid'),
+            'sent_at': extra.get('sent_at'),
         }
 
     return msg_dict
@@ -619,33 +621,46 @@ def _disconnect_user_sessions(user_id, reason):
     emit_users()
 
 
-#: E2EE protocol version for new messages. Older versions are still *read*
-#: by the client (rows expire within the hour), but are no longer accepted.
-E2EE_PROTOCOL = 2
+#: E2EE protocol version, the only one accepted and the only one the client
+#: opens. v1 and v2 rows still on the server expire within the hour.
+E2EE_PROTOCOL = 3
+#: How far a message's sent_at (the sender's clock) may be from the server's.
+#: The client's check of the *authenticated* sent_at is the security boundary;
+#: this only refuses obviously wrong values at the door.
+E2EE_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 _MSG_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 DUPLICATE_MESSAGE_ERROR = 'This message was already delivered'
 
 
 def _e2ee_envelope(data, sender_id, recipient_id):
-    """Validate the v2 envelope of an encrypted send.
+    """Validate the v3 envelope of an encrypted send.
 
     Returns (fields_to_store, error). The server cannot check the ciphertext,
-    but it can make sure the two values the recipient authenticates it with
-    -- `v` and `msg_uuid` -- are present, well formed and unused in this
-    conversation. A v1 send is refused: v1 used one key for both directions
-    and no associated data, which is what let a ciphertext be reflected back
-    to its own sender as though the peer had written it.
+    but it can make sure the values the recipient authenticates it with --
+    `v`, `msg_uuid` and `sent_at` -- are present, well formed, and (for
+    msg_uuid) unused in this conversation. v1 and v2 sends are refused: v1
+    used one key for both directions, and v2 bound neither the conversation
+    nor the time, so a stored ciphertext could be replayed later as new.
+
+    sent_at must be an integer within E2EE_MAX_CLOCK_SKEW_MS of this clock.
+    That is a sanity check on an honest sender, not a defence: the server is
+    the party E2EE does not trust, and the recipient's browser re-checks the
+    authenticated value itself.
     """
-    if data.get('v') != E2EE_PROTOCOL or isinstance(data.get('v'), bool):
+    version = data.get('v')
+    if version != E2EE_PROTOCOL or isinstance(version, bool):
         return None, 'Unsupported encryption version. Reload the page.'
     msg_uuid = data.get('msg_uuid')
     if not isinstance(msg_uuid, str) or not _MSG_UUID_RE.match(msg_uuid):
         return None, 'Invalid encrypted payload'
+    sent_at = data.get('sent_at')
+    if not isinstance(sent_at, int) or isinstance(sent_at, bool):
+        return None, 'Invalid encrypted payload'
+    if abs(sent_at - int(time.time() * 1000)) > E2EE_MAX_CLOCK_SKEW_MS:
+        return None, "This device's clock is more than 5 minutes off. Correct it and resend."
     if chat_room.has_message_uuid(sender_id, recipient_id, msg_uuid):
         return None, DUPLICATE_MESSAGE_ERROR
-    return {'v': E2EE_PROTOCOL, 'msg_uuid': msg_uuid}, None
-
-
+    return {'v': E2EE_PROTOCOL, 'msg_uuid': msg_uuid, 'sent_at': sent_at}, None
 
 
 def _share_hmac(image):

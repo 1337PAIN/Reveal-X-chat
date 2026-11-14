@@ -18,10 +18,13 @@ import { fileURLToPath } from 'node:url';
 import { STATIC_JS, loadBrowserScript, makeWindow, makeIndexedDB } from './harness.mjs';
 
 const E2EE = join(STATIC_JS, 'e2ee.js');
-// The v1 client exactly as it shipped (git show 2c030ff:app/static/js/e2ee.js),
-// so "old rows still decrypt" is tested against the real old code rather than
-// a re-derivation of it that could share the new code's mistakes.
-const E2EE_V1 = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'e2ee-v1.js');
+// The v1 and v2 clients exactly as they shipped (git show 2c030ff and
+// 3178e7b:app/static/js/e2ee.js), so "old payloads are refused" is tested
+// against what the old code really produced, not a re-derivation of it.
+const FIXTURES = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures');
+const E2EE_V1 = join(FIXTURES, 'e2ee-v1.js');
+const E2EE_V2 = join(FIXTURES, 'e2ee-v2.js');
+const MINUTE = 60 * 1000;
 
 /** A fresh session with its own key store, as a separate browser would have. */
 async function newSession(userId, indexedDB = makeIndexedDB(), file = E2EE) {
@@ -39,7 +42,17 @@ function send(from, to, text) {
 
 /** The context a receiver rebuilds from the stored row. */
 function ctx(sent, senderId, recipientId) {
-    return { v: sent.v, senderId, recipientId, msgUuid: sent.msg_uuid };
+    return {
+        v: sent.v, conversation: 'dm', senderId, recipientId,
+        msgUuid: sent.msg_uuid, sentAt: sent.sent_at,
+    };
+}
+
+/** `by` opens a message through the full check: crypto, freshness, replay. */
+function openFull(by, from, to, sent, messageId, overrides = {}, options = {}) {
+    const peer = by.id === from.id ? to : from;
+    return by.session.openMessage(peer.publicKey, sent.ciphertext, sent.iv,
+        { ...ctx(sent, from.id, to.id), ...overrides }, { messageId, ...options });
 }
 
 /** `by` opens a message that went from -> to. */
@@ -206,7 +219,7 @@ test('encrypting to nobody returns null rather than sending in the clear', async
 test('decrypt returns null on a missing ciphertext or iv', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
-    const c = { v: 2, senderId: 'alice', recipientId: 'bob', msgUuid: 'x' };
+    const c = { v: 3, conversation: 'dm', senderId: 'alice', recipientId: 'bob', msgUuid: 'x', sentAt: Date.now() };
     assert.equal(await bob.session.decrypt(alice.publicKey, '', 'aaaa', c), null);
     assert.equal(await bob.session.decrypt(alice.publicKey, 'aaaa', '', c), null);
 });
@@ -275,17 +288,31 @@ test('a session without Web Crypto degrades instead of throwing', async () => {
 
 
 // ----------------------------------------------------------------------
-// Protocol v2: direction-bound keys and associated data
+// Protocol v3: direction-bound keys, conversation and time in the AAD
 // ----------------------------------------------------------------------
 
-test('new messages are v2 and carry a random UUID', async () => {
+test('new messages are v3 and carry a random UUID and the sender\'s clock', async () => {
     const alice = await newSession('alice');
     const bob = await newSession('bob');
+    const before = Date.now();
     const a = await send(alice, bob, 'one');
     const b = await send(alice, bob, 'two');
-    assert.equal(a.v, 2);
+    assert.equal(a.v, 3);
     assert.match(a.msg_uuid, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     assert.notEqual(a.msg_uuid, b.msg_uuid);
+    assert.ok(Number.isSafeInteger(a.sent_at), 'sent_at is integer milliseconds');
+    assert.ok(a.sent_at >= before && a.sent_at <= Date.now());
+});
+
+test('a v3 round trip through openMessage', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await send(alice, bob, 'over v3');
+    const opened = await openFull(bob, alice, bob, sent, 'row-1');
+    assert.equal(opened.status, 'ok');
+    assert.equal(opened.text, 'over v3');
+    // The sender reads their own transcript the same way.
+    assert.equal((await openFull(alice, alice, bob, sent, 'row-1')).text, 'over v3');
 });
 
 test('a ciphertext sent A->B does not open as B->A (reflection)', async () => {
@@ -297,58 +324,194 @@ test('a ciphertext sent A->B does not open as B->A (reflection)', async () => {
 
     assert.equal(await open(alice, bob, alice, sent), null, 'reflected to the sender');
     assert.equal(await open(bob, bob, alice, sent), null, 'relabelled for the recipient');
+    assert.equal((await openFull(alice, bob, alice, sent, 'row-1')).status, 'failed');
 });
 
 for (const [field, value] of [
+    ['conversation', 'group:g1'],
     ['senderId', 'mallory'],
     ['recipientId', 'mallory'],
     ['msgUuid', '00000000-0000-4000-8000-000000000000'],
+    ['sentAt', 'shift'],
 ]) {
     test(`changing the associated ${field} fails authentication`, async () => {
         const alice = await newSession('alice');
         const bob = await newSession('bob');
         const sent = await send(alice, bob, 'bound to its context');
         assert.equal(await open(bob, alice, bob, sent), 'bound to its context');
-        assert.equal(await open(bob, alice, bob, sent, { [field]: value }), null);
+        const changed = value === 'shift' ? sent.sent_at + 1 : value;
+        assert.equal(await open(bob, alice, bob, sent, { [field]: changed }), null);
     });
 }
 
-test('relabelling a v2 message as v1 does not open it (no downgrade)', async () => {
+test('a field containing the separator is refused, not encoded ambiguously', async () => {
+    // "a|b" + "c" and "a" + "b|c" would otherwise be the same associated data.
     const alice = await newSession('alice');
     const bob = await newSession('bob');
-    const sent = await send(alice, bob, 'v2 only');
-    assert.equal(await open(bob, alice, bob, sent, { v: 1 }), null);
-    assert.equal(await open(bob, alice, bob, sent, { v: undefined }), null);
+    assert.equal(await alice.session.encrypt(bob.publicKey, 'x', { recipientId: 'bob|eve' }), null);
+    const sent = await send(alice, bob, 'x');
+    assert.equal(await open(bob, alice, bob, sent, { conversation: 'dm|x' }), null);
 });
 
-test('rows written by the v1 client still decrypt', async () => {
-    // Same browser, same key store: the user upgraded with messages from the
-    // last hour still on the server.
+test('v1 payloads are refused, not decrypted', async () => {
     const aliceStore = makeIndexedDB();
     const bobStore = makeIndexedDB();
     const oldAlice = await newSession('alice', aliceStore, E2EE_V1);
     const oldBob = await newSession('bob', bobStore, E2EE_V1);
-    const legacy = await oldAlice.session.encrypt(oldBob.publicKey, 'written before v2');
+    const legacy = await oldAlice.session.encrypt(oldBob.publicKey, 'written by v1');
     assert.equal(legacy.v, undefined, 'the fixture really is the v1 client');
 
+    // Same browsers, same keys, upgraded client.
     const alice = await newSession('alice', aliceStore);
     const bob = await newSession('bob', bobStore);
     assert.equal(alice.publicKey, oldAlice.publicKey);
-
-    const legacyCtx = { senderId: 'alice', recipientId: 'bob' };
-    assert.equal(await bob.session.decrypt(alice.publicKey, legacy.ciphertext, legacy.iv, legacyCtx),
-        'written before v2');
-    assert.equal(await alice.session.decrypt(bob.publicKey, legacy.ciphertext, legacy.iv, legacyCtx),
-        'written before v2', 'the sender still reads their own old message');
+    for (const v of [undefined, 1]) {
+        const c = { v, conversation: 'dm', senderId: 'alice', recipientId: 'bob', msgUuid: 'u', sentAt: Date.now() };
+        assert.equal(await bob.session.decrypt(alice.publicKey, legacy.ciphertext, legacy.iv, c), null);
+        const opened = await bob.session.openMessage(alice.publicKey, legacy.ciphertext, legacy.iv, c, { messageId: 'r' });
+        assert.equal(opened.status, 'legacy');
+    }
 });
 
-test('a v1 client cannot read a v2 message, so nothing silently falls back', async () => {
+test('v2 payloads are refused, even relabelled as v3', async () => {
+    const aliceStore = makeIndexedDB();
+    const bobStore = makeIndexedDB();
+    const oldAlice = await newSession('alice', aliceStore, E2EE_V2);
+    const oldBob = await newSession('bob', bobStore, E2EE_V2);
+    const legacy = await oldAlice.session.encrypt(oldBob.publicKey, 'written by v2', { recipientId: 'bob' });
+    assert.equal(legacy.v, 2, 'the fixture really is the v2 client');
+
+    const alice = await newSession('alice', aliceStore);
+    const bob = await newSession('bob', bobStore);
+    const base = { conversation: 'dm', senderId: 'alice', recipientId: 'bob', msgUuid: legacy.msg_uuid, sentAt: Date.now() };
+    const asV2 = await bob.session.openMessage(alice.publicKey, legacy.ciphertext, legacy.iv,
+        { ...base, v: 2 }, { messageId: 'r' });
+    assert.equal(asV2.status, 'legacy');
+    assert.equal(await bob.session.decrypt(alice.publicKey, legacy.ciphertext, legacy.iv, { ...base, v: 3 }), null,
+        'a v2 ciphertext does not authenticate under v3');
+});
+
+test('an old client cannot read a v3 message, so nothing silently falls back', async () => {
     const bobStore = makeIndexedDB();
     const alice = await newSession('alice');
     const bob = await newSession('bob', bobStore);
     const sent = await send(alice, bob, 'new format');
-    const oldBob = await newSession('bob', bobStore, E2EE_V1);
-    assert.equal(await oldBob.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv), null);
+    const v2Bob = await newSession('bob', bobStore, E2EE_V2);
+    assert.equal(await v2Bob.session.decrypt(alice.publicKey, sent.ciphertext, sent.iv,
+        { v: 2, senderId: 'alice', recipientId: 'bob', msgUuid: sent.msg_uuid }), null);
+});
+
+// ----------------------------------------------------------------------
+// Freshness: the authenticated sent_at must be recent
+// ----------------------------------------------------------------------
+
+for (const [label, offset, expected] of [
+    ['64 minutes old', -64 * MINUTE, 'ok'],
+    ['66 minutes old', -66 * MINUTE, 'unverifiable'],
+    ['4 minutes in the future', 4 * MINUTE, 'ok'],
+    ['6 minutes in the future', 6 * MINUTE, 'unverifiable'],
+]) {
+    test(`a message whose sent_at is ${label} is ${expected}`, async () => {
+        const alice = await newSession('alice');
+        const bob = await newSession('bob');
+        const sent = await alice.session.encrypt(bob.publicKey, 'timed', {
+            recipientId: 'bob', sentAt: Date.now() + offset });
+        const opened = await openFull(bob, alice, bob, sent, 'row-1');
+        assert.equal(opened.status, expected);
+        if (expected !== 'ok') assert.equal(opened.text, undefined, 'nothing is handed back');
+    });
+}
+
+test('freshness is judged on the authenticated time, not a relabelled one', async () => {
+    // A server that rewrites sent_at to look fresh breaks the tag instead.
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await alice.session.encrypt(bob.publicKey, 'old', {
+        recipientId: 'bob', sentAt: Date.now() - 90 * MINUTE });
+    const relabelled = await openFull(bob, alice, bob, sent, 'row-1', { sentAt: Date.now() });
+    assert.equal(relabelled.status, 'failed');
+});
+
+// ----------------------------------------------------------------------
+// Replay: remembered in IndexedDB, so a reload does not forget it
+// ----------------------------------------------------------------------
+
+test('the same ciphertext under a second row id is a replay', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await send(alice, bob, 'pay 10');
+    assert.equal((await openFull(bob, alice, bob, sent, 'row-1')).status, 'ok');
+    assert.equal((await openFull(bob, alice, bob, sent, 'row-1')).status, 'ok', 'the same row again is not a replay');
+    assert.equal((await openFull(bob, alice, bob, sent, 'row-2')).status, 'replay');
+});
+
+test('a replay is still caught after reloading the module', async () => {
+    const bobStore = makeIndexedDB();
+    const alice = await newSession('alice');
+    const bob = await newSession('bob', bobStore);
+    const sent = await send(alice, bob, 'pay 10');
+    assert.equal((await openFull(bob, alice, bob, sent, 'row-1')).status, 'ok');
+
+    // A page reload: fresh script, fresh memory, same IndexedDB.
+    const reloaded = await newSession('bob', bobStore);
+    assert.equal((await openFull(reloaded, alice, reloaded, sent, 'row-2')).status, 'replay');
+    assert.equal((await openFull(reloaded, alice, reloaded, sent, 'row-1')).status, 'ok',
+        'history still shows the original');
+});
+
+test('concurrent opens of two rows with one uuid let only one through', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await send(alice, bob, 'pay 10');
+    const results = await Promise.all([
+        openFull(bob, alice, bob, sent, 'row-1'),
+        openFull(bob, alice, bob, sent, 'row-2'),
+    ]);
+    assert.deepEqual(results.map((r) => r.status).sort(), ['ok', 'replay']);
+});
+
+test('replay entries expire at sent_at + 65 minutes and are pruned on load', async () => {
+    const bobStore = makeIndexedDB();
+    const alice = await newSession('alice');
+    const bob = await newSession('bob', bobStore);
+    const sentAt = Date.now() - 64 * MINUTE;
+    const sent = await alice.session.encrypt(bob.publicKey, 'nearly stale', { recipientId: 'bob', sentAt });
+    assert.equal((await openFull(bob, alice, bob, sent, 'row-1')).status, 'ok');
+
+    const seen = () => new Promise((resolve) => {
+        const req = bobStore.open('revealx-e2ee-replay');
+        req.onsuccess = () => {
+            const get = req.result.transaction('seen', 'readonly').objectStore('seen').getAll();
+            get.onsuccess = () => resolve(get.result);
+        };
+    });
+    const [entry] = await seen();
+    assert.equal(entry.expiresAt, sentAt + 65 * MINUTE);
+    assert.ok(entry.key.startsWith('dm|alice|bob|'), entry.key);
+
+    // Reload two minutes later: the entry has expired and goes on load. That
+    // opens no window, because the message itself is now stale and refused.
+    const realNow = Date.now;
+    const later = class extends Date { static now() { return realNow() + 2 * MINUTE; } };
+    const window = makeWindow({ indexedDB: bobStore });
+    loadBrowserScript(E2EE, { window, indexedDB: bobStore, console, Date: later });
+    await window.revealxE2EE.init('bob');
+    await window.revealxE2EE.pruneReplayStore();
+    assert.deepEqual(await seen(), []);
+    const again = await window.revealxE2EE.openMessage(alice.publicKey, sent.ciphertext, sent.iv,
+        ctx(sent, 'alice', 'bob'), { messageId: 'row-2' });
+    assert.equal(again.status, 'unverifiable');
+});
+
+test('without IndexedDB the replay check still works for the page\'s lifetime', async () => {
+    // Private windows can refuse IndexedDB. The check then degrades to memory
+    // rather than letting every replay through.
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await send(alice, bob, 'pay 10');
+    bob.session.replayStoreBroken = true;
+    assert.equal((await openFull(bob, alice, bob, sent, 'row-1')).status, 'ok');
+    assert.equal((await openFull(bob, alice, bob, sent, 'row-2')).status, 'replay');
 });
 
 
