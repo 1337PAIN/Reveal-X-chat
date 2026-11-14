@@ -53,3 +53,11 @@ def test_the_run_is_sequential_and_waits_out_the_limit():
     once = once[:once.index('\n}\n')]
     assert 'retryAfter(' in once and 'res.status === 429' in once
     assert 'innerHTML' not in run
+
+
+def test_table_captions_clear_the_rounded_corner():
+    # table { overflow: hidden; border-radius } clipped the first letter of a
+    # caption with no left padding ("Which" showed as "/hich" at 390px).
+    css = (ROOT / 'app' / 'static' / 'css' / 'rx_lab.css').read_text(encoding='utf-8')
+    rule = re.search(r'#attackTable caption,\s*#sweepTable caption\s*\{([^}]*)\}', css)
+    assert rule and re.search(r'padding:\s*0 \.6rem', rule.group(1))

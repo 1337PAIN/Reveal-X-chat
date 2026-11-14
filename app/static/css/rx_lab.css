@@ -336,9 +336,12 @@ tbody tr:hover td { background: rgba(255, 255, 255, .04); }
     background: var(--panel-2);
 }
 
-#attackTable caption {
+/* Inset from the left: the table's rounded corner (overflow: hidden) clipped
+   the caption's first letter. */
+#attackTable caption,
+#sweepTable caption {
     text-align: left;
-    padding: 0 0 .6rem;
+    padding: 0 .6rem .6rem;
     color: var(--muted);
     font-size: .85rem;
 }
