@@ -254,9 +254,7 @@ keysBtn.className = 'icon-btn footer-btn';
 keysBtn.title = 'Encryption keys';
 keysBtn.setAttribute('aria-label', 'Encryption keys');
 {
-    const icon = document.createElement('span');
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = '🔑';
+    const icon = window.revealxIcons.icon(document, 'key');
     const label = document.createElement('span');
     label.className = 'btn-label';
     label.textContent = 'Keys';

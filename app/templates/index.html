@@ -79,7 +79,7 @@
                             <span class="status" id="userStatus">Online</span>
                         </div>
                     </div>
-                    <button id="settingsBtn" class="btn-settings" type="button" title="Settings" aria-label="Settings"><span aria-hidden="true">⚙️</span></button>
+                    <button id="settingsBtn" class="btn-settings" type="button" title="Settings" aria-label="Settings"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg></button>
                 </div>
 
                 <div class="sidebar-stats">
@@ -95,8 +95,8 @@
                 </ul>
 
                 <div class="sidebar-footer">
-                    <button id="reconstructImageBtn" class="icon-btn footer-btn" type="button" title="Rebuild an image from two shares" aria-label="Rebuild an image from two shares"><span aria-hidden="true">🔄</span><span class="btn-label">Rebuild</span></button>
-                    <button id="themeToggle" class="icon-btn theme-btn footer-btn" type="button" title="Toggle theme" aria-label="Switch to light theme"><span class="theme-icon" aria-hidden="true">🌙</span><span class="btn-label">Theme</span></button>
+                    <button id="reconstructImageBtn" class="icon-btn footer-btn" type="button" title="Rebuild an image from two shares" aria-label="Rebuild an image from two shares"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-rebuild"></use></svg><span class="btn-label">Rebuild</span></button>
+                    <button id="themeToggle" class="icon-btn theme-btn footer-btn" type="button" title="Toggle theme" aria-label="Switch to light theme"><svg class="icon theme-icon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg><span class="btn-label">Theme</span></button>
                 </div>
             </aside>
 
@@ -133,12 +133,12 @@
                 </div>
 
                 <div class="message-input">
-                    <button id="shareImageBtn" class="btn btn-image" disabled aria-label="Share an image"><span aria-hidden="true">📷</span></button>
+                    <button id="shareImageBtn" class="btn btn-image" disabled aria-label="Share an image"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-camera"></use></svg></button>
                     <input type="file" id="imageInput" accept="image/*" hidden>
-                    <button id="voiceBtn" class="btn btn-image" disabled aria-label="Record a voice message"><span aria-hidden="true">🎤</span></button>
+                    <button id="voiceBtn" class="btn btn-image" disabled aria-label="Record a voice message"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg></button>
                     <span id="voiceTimer" class="voice-timer hidden" aria-live="polite" role="timer"></span>
                     <button id="voiceCancelBtn" class="btn btn-image voice-cancel hidden" type="button"
-                            aria-label="Discard recording" title="Discard recording">✕</button>
+                            aria-label="Discard recording" title="Discard recording"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-close"></use></svg></button>
                     <input
                         type="text"
                         id="messageInput"
@@ -602,7 +602,7 @@
     <!-- Passcode lock screen (local to this browser) -->
     <div id="lockScreen" class="lock-screen hidden" role="dialog" aria-modal="true" aria-labelledby="lockTitle">
         <div class="lock-card">
-            <div class="lock-icon">🔒</div>
+            <div class="lock-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-lock"></use></svg></div>
             <h2 id="lockTitle">Reveal-X is locked</h2>
             <p>Enter your passcode to continue on this device.</p>
             <input type="password" id="lockPasscodeInput" inputmode="numeric" autocomplete="off"
@@ -664,6 +664,24 @@
         <button id="startupFailureReload" class="btn btn-primary" type="button">Reload</button>
     </div>
 
+    <!-- Icons for the controls, drawn in currentColor so they follow the theme.
+         They replace emoji, which each platform draws in its own font and
+         colour. Script-built icons point here too (js/icons.js). -->
+    <svg id="iconSprite" class="icon-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+        <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.5"/></symbol>
+        <symbol id="i-rebuild" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 0 1 14.6-5.9L20.5 8.5"/><path d="M20.5 3.5v5h-5"/><path d="M20.5 12a8.5 8.5 0 0 1-14.6 5.9L3.5 15.5"/><path d="M3.5 20.5v-5h5"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+        <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 7.5h3l1.8-2.5h6.4L17 7.5h3a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.8"/></symbol>
+        <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v3.5M8.5 21h7"/></symbol>
+        <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+        <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15.5" r="4"/><path d="M11 12.5l9-9M16.5 7l3 3M13.5 10l2 2"/></symbol>
+        <symbol id="i-react" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.8h.01M15 9.8h.01"/></symbol>
+        <symbol id="i-more" viewBox="0 0 24 24"><path d="M5.5 12h.01M12 12h.01M18.5 12h.01" stroke-width="3.2"/></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
+    </svg>
+
     <!-- Connection banner: "Reconnecting..." / "Signed out - sign in again".
          Text and visibility come from js/connection.js via basics.js. -->
     <div id="connectionBanner" class="connection-banner" role="status" aria-live="polite" hidden></div>
@@ -685,6 +703,7 @@
     <script src="{{ asset('js/chips.js') }}"></script>
     <script src="{{ asset('js/connection.js') }}"></script>
     <script src="{{ asset('js/modal-focus.js') }}"></script>
+    <script src="{{ asset('js/icons.js') }}"></script>
     <!-- In-browser tamper detection. Registers window.revealxTamperML but does
          not download the ~11 MB wasm runtime until something asks for a verdict. -->
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>

@@ -191,5 +191,13 @@ export function makeDocument() {
         };
         return el;
     };
+    // SVG elements are built the same way; the namespace is recorded so a
+    // test can check an icon really is SVG and not an HTML element named svg.
+    doc.createElementNS = (namespace, tag) => {
+        const el = doc.createElement(tag);
+        el.namespaceURI = namespace;
+        el.tagName = tag;
+        return el;
+    };
     return doc;
 }

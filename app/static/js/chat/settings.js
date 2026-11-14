@@ -473,7 +473,7 @@ themeToggle.addEventListener('click', () => {
 function updateThemeIcon() {
     const icon = document.querySelector('.theme-icon');
     const isDark = document.body.getAttribute('data-theme') !== 'light';
-    if (icon) icon.textContent = isDark ? '🌙' : '☀️';
+    if (icon) window.revealxIcons.setIcon(icon, isDark ? 'moon' : 'sun');
     // The name says what pressing it will do, not the current state.
     themeToggle.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
 }

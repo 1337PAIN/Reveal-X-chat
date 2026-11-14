@@ -446,11 +446,8 @@ function formatVoiceClock(seconds) {
 function setVoiceButtonState(recording) {
     if (voiceBtn) {
         voiceBtn.classList.toggle('recording', recording);
-        // The glyph is decoration (aria-hidden); the name carries the meaning.
-        const icon = document.createElement('span');
-        icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = recording ? '⏹' : '🎤';
-        voiceBtn.replaceChildren(icon);
+        // The icon is decoration (aria-hidden); the name carries the meaning.
+        voiceBtn.replaceChildren(window.revealxIcons.icon(document, recording ? 'stop' : 'mic'));
         voiceBtn.setAttribute('aria-label', recording ? 'Stop and send recording' : 'Record a voice message');
         // The composer carries the state so CSS can lay the row out for it: on
         // a phone the clock and the discard button do not fit beside a text

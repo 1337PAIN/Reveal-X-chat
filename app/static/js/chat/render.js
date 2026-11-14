@@ -501,9 +501,9 @@ export function displayMessage(msg) {
                 <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
-                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false">☺</button>
+                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-react"></use></svg></button>
                 <span class="message-menu-wrap">
-                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
+                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-more"></use></svg></button>
                     <span class="message-menu" role="menu" hidden>
                         <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
                     </span>
@@ -546,9 +546,9 @@ export function displayMessage(msg) {
                 <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
-                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false">☺</button>
+                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-react"></use></svg></button>
                 <span class="message-menu-wrap">
-                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
+                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-more"></use></svg></button>
                     <span class="message-menu" role="menu" hidden>
                         <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
                     </span>
@@ -620,9 +620,9 @@ export function displayMessage(msg) {
                 <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
-                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false">☺</button>
+                <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction" aria-haspopup="true" aria-expanded="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-react"></use></svg></button>
                 <span class="message-menu-wrap">
-                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message">⋯</button>
+                    <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-more"></use></svg></button>
                     <span class="message-menu" role="menu" hidden>
                         <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
                     </span>

@@ -269,6 +269,16 @@ Not measured by the script above, but present:
   none of which had a reduced-motion override, so a busy chat was never still
   (`tests/test_reduced_motion_entrances.py`). The spinner keeps its existing
   cross-fade substitute.
+- **Controls draw their icons, they do not borrow emoji.** Settings,
+  rebuild, theme, camera, microphone, discard, keys, react, "more" and the
+  lock screen used emoji, which each platform draws in its own font and
+  colour -- a gear on one phone, a cog on another -- and which cannot follow
+  the text colour into the light theme. They are now one inline SVG sprite
+  stroked in `currentColor`, so an icon has its button's text contrast in
+  both themes. Each stays `aria-hidden`, the button's `aria-label` carrying
+  the name (`icons.js`, `tests/js/icons.test.mjs`, `tests/test_svg_icons.py`).
+  Emoji that are part of a status's wording, such as "🔒 Key exchanged",
+  are left as text.
 - The offline indicator shows a crossed-out wifi icon, drawn as inline SVG
   and named "Offline". It used to ask Font Awesome for `fa-wifi-slash`,
   which the free set does not have, so it showed an empty box; the library

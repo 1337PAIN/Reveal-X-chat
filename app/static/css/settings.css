@@ -791,3 +791,40 @@ body[data-theme="light"] .lock-screen {
     width: 200px;
     margin: 10px auto;
 }
+
+/* --- Icons (the #iconSprite symbols, js/icons.js) --------------------------
+   Stroked in the text colour, so an icon has the same contrast as the
+   words around it in both themes, and sized in em so it scales with the
+   button's font size, as the emoji did. */
+.icon {
+    width: 1.15em;
+    height: 1.15em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: -0.2em;
+    flex-shrink: 0;
+}
+
+/* The sprite only holds symbols. Not display:none -- some engines then drop
+   what <use> points at -- but nothing to see and no space taken. */
+.icon-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+.lock-icon .icon {
+    width: 2.6rem;
+    height: 2.6rem;
+}
+
+/* The footer buttons had different font sizes for their emoji; one size
+   for all three icons now. */
+.footer-btn .icon {
+    width: 18px;
+    height: 18px;
+}
