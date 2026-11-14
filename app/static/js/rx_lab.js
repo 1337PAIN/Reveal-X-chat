@@ -156,19 +156,23 @@ function renderResults(data) {
     document.getElementById('mlResult').textContent = `${data.ml.label}`;
     document.getElementById('mlDetail').textContent = `${data.ml.model_name} • confidence ${(data.ml.confidence * 100).toFixed(1)}%`;
 
-    document.getElementById('qualityResult').textContent = `${data.metrics.reconstructed.psnr} dB / ${data.metrics.reconstructed.ssim}`;
-    document.getElementById('qualityDetail').textContent = data.metrics.quality_safe_fallback
-        ? `Enhancement lowered SSIM (${data.metrics.enhanced_candidate.ssim}), so the plain reconstruction is reported instead.`
-        : `Enhanced: ${data.metrics.enhanced.psnr} dB / ${data.metrics.enhanced.ssim}`;
-    document.getElementById('timeResult').textContent = `${data.metrics.processing_ms} ms`;
+    // Every metric goes through metric(): two decimals for display, where
+    // the response carries four (lab-format.js).
+    const { metric, metricPair } = window.revealxLabFormat;
+    const m = data.metrics;
+    document.getElementById('qualityResult').textContent = `${metric(m.reconstructed.psnr, 'dB')} / ${metric(m.reconstructed.ssim)}`;
+    document.getElementById('qualityDetail').textContent = m.quality_safe_fallback
+        ? `Enhancement lowered SSIM (${metricPair(m.enhanced_candidate.ssim, m.reconstructed.ssim).join(' vs ')}), so the plain reconstruction is reported instead.`
+        : `Enhanced: ${metric(m.enhanced.psnr, 'dB')} / ${metric(m.enhanced.ssim)}`;
+    document.getElementById('timeResult').textContent = `${Math.round(m.processing_ms)} ms`;
 
-    document.getElementById('mseReconstructed').textContent = data.metrics.reconstructed.mse;
-    document.getElementById('psnrReconstructed').textContent = `${data.metrics.reconstructed.psnr} dB`;
-    document.getElementById('ssimReconstructed').textContent = data.metrics.reconstructed.ssim;
-    const fallbackNote = data.metrics.quality_safe_fallback ? ' *' : '';
-    document.getElementById('mseEnhanced').textContent = `${data.metrics.enhanced.mse}${fallbackNote}`;
-    document.getElementById('psnrEnhanced').textContent = `${data.metrics.enhanced.psnr} dB${fallbackNote}`;
-    document.getElementById('ssimEnhanced').textContent = `${data.metrics.enhanced.ssim}${fallbackNote}`;
+    document.getElementById('mseReconstructed').textContent = metric(m.reconstructed.mse);
+    document.getElementById('psnrReconstructed').textContent = metric(m.reconstructed.psnr, 'dB');
+    document.getElementById('ssimReconstructed').textContent = metric(m.reconstructed.ssim);
+    const fallbackNote = m.quality_safe_fallback ? ' *' : '';
+    document.getElementById('mseEnhanced').textContent = `${metric(m.enhanced.mse)}${fallbackNote}`;
+    document.getElementById('psnrEnhanced').textContent = `${metric(m.enhanced.psnr, 'dB')}${fallbackNote}`;
+    document.getElementById('ssimEnhanced').textContent = `${metric(m.enhanced.ssim)}${fallbackNote}`;
 
     // The Enhanced card shows the plain reconstruction when enhancement was
     // skipped, so its title and caption have to say so (lab-format.js).
@@ -178,9 +182,10 @@ function renderResults(data) {
 
     const fallbackEl = document.getElementById('fallbackNote');
     if (fallbackEl) {
+        const [tried, plain] = metricPair(m.enhanced_candidate.ssim, m.reconstructed.ssim);
         fallbackEl.textContent = data.metrics.quality_safe_fallback
             ? '* Enhancement was skipped for this run: it scored SSIM ' +
-              `${data.metrics.enhanced_candidate.ssim} against ${data.metrics.reconstructed.ssim} for the raw reconstruction, ` +
+              `${tried} against ${plain} for the raw reconstruction, ` +
               'so the unenhanced image is reported.'
             : '';
     }
