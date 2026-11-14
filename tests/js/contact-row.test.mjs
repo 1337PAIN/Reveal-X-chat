@@ -71,17 +71,35 @@ test('unread count, presence and state are exposed', () => {
     const badge = li.querySelectorAll('span').find((s) => s.className === 'unread-badge');
     assert.equal(badge.getAttribute('aria-hidden'), 'true');
     assert.equal(badge.getAttribute('aria-label'), null);
-    assert.equal(button.getAttribute('aria-label'), 'alice, Online, 3 unread messages');
+    assert.equal(spokenName(button), 'alice, Online, 3 unread messages');
 });
+
+/**
+ * The name a screen reader computes from content: text, minus anything under
+ * aria-hidden. (The harness document does not compute names itself.)
+ */
+function spokenName(el) {
+    if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return '';
+    return (el._text || '') + el.children.map(spokenName).join('');
+}
 
 test('the name and status are read as separate words', () => {
     // Read from content, the name and status line ran together: a screen
-    // reader said "e2ebobOffline". The button now carries an explicit name.
+    // reader said "e2ebobOffline". A visually hidden ", " now separates them.
     const { button } = row({ ...alice, online: false, status: 'offline' }, { statusLabel: 'Offline' });
-    assert.equal(button.getAttribute('aria-label'), 'alice, Offline');
+    assert.equal(spokenName(button), 'alice, Offline');
+});
+
+test('the name comes from the content, not an aria-label', () => {
+    // An aria-label of "alice, Online" left out the avatar initial that is
+    // visibly part of the button, so the name did not contain the visible
+    // text (axe: label-content-name-mismatch). Speech-input users say what
+    // they see; the name must contain it.
+    const { button } = row({ ...alice }, { statusLabel: 'Online' });
+    assert.equal(button.getAttribute('aria-label'), null);
 });
 
 test('a bio stands in for the status, as it does on screen', () => {
     const { button } = row({ ...alice, bio: 'at the desk' });
-    assert.equal(button.getAttribute('aria-label'), 'alice, at the desk');
+    assert.equal(spokenName(button), 'alice, at the desk');
 });

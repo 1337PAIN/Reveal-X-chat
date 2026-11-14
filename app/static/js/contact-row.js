@@ -27,6 +27,14 @@
      * @param {function(string)} [options.onSelect]
      * @returns {HTMLLIElement}
      */
+    /** Text for screen readers only (.sr-only in settings.css). */
+    function hiddenText(doc, text) {
+        const span = doc.createElement('span');
+        span.className = 'sr-only';
+        span.textContent = text;
+        return span;
+    }
+
     function buildContactRow(doc, user, options) {
         const opts = options || {};
         const status = user.status || (user.online ? 'online' : 'offline');
@@ -66,24 +74,27 @@
         line.className = 'user-status-line';
         const statusText = user.bio || opts.statusLabel || status;
         line.textContent = statusText;
-        meta.append(name, line);
+        meta.append(name, hiddenText(doc, ', '), line);
 
         button.append(avatar, meta);
 
+        // The button is named by its content, not an aria-label. An
+        // aria-label ("alice, Online") left out the avatar initial that is
+        // visibly part of the button, so the name did not contain what is on
+        // screen -- and speech-input users say what they see. Read from
+        // content, the name and status ran together ("e2ebobOffline"), so a
+        // visually hidden ", " separates them.
         const unread = Number(opts.unread) || 0;
-        // An explicit name: read from content, the name and status line ran
-        // together ("e2ebobOffline"). The badge is hidden and its count said
-        // here instead -- aria-label on a plain <span> is not allowed.
-        const spoken = [user.username, statusText];
         if (unread > 0) {
-            spoken.push(`${unread} unread messages`);
+            // The badge is hidden and the count said in words instead, since
+            // aria-label on a plain <span> is not allowed.
+            button.append(hiddenText(doc, `, ${unread} unread messages`));
             const badge = doc.createElement('span');
             badge.className = 'unread-badge';
             badge.setAttribute('aria-hidden', 'true');
             badge.textContent = String(unread);
             button.append(badge);
         }
-        button.setAttribute('aria-label', spoken.join(', '));
 
         if (typeof opts.onSelect === 'function') {
             button.addEventListener('click', () => opts.onSelect(user.id));

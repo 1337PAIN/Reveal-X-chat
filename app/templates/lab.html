@@ -143,9 +143,9 @@
                     <li><span class="sweep-key sweep-key-ml" aria-hidden="true"></span>ML tamper probability (dashed, squares)</li>
                 </ul>
             </figure>
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="0" role="region" aria-labelledby="sweepTableCaption">
                 <table id="sweepTable">
-                    <caption>The values plotted above</caption>
+                    <caption id="sweepTableCaption">The values plotted above</caption>
                     <thead><tr><th scope="col">Strength</th><th scope="col">SSIM</th><th scope="col">ML tamper probability</th><th scope="col">ML verdict</th></tr></thead>
                     <tbody id="sweepTableBody"><tr><td colspan="4">No sweep yet.</td></tr></tbody>
                 </table>
@@ -154,9 +154,9 @@
         <section class="metrics-panel" id="attackTableSection">
             <h2>Every attack on this image</h2>
             <p>Runs each attack on Share 1 at the strength above and records which check catches it. The README says the HMAC catches all seven and the ML misses random noise, because noise on a random share changes nothing its features measure; this table checks that on your image.</p>
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="0" role="region" aria-labelledby="attackTableCaption">
                 <table id="attackTable">
-                    <caption>Which check detects each attack, and the quality of the reconstruction</caption>
+                    <caption id="attackTableCaption">Which check detects each attack, and the quality of the reconstruction</caption>
                     <thead><tr><th scope="col">Attack</th><th scope="col">ML detects</th><th scope="col">HMAC detects</th><th scope="col">PSNR</th><th scope="col">SSIM</th></tr></thead>
                     <tbody id="attackTableBody"><tr><td colspan="5">Choose an image, then run all attacks.</td></tr></tbody>
                 </table>
@@ -164,8 +164,8 @@
             <p id="attackTableNote" class="fallback-note"></p>
         </section>
         <section class="metrics-panel">
-            <h2>Quality metrics</h2>
-            <div class="table-wrap">
+            <h2 id="qualityMetricsHeading">Quality metrics</h2>
+            <div class="table-wrap" tabindex="0" role="region" aria-labelledby="qualityMetricsHeading">
                 <table>
                     <thead><tr><th>Metric</th><th>Reconstructed</th><th>Enhanced</th></tr></thead>
                     <tbody>

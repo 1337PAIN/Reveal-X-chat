@@ -1,7 +1,7 @@
 // Settings, theme, exports, passcode lock and profile.
 // Split out of chat.js; main.js loads the modules in order.
 
-import { registerLate } from './late.js';
+import { late, registerLate } from './late.js';
 import {
     STATUS_LABELS,
     accountName,
@@ -73,6 +73,12 @@ function settingsFeedback(message, isError = false) {
 
 export function openSettings() {
     if (!state.currentUser) return;
+
+    // On a phone the button is inside the accounts drawer. Left open, the
+    // drawer kept its own focus trap running under the dialog's, and its text
+    // showed through the backdrop at a contrast nobody is meant to read
+    // (axe, light theme, 375 px). Choosing a destination closes a drawer.
+    late.closeSidebar();
 
     settingsUsername.value = state.currentUser.username;
     settingsBio.value = state.currentUser.bio || '';

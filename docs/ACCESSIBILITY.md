@@ -205,15 +205,37 @@ result while this audit was being done:
 
 ## Automated check: axe-core
 
-axe-core 4.10.2 was run in the browser against the sign-in screen, the chat
-with a conversation open, the settings panel and `/lab`, in both themes
-(14 Nov 2026), with its AAA contrast rule (`color-contrast-enhanced`)
-switched on as well as the default WCAG A/AA rules: **0 violations** on
-every screen. `/lab` has one theme only, so it was checked once. axe is not a
-project dependency and nothing loads it: it was injected for the run from a
-copy outside the repository.
+axe-core runs in CI on every push, in place of the manual run this section
+used to record (`tests/e2e/test_accessibility.py`, the `e2e` job in
+`.github/workflows/ci.yml`). It scans the sign-in screen, the chat with a
+conversation open, the settings panel and `/lab`, each at **1440 px and
+375 px**, in **both themes** (`/lab` has one), with the AAA contrast rule
+(`color-contrast-enhanced`) switched on as well as axe's default rules. Any
+violation fails the build. axe-core 4.14.0 is pinned in
+`tests/e2e/package.json` with a lockfile and injected from `node_modules`
+through DevTools, so the scan makes no third-party request and the app's CSP
+is left as users get it. It is a test dependency only; nothing the app serves
+loads it.
 
-Two things to know when repeating it:
+**Result, 15 Nov 2026: 0 violations on all 14 page, width and theme
+combinations.** Getting there found three defects the manual run at 1440 px
+had not:
+
+- **Contact names did not contain their visible text**
+  (`label-content-name-mismatch`). Each contact button carried
+  `aria-label="e2ebob, Online"`, which leaves out the avatar initial that is
+  visibly part of the button; speech-input users say what they see. The
+  button is now named by its content, with a visually hidden ", " between
+  name and status (`contact-row.js`).
+- **The `/lab` tables could not be scrolled by keyboard at 375 px**
+  (`scrollable-region-focusable`). Each table wrapper is now a focusable,
+  named region with a visible focus ring.
+- **Settings opened over the phone drawer** (`color-contrast-enhanced`, light
+  theme, 375 px). The drawer's text showed through the dialog's backdrop
+  below AAA contrast, and the drawer's focus trap kept running under the
+  dialog's. Opening Settings now closes the drawer.
+
+Two things to know when running axe by hand:
 
 - **Freeze transitions first.** Run after toggling the theme, axe reported
   eight contrast failures (2.2:1) that were the previous theme's surfaces

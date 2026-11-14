@@ -100,8 +100,10 @@ def test_the_readme_test_counts_agree_with_each_other():
 def test_the_readme_server_count_is_the_suite(request):
     """Only meaningful on a full run: a -k or a single file collects fewer."""
     config = request.config
-    if config.option.keyword or config.option.markexpr or config.args not in ([], ['tests'],
-                                                                               [str(ROOT / 'tests')]):
+    # pytest.ini always passes -m "not e2e"; that is the full server suite.
+    # Any other -m, a -k or a narrower path collects fewer.
+    if (config.option.keyword or config.option.markexpr not in ('', 'not e2e')
+            or config.args not in ([], ['tests'], [str(ROOT / 'tests')])):
         pytest.skip('not a full run')
     collected = request.session.testscollected
     stated = int(re.search(r'(\d+) server tests', README).group(1))
@@ -163,3 +165,14 @@ def test_backup_script_takes_a_custom_format_dump_of_database_url():
     assert re.search(r'pg_dump\b[^\n]*-Fc[^\n]*"\$DATABASE_URL"', script)
     assert 'set -eu' in script, 'a failed dump must not look like a successful one'
     assert '$(date' in script, 'the dump file name carries the date'
+
+
+def test_the_browser_tests_stay_out_of_the_default_run():
+    """The README's server count is the default run, which needs no browser.
+    Every file under tests/e2e must carry the e2e mark for that to hold."""
+    ini = (ROOT / 'pytest.ini').read_text(encoding='utf-8')
+    assert re.search(r'^addopts = -m "not e2e"$', ini, re.M)
+    files = sorted((ROOT / 'tests' / 'e2e').glob('test_*.py'))
+    assert files
+    for path in files:
+        assert 'pytestmark = pytest.mark.e2e' in path.read_text(encoding='utf-8'), path.name

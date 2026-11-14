@@ -251,6 +251,10 @@ option { background: #101528; color: #e8ecf6; }
 .metric-card ul { padding-left: 1.1rem; }
 .metrics-panel { padding: 1.2rem; }
 .table-wrap { overflow-x: auto; }
+/* The tables scroll sideways on a phone, so each wrapper takes keyboard focus
+   (tabindex="0" in lab.html) -- otherwise a keyboard user cannot reach the
+   columns off screen (axe: scrollable-region-focusable). It needs a ring. */
+.table-wrap:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
 table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 16px; }
 th, td { padding: .9rem 1rem; border-bottom: 1px solid var(--line); text-align: left; }

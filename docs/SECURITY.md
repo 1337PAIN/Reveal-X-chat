@@ -257,8 +257,8 @@ localises damage and survives a re-encode. Either alone would be weaker.
   byte-exact so a Windows checkout hashes the same as CI.
   `scripts/check_vendored_advisories.py` asks OSV about each release and fails
   on any advisory; CI runs it on every push and weekly. DOMPurify was 3.0.6,
-  against which OSV lists twenty-three advisories, and is now 3.4.18; checked
-  in a browser, the real library strips `onerror`, `javascript:` URLs, script
+  against which OSV lists twenty-three advisories, and is now 3.4.18; in a
+  real browser (`tests/e2e/test_accessibility.py`, run in CI) the library strips `onerror`, `javascript:` URLs, script
   and iframe tags and the known mutation-XSS shapes, and leaves plain
   formatting alone. `cleanHTML()` currently has no caller in the app; the
   one place DOMPurify runs is on an already-escaped username in

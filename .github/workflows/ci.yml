@@ -133,6 +133,50 @@ jobs:
       - name: Run the browser tests
         run: node --test "tests/js/*.test.mjs"
 
+  e2e:
+    name: Browser end-to-end (Playwright, axe-core)
+    runs-on: ubuntu-latest
+    # Two real browsers talking through the real server: sign-in, opening a
+    # chat by keyboard, E2EE text both ways, the browser-side image split with
+    # its integrity check and reconstruction, revoking, a dropped connection
+    # and its resume, and the blocking warning when a peer's key changes. Then
+    # axe-core over login, chat, settings and /lab at 1440 and 375 px, in both
+    # themes, with the AAA contrast rule on. Any violation fails the job.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install from the pinned requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock -r requirements-dev.txt
+
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+
+      - name: Install axe-core from the lockfile
+        working-directory: tests/e2e
+        run: npm ci --ignore-scripts
+
+      - name: Run the browser tests
+        run: pytest -m e2e -q
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: tests/e2e/artifacts/
+          if-no-files-found: ignore
+
   container:
     name: Container image builds and serves
     runs-on: ubuntu-latest

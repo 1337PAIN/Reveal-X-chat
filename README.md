@@ -500,8 +500,8 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 1058 server tests
-node --test "tests/js/*.test.mjs"   # 193 browser tests
+pytest                          # 1059 server tests
+node --test "tests/js/*.test.mjs"   # 194 browser tests
 ```
 
 Both run on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
@@ -509,6 +509,19 @@ CI also boots the production server from the `Procfile` and asserts it serves,
 completes a Socket.IO handshake, and reports `firebase: null` when unconfigured,
 because gunicorn does not run on Windows and an unverified deployment command is
 just a note.
+
+**Browser end-to-end tests** (`tests/e2e`, `pytest -m e2e`; the default run
+leaves them out, so the counts above need no browser). Two people in two real
+Chromium contexts sign in, open a chat by keyboard, send text both ways and see
+the **E2EE** chip, send an image that is split in the browser, checked and
+reconstructed, revoke a share, lose and regain the server and watch the session
+resume, and get the blocking warning when a peer's key changes. axe-core then
+scans login, chat, settings and `/lab` at 1440 and 375 px in both themes with
+the AAA contrast rule on, failing on any violation; and the vendored DOMPurify
+is run against XSS payloads in the page itself. Setup:
+`pip install -r requirements-dev.txt`, `python -m playwright install chromium`,
+`npm ci` in `tests/e2e`. CI runs them in their own job and keeps the
+screenshots.
 
 Production runs on PostgreSQL, so a second job runs the whole server suite
 against a real PostgreSQL 16 service with `DATABASE_URL` set. There every test
@@ -518,9 +531,9 @@ even imported, since importing it runs `init_db`), and the SQLite-only tests
 -- the WAL settings and the upgrades of historical SQLite files -- skip with
 a reason.
 
-**1058 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
+**1059 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
 
-**193 browser tests** run the shipped `app/static/js` files verbatim on Node's
+**194 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
 They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v3 reflection, associated-data, freshness and replay cases, the replay check surviving a reload; key pinning and the safety number; the send policy that decides when plaintext is allowed; the browser-side visual cryptography split, its PNG codec and the end-to-end hash; and the shipped v1 and v2 clients as fixtures, so their payloads are proven to be refused rather than decrypted), the escaping layer, and the service worker's request scoping.
 
@@ -580,7 +593,7 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, Render, and running it from Windows behind a tunnel |
 | [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) | Google sign-in, start to finish, including the failures and what each means |
 | [docs/ADMIN.md](docs/ADMIN.md) | Roles, the approval gate, and the rank rules |
-| [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | WCAG contrast measurements, the audit tool, and the correction to an earlier claim |
+| [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | WCAG contrast measurements, the audit tool, the axe-core gate in CI, and the correction to an earlier claim |
 | [FINAL_DEMO_GUIDE.md](FINAL_DEMO_GUIDE.md) | Running the demo |
 
 Two of these are worth reading before a viva. **SECURITY.md** explains the

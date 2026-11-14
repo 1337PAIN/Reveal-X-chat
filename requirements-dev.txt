@@ -30,3 +30,12 @@ fakeredis==2.26.2
 skl2onnx==1.20.0
 onnx==1.23.2
 onnxruntime==1.31.1
+
+# Browser end-to-end tests (tests/e2e, run with `pytest -m e2e`; the default
+# run deselects them). Chromium itself comes from
+#   python -m playwright install --with-deps chromium
+# and axe-core from tests/e2e/package.json (`npm ci` there). greenlet and pyee
+# are Playwright's own dependencies, pinned here so nothing floats.
+playwright==1.64.1
+greenlet==3.5.0
+pyee==13.0.1

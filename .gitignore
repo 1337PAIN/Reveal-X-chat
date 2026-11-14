@@ -57,3 +57,7 @@ run-firebase.sh
 # Local environments
 .venv/
 .env.production
+
+# Browser end-to-end tests: npm install output and screenshots
+tests/e2e/node_modules/
+tests/e2e/artifacts/

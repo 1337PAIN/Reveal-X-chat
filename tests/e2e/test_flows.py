@@ -1,0 +1,208 @@
+"""The chat, driven end to end in two real browsers.
+
+Every other test of the client runs one module in Node. These run the whole
+app: sign-in, key agreement between two separate IndexedDB stores, the
+browser-side image split, the server's integrity check and the resume path
+after a dropped connection. Each test signs in two people in two browser
+contexts, which is the only way to see what one of them sees of the other.
+"""
+
+import struct
+import zlib
+
+import pytest
+
+from e2e_helpers import ALICE, BOB, new_page, shot, sign_in
+
+pytestmark = pytest.mark.e2e
+
+
+def open_chat_by_keyboard(page, peer_name):
+    """Reach the contact with Tab from the search box and open it with Enter."""
+    page.focus('#userSearchInput')
+    for _ in range(25):
+        page.keyboard.press('Tab')
+        focused = page.evaluate(
+            "() => (document.activeElement.querySelector('.user-name') || {}).textContent || ''")
+        if focused == peer_name:
+            page.keyboard.press('Enter')
+            page.wait_for_function(
+                "name => document.getElementById('chatTitle').textContent.includes(name)", arg=peer_name)
+            return
+    raise AssertionError(f'Tab never reached the contact {peer_name}')
+
+
+def send_text(page, text):
+    page.fill('#messageInput', text)
+    page.keyboard.press('Enter')
+
+
+def message_with(page, text):
+    return page.locator('#messagesContainer .message', has_text=text).last
+
+
+def png_bytes(width=320, height=240):
+    """A grayscale PNG with structure, built without any image library.
+
+    Photo-sized on purpose. The tamper model was trained on 96 x 96 shares,
+    and below about 100 px a genuinely clean random share is often scored
+    "tampered" (64 x 64: every time; 96 x 72: 44%). That is a property of the
+    shipped model, recorded in docs/EVALUATION.md, not something a browser
+    test should depend on either way.
+    """
+    rows = b''.join(
+        b'\x00' + bytes((x * 3 + y * 5 + (60 if 20 < x < 50 and 20 < y < 50 else 0)) % 256
+                        for x in range(width))
+        for y in range(height))
+
+    def chunk(kind, data):
+        return (struct.pack('>I', len(data)) + kind + data
+                + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff))
+
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 0, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
+
+
+def send_image(page, tmp_path, name='picture.png'):
+    path = tmp_path / name
+    path.write_bytes(png_bytes())
+    page.set_input_files('#imageInput', str(path))
+    page.wait_for_selector('#imagePreviewModal:not(.hidden)')
+    page.click('#confirmImageBtn')
+
+
+def test_sign_in_and_open_a_chat_by_keyboard(pair):
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    assert alice.evaluate("() => document.activeElement.id") != ''
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_text_both_ways_is_end_to_end_encrypted(pair):
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    open_chat_by_keyboard(bob, ALICE[0])
+
+    send_text(alice, 'hello from alice')
+    for page in (alice, bob):
+        message = message_with(page, 'hello from alice')
+        message.wait_for()
+        assert 'E2EE' in message.locator('.msg-chip').inner_text()
+
+    send_text(bob, 'and back from bob')
+    for page in (alice, bob):
+        message = message_with(page, 'and back from bob')
+        message.wait_for()
+        assert 'E2EE' in message.locator('.msg-chip').inner_text()
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_an_image_is_split_checked_and_reconstructed(pair, tmp_path):
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    open_chat_by_keyboard(bob, ALICE[0])
+    send_image(alice, tmp_path)
+
+    share = bob.locator('#messagesContainer .message:has([data-role="tamper-panel"])').last
+    share.wait_for()
+    panel = share.locator('[data-role="tamper-panel"]')
+    panel.locator('text=verified intact').wait_for(timeout=30000)
+    shot(bob, 'image-integrity-passed')
+
+    share.locator('[data-action="reconstruct"]').click()
+    bob.wait_for_selector('#reconstructionPanel.active')
+    bob.wait_for_function("() => !document.getElementById('reconstructBtn').disabled", timeout=30000)
+    bob.click('#reconstructBtn')
+    bob.wait_for_function(
+        "() => (document.getElementById('reconstructedPreview').src || '').startsWith('data:image')",
+        timeout=30000)
+    shot(bob, 'image-reconstructed')
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_a_revoked_share_can_no_longer_be_opened(pair, tmp_path):
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    open_chat_by_keyboard(bob, ALICE[0])
+    send_image(alice, tmp_path, 'revoke-me.png')
+
+    mine = alice.locator('#messagesContainer .message:has([data-action="revoke"])').last
+    mine.wait_for()
+    theirs = bob.locator('#messagesContainer .message:has([data-role="tamper-panel"])').last
+    theirs.wait_for()
+
+    mine.locator('[data-action="revoke"]').click()
+    alice.click('#confirmDialogOk')
+
+    # The recipient can no longer reconstruct: the share is gone server-side.
+    bob.wait_for_function(
+        """() => {
+            const shares = document.querySelectorAll('#messagesContainer .message [data-role="tamper-panel"]');
+            if (!shares.length) return true;  // the message was removed outright
+            const last = shares[shares.length - 1].closest('.message');
+            const button = last.querySelector('[data-action="reconstruct"]');
+            return !button || button.disabled;
+        }""", timeout=15000)
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_a_dropped_connection_shows_the_banner_then_resumes(browser, server):
+    """The server goes away and comes back with the same database: the page
+    says it is reconnecting, then resumes its session without a sign-in."""
+    alice = sign_in(new_page(browser), server, ALICE)
+    try:
+        server.stop()
+        alice.wait_for_selector('#connectionBanner:not([hidden])', timeout=20000)
+        assert 'Reconnecting' in alice.inner_text('#connectionBanner')
+        shot(alice, 'connection-banner')
+
+        server.start()
+        alice.wait_for_selector('#connectionBanner', state='hidden', timeout=60000)
+        # Resumed, not signed out: no sign-in form, same account.
+        assert not alice.is_visible('#authModal')
+        assert alice.text_content('#accountName').strip() == ALICE[0]
+        open_chat_by_keyboard(alice, BOB[0])
+    finally:
+        if server.proc.poll() is not None:
+            server.start()
+        alice.context.close()
+
+
+def test_a_changed_peer_key_blocks_sending_until_accepted(pair):
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    send_text(alice, 'before the key changes')
+    message_with(alice, 'before the key changes').wait_for()
+
+    # Bob makes a new key pair. To Alice that is indistinguishable from the
+    # server substituting one.
+    bob.get_by_role('button', name='Keys').click()
+    bob.click('#regenerateKeyBtn')
+    bob.click('#confirmDialogOk')
+    bob.wait_for_selector('text=New key pair generated and published.')
+
+    # The warning arrives unprompted, with the conversation open.
+    alice.wait_for_selector('#safetyChangeModal:not(.hidden)')
+    assert 'different from the one this device saw before' in alice.inner_text('#safetyChangeText')
+    shot(alice, 'safety-number-changed')
+
+    # "Not now" leaves sending blocked: trying again brings the warning back
+    # and nothing leaves the browser.
+    alice.click('#safetyChangeCancel')
+    alice.wait_for_selector('#safetyChangeModal.hidden', state='attached')
+    alice.fill('#messageInput', 'after the key changes')
+    alice.wait_for_timeout(2500)  # past the two-second send pause
+    alice.click('#sendBtn')
+    alice.wait_for_selector('#safetyChangeModal:not(.hidden)')
+    assert alice.locator('#messagesContainer .message', has_text='after the key changes').count() == 0
+    assert bob.locator('#messagesContainer .message', has_text='after the key changes').count() == 0
+
+    # Accepting pins the new key; the next send is encrypted to it and Bob,
+    # holding only his new private key, can read it.
+    alice.click('#safetyChangeAccept')
+    alice.wait_for_selector('#safetyChangeModal.hidden', state='attached')
+    alice.click('#sendBtn')
+    bob.click('#closeKeyManagerBtn')
+    open_chat_by_keyboard(bob, ALICE[0])
+    message_with(bob, 'after the key changes').wait_for()
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors
