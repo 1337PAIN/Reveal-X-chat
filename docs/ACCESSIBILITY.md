@@ -259,6 +259,12 @@ Not measured by the script above, but present:
 - `prefers-reduced-motion`, `prefers-reduced-transparency` and
   `@supports not (backdrop-filter)` fallbacks, so the glass layer degrades to
   solid surfaces rather than becoming unreadable.
+  On a phone every dialog is a bottom sheet; it used to rest off the bottom
+  of the screen (`translateY(100%)`) and rely on its slide-up animation to
+  arrive, so it was invisible whenever the animation did not play, and the
+  slide ignored reduced motion. It now rests in place, slides only as an
+  entrance, and does not slide at all under reduced motion
+  (`tests/test_bottom_sheet_motion.py`).
 - Responsive down to 375px with 44px minimum touch targets. `/lab` holds at
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card

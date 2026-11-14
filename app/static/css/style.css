@@ -1622,14 +1622,21 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
         width: 100% !important;
         border-radius: 24px 24px 0 0 !important;
         padding: 24px 16px calc(36px + env(safe-area-inset-bottom, 0px)) 16px !important;
-        animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        transform: translateY(100%);
+        /* Rests in place; the animation only starts it from below. It used
+           to rest at translateY(100%), off screen, so the dialog showed only
+           if the animation played -- not in a tab with no frames, and the
+           slide ignored reduced motion. */
+        animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 }
 
+@media (max-width: 560px) and (prefers-reduced-motion: reduce) {
+    .modal-content { animation: none; }
+}
+
 @keyframes slideUp {
-    to {
-        transform: translateY(0);
+    from {
+        transform: translateY(100%);
     }
 }
 
