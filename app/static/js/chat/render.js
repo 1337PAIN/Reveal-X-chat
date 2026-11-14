@@ -447,6 +447,26 @@ export function renderTamperPanel(panel, data, local) {
     }
 }
 
+/** Draw a status chip from chips.js: an aria-hidden glyph and the words. */
+function fillChip(node, chip) {
+    if (!node || !chip) return;
+    node.className = `msg-chip ${chip.kind}`;
+    node.title = chip.title || '';
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = chip.icon;
+    const words = document.createElement('span');
+    words.textContent = chip.text;
+    node.replaceChildren(icon, words);
+}
+
+/** Whole minutes until a share expires, from the server's own expires_at. */
+function shareMinutesLeft(msg) {
+    const created = parseServerTime(msg.created_at) || new Date();
+    const expires = parseServerTime(msg.expires_at) || new Date(created.getTime() + 60 * 60 * 1000);
+    return Math.max(0, Math.round((expires - new Date()) / 60000));
+}
+
 export function displayMessage(msg) {
     const messageDiv = document.createElement('div');
     messageDiv.dataset.messageId = msg.id;
@@ -467,24 +487,21 @@ export function displayMessage(msg) {
     messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
     if (isSent) messageDiv.dataset.read = msg.read_at ? 'true' : 'false';
 
-    // Badges report what actually happened to this message rather than showing
-    // a padlock unconditionally.
+    // Every message gets one status chip (chips.js) saying in words what
+    // happened to it -- "E2EE", "Not encrypted", or for a share how long it
+    // can still be opened. It replaces a bare header padlock, a red
+    // "[not encrypted]" badge and a red one-time notice: red is for tamper
+    // and error states only.
     const isEncrypted = msg.encrypted === true;
-    const plaintextWarning = (msg.type === 'text' || msg.type === 'voice') && !isEncrypted;
-    const legacyBadge = plaintextWarning
-        ? '<span class="legacy-badge" title="Sent before a key was exchanged with this account">[not encrypted]</span>'
-        : '';
-    const e2eLock = isEncrypted
-        ? '<span class="e2e-badge" title="End-to-end encrypted: ECDH P-256 + HKDF + AES-GCM"><i class="fas fa-lock"></i></span>'
-        : '';
 
     const sanitizedUsername = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(escapeHtml(msg.username)) : escapeHtml(msg.username);
 
     if (msg.type === 'text') {
         messageDiv.innerHTML = `
-            <div class="message-username">${isSent ? 'You' : sanitizedUsername} ${e2eLock}</div>
-            <div class="message-content"><span class="message-text"></span>${legacyBadge}</div>
+            <div class="message-username">${isSent ? 'You' : sanitizedUsername}</div>
+            <div class="message-content"><span class="message-text"></span></div>
             <div class="message-meta">
+                <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
                 <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
@@ -523,12 +540,13 @@ export function displayMessage(msg) {
 
     } else if (msg.type === 'voice') {
         messageDiv.innerHTML = `
-            <div class="message-username">${isSent ? 'You' : sanitizedUsername} ${e2eLock}</div>
+            <div class="message-username">${isSent ? 'You' : sanitizedUsername}</div>
             <div class="message-content">
                 <audio class="voice-player" controls preload="metadata"></audio>
-                <span class="voice-status"></span>${legacyBadge}
+                <span class="voice-status"></span>
             </div>
             <div class="message-meta">
+                <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
                 <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
@@ -574,14 +592,7 @@ export function displayMessage(msg) {
         // so it survives a reload and an offline recipient.
         const hasLiveShare2 = Boolean(msg.extra.share2_live) || isClientSplitShare(msg);
 
-        // Share expiry countdown, driven by the server's own expires_at.
-        const createdTime = parseServerTime(msg.created_at) || new Date();
-        const expiresTime = parseServerTime(msg.expires_at)
-            || new Date(createdTime.getTime() + 60 * 60 * 1000);
-        const remainingMin = Math.max(0, Math.round((expiresTime - new Date()) / 60000));
 
-        const expiryText = remainingMin > 0 ? `⏳ Expires in ${remainingMin}m` : '⏳ Expired';
-        const oneTimeNotice = '<div class="one-time-notice"><i class="fas fa-exclamation-triangle"></i> ONE-TIME ACCESS SHARE</div>';
 
         const statusMessage = isSent
             ? 'You sent encrypted shares. The sender cannot reconstruct.'
@@ -596,8 +607,6 @@ export function displayMessage(msg) {
             <div class="message-content">
                 <div class="encrypted-image-notice">
                     ${statusMessage}
-                    ${oneTimeNotice}
-                    <div class="share-expiry">${expiryText}</div>
                 </div>
                 ${!isSent ? '<div class="tamper-panel" data-role="tamper-panel"></div>' : ''}
                 <div class="share-actions">
@@ -607,6 +616,7 @@ export function displayMessage(msg) {
                 </div>
             </div>
             <div class="message-meta">
+                <span class="msg-chip"></span>
                 <span class="message-time">${localTimeLabel(msg)}</span>
                 ${isSent ? `<span class="message-status">${msg.read_at ? 'Read' : 'Sent'}</span>` : ''}
                 <button class="btn-react" data-message-id="${msg.id}" title="React" aria-label="Add a reaction">☺</button>
@@ -666,6 +676,16 @@ export function displayMessage(msg) {
             setTimeout(() => renderReactions(msg.id, msg.extra.reactions), 0);
         }
     }
+
+    fillChip(messageDiv.querySelector('.msg-chip'), window.revealxChips.messageChip({
+
+        type: msg.type,
+
+        encrypted: isEncrypted,
+
+        minutesLeft: msg.type === 'share' ? shareMinutesLeft(msg) : undefined,
+
+    }));
 
     messagesContainer.appendChild(messageDiv);
     filterVisibleMessages();

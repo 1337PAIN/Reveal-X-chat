@@ -386,9 +386,6 @@
         </div>
     </div>
 
-    <!-- Legacy Message Badge Style (will be injected via JS) -->
-    <style id="legacy-badge-style"></style>
-
     <!-- Administration. Rendered for everyone but revealed only when the server
          reports role === 'admin'; the server re-checks on every action, so this
          is presentation, not access control. -->
@@ -678,6 +675,7 @@
     <script src="{{ asset('js/contact-row.js') }}"></script>
     <script src="{{ asset('js/dialogs.js') }}"></script>
     <script src="{{ asset('js/composer.js') }}"></script>
+    <script src="{{ asset('js/chips.js') }}"></script>
     <!-- In-browser tamper detection. Registers window.revealxTamperML but does
          not download the ~11 MB wasm runtime until something asks for a verdict. -->
     <script src="{{ asset('js/tamper-onnx.js') }}"></script>

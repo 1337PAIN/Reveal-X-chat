@@ -496,19 +496,6 @@ body[data-theme="light"] .modal {
     border-color: var(--glass-border);
 }
 
-.legacy-badge {
-    background: rgba(251, 191, 36, .18);
-    border: 1px solid rgba(251, 191, 36, .38);
-    border-radius: 999px;
-}
-
-.e2e-badge {
-    background: rgba(74, 222, 128, .16);
-    border: 1px solid rgba(74, 222, 128, .34);
-    border-radius: 999px;
-    padding: 1px 6px;
-}
-
 .offline-banner,
 .offline-indicator {
     background: var(--glass-3);
@@ -599,17 +586,6 @@ body[data-theme="light"] .message.sent {
     background: linear-gradient(135deg, rgba(79, 70, 229, .16), rgba(56, 189, 248, .12));
 }
 
-body[data-theme="light"] .legacy-badge {
-    background: rgba(180, 83, 9, .14);
-    border-color: rgba(180, 83, 9, .35);
-    color: #92400e;
-}
-
-body[data-theme="light"] .e2e-badge {
-    background: rgba(21, 128, 61, .14);
-    border-color: rgba(21, 128, 61, .34);
-}
-
 body[data-theme="light"] .tamper-panel.success {
     background: rgba(21, 128, 61, .10);
     border-color: rgba(21, 128, 61, .42);
@@ -618,10 +594,6 @@ body[data-theme="light"] .tamper-panel.success {
 body[data-theme="light"] .tamper-panel.danger {
     background: rgba(220, 38, 38, .10);
     border-color: rgba(220, 38, 38, .42);
-}
-
-body[data-theme="light"] .one-time-notice {
-    color: #b91c1c;
 }
 
 /* --- Docked sidebar on wide screens ---------------------------------------

@@ -200,6 +200,12 @@ Not measured by the script above, but present:
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
+- **Message state is words, and red means danger.** Each message carries one
+  chip -- "E2EE", "Not encrypted", or "Opens once - N min left" -- in
+  `--text-primary` with only the border tinted (`chips.js`). It replaces a bare
+  header padlock with no text, a red "[not encrypted]" badge, and a red
+  "ONE-TIME ACCESS SHARE" notice that measured 3.34:1, failing even AA
+  (`tests/js/chips.test.mjs`, `tests/test_message_chips.py`).
 - **Send keeps its name during the two-second cooldown.** The label used to
   become a countdown ("2s", "1s") and the button was disabled, so a screen
   reader announced a button called "2s" and keyboard focus fell out of the
