@@ -117,6 +117,18 @@
             </article>
             <article class="image-card"><h3>Reconstructed</h3><button type="button" class="zoom-btn" disabled aria-label="Enlarge Reconstructed"><img id="imgReconstructed" alt="Reconstructed image"></button><p>XOR result from received Share 1 and Share 2.</p></article>
             <article class="image-card"><h3 id="enhancedTitle">Enhanced output</h3><button type="button" class="zoom-btn" disabled aria-label="Enlarge Enhanced output"><img id="imgEnhanced" alt="Enhanced image"></button><p id="enhancedCaption">Denoised and sharpened output for quality comparison.</p></article>
+            <article class="image-card">
+                <h3>Original vs reconstructed</h3>
+                <!-- One frame: the original left of the divider, the
+                     reconstruction right of it. rx_lab.js moves the divider. -->
+                <div class="compare-frame">
+                    <img id="imgCompareOriginal" alt="Original image">
+                    <img id="imgCompareReconstructed" class="compare-top" alt="Reconstructed image">
+                </div>
+                <label class="field-label" for="compareSplit">Divider: <output id="compareSplitValue" for="compareSplit">50%</output> from the left</label>
+                <input id="compareSplit" type="range" min="0" max="100" value="50" class="range-input">
+                <p>Original on the left, reconstruction on the right. Slide to see what the attack cost.</p>
+            </article>
             <article class="image-card metric-card"><h3>Model explanation</h3><ul id="explanationList"><li>Run analysis to view reasoning.</li></ul></article>
         </section>
 

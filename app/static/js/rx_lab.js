@@ -62,6 +62,19 @@ if (zoomDialog) {
     });
 }
 
+// Original vs reconstructed: the divider position is a custom property set
+// through the CSSOM, clipping the reconstruction to the right of it.
+const compareSplit = document.getElementById('compareSplit');
+const compareFrame = document.querySelector('.compare-frame');
+if (compareSplit && compareFrame) {
+    const applySplit = () => {
+        compareFrame.style.setProperty('--split', `${compareSplit.value}%`);
+        document.getElementById('compareSplitValue').textContent = `${compareSplit.value}%`;
+    };
+    compareSplit.addEventListener('input', applySplit);
+    applySplit();
+}
+
 strengthRange.addEventListener('input', () => {
     strengthValue.textContent = `${strengthRange.value}%`;
 });
@@ -376,6 +389,11 @@ function renderResults(data) {
         const img = button.querySelector('img');
         if (img && img.getAttribute('src')) button.disabled = false;
     });
+    // The compare frame: the original under, the reconstruction over it.
+    const compareOriginal = document.getElementById('imgCompareOriginal');
+    const compareReconstructed = document.getElementById('imgCompareReconstructed');
+    if (compareOriginal && data.images.original) compareOriginal.src = data.images.original;
+    if (compareReconstructed && data.images.reconstructed) compareReconstructed.src = data.images.reconstructed;
     // The share under the heatmap overlay.
     const heatBase = document.getElementById('imgHeatBase');
     if (heatBase && data.images.share1_received) heatBase.src = data.images.share1_received;
