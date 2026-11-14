@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reveal-X | Secure Image Sharing</title>
-    <!-- [MODIFIED] Added CSP meta tag as fallback -->
     <!-- The Content-Security-Policy is sent as a header only (see
          routes.add_security_headers). A copy used to sit here as well; both
          were enforced, so it changed nothing except to advertise
@@ -23,7 +22,7 @@
     <meta name="apple-mobile-web-app-title" content="Reveal-X">
     <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
 
-    <!-- [NEW] DOMPurify for XSS prevention -->
+    <!-- DOMPurify, behind sanitize.js, for the few places that must render markup. -->
     <script src="{{ asset('vendor/dompurify/purify.min.js') }}"></script>
     <!-- Font Awesome and Inter are vendored: a stylesheet request to Google or
          Cloudflare on every load tells them who opened the app, and when. -->
@@ -46,7 +45,6 @@
                 <h1>Reveal-X</h1>
             </div>
             <div class="header-info">
-                <!-- [NEW] Offline indicator -->
                 <div id="offlineIndicator" class="offline-indicator" title="Offline" aria-live="polite">
                     <i class="fas fa-wifi-slash"></i>
                     <span id="reconnectCount" class="reconnect-count" aria-live="polite"></span>
@@ -102,7 +100,6 @@
                         <h2 id="chatTitle">Select a user</h2>
                         <p id="chatSubtitle">Choose someone online to start a private chat</p>
                     </div>
-                    <!-- [MODIFIED] Added debounce attribute for search -->
                     <input type="search" id="messageSearchInput" class="message-search" placeholder="Search chat..." autocomplete="off">
                 </div>
 

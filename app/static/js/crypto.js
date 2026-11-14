@@ -1,6 +1,5 @@
 /**
  * Client-side Visual Cryptography operations
- * [NEW] Extracted for modularity and security audit
  */
 
 /**

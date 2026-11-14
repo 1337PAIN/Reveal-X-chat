@@ -3,9 +3,6 @@
 
 import { late } from './late.js';
 
-// Reveal-X Chat Application - Client Side
-// [MODIFIED] Fully refactored under modular organization with modern feature sets
-
 // socket.io is vendored under app/static/vendor/socketio rather than loaded
 // from cdn.socket.io, for the same reason onnxruntime-web is: a blocking
 // third-party script in the critical path is a single point of failure the

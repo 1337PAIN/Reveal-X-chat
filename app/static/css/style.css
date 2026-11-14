@@ -1596,7 +1596,7 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
 }
 
 /* ==========================================
-   [NEW] Premium Modern Enhancements & WCAG Accessibility
+   Touch targets, the phone bottom sheet and other accessibility rules
    ========================================== */
 
 /* Focus indicators. Contrast across the app is audited to WCAG 2.1 AAA
