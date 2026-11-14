@@ -396,6 +396,11 @@ Not measured by the script above, but present:
   not offline, so an "away" contact showed green beside an amber pip. Your
   own avatar shows your initial until there is a photo, as contacts do; it
   was an empty circle (`tests/test_presence_and_own_avatar.py`).
+- **Your photo can be changed from the keyboard.** The sidebar avatar and
+  settings' "Change photo" were both `<label>`s for a file input with the
+  `hidden` attribute; neither can take focus, so Tab never reached them.
+  Both are buttons that open the file chooser, and the avatar grows to 44px
+  on touch screens (`tests/test_photo_picker_keyboard.py`).
 - **Avatar initials and unread counts are readable.** Both were white on a
   translucent light-blue to aqua gradient: 1.4:1 to 3.0:1 once composited,
   below AA. The contrast sweep never measured them -- the initials are

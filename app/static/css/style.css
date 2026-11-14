@@ -299,9 +299,20 @@ body::before {
     transform: rotate(20deg);
 }
 
+/* A button that looks like the avatar it holds. */
 .profile-picker {
     cursor: pointer;
+    background: none;
+    border: 0;
+    padding: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
 }
+
+/* 34px for a mouse; on touch screens it joins the 44px block below. */
 
 .profile-preview {
     background: var(--bg-tertiary);
@@ -915,7 +926,8 @@ body::before {
 
 @media (pointer: coarse) {
     .btn-react,
-    .btn-message-menu {
+    .btn-message-menu,
+    .profile-picker {
         min-height: 44px;
         min-width: 44px;
     }

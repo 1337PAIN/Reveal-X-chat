@@ -70,12 +70,15 @@
             <aside id="accountsSidebar" class="sidebar">
                 <div class="sidebar-profile">
                     <div class="profile-info">
-                        <label class="profile-picker" title="Profile picture">
+                        <!-- A button, not a label: the file input is hidden, and neither a
+                             label nor a hidden input can take focus, so the keyboard could
+                             not reach it. settings.js opens the chooser on click. -->
+                        <button type="button" class="profile-picker" title="Change profile photo" aria-label="Change profile photo">
                             <img id="profilePreview" alt="" class="profile-preview">
                             <!-- Your initial until there is a photo, as contacts have. -->
                             <span id="profileInitial" class="avatar-dot profile-initial" aria-hidden="true"></span>
-                            <input type="file" id="profileImageInput" accept="image/*" hidden>
-                        </label>
+                        </button>
+                        <input type="file" id="profileImageInput" accept="image/*" hidden>
                         <div class="profile-details">
                             <span class="account-name" id="accountName"></span>
                             <span class="status" id="userStatus">Online</span>
@@ -285,7 +288,7 @@
                         <label>Profile Photo</label>
                         <div class="profile-photo-upload">
                             <img id="settingsProfilePreview" src="" alt="Profile photo" class="settings-profile-preview">
-                            <label for="settingsProfileInput" class="btn btn-secondary">Change Photo</label>
+                            <button type="button" id="settingsProfileBtn" class="btn btn-secondary">Change photo</button>
                             <input type="file" id="settingsProfileInput" accept="image/*" hidden>
                             <p class="photo-hint">Max 512 KB, PNG/JPEG/WebP/BMP</p>
                         </div>

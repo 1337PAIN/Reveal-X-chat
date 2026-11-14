@@ -30,7 +30,7 @@ def test_there_is_no_second_presence_dot():
 
 def test_your_avatar_has_an_initial_slot():
     picker = INDEX[INDEX.index('class="profile-picker"'):]
-    picker = picker[:picker.index('</label>')]
+    picker = picker[:picker.index('</button>')]
     tag = re.search(r'<span[^>]*id="profileInitial"[^>]*>', picker).group(0)
     assert 'aria-hidden="true"' in tag
     assert picker.index('id="profilePreview"') < picker.index('id="profileInitial"')

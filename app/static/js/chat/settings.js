@@ -190,6 +190,12 @@ socket.on('settings_error', (data) => {
 
 // Profile photo can be changed from the sidebar or from Settings.
 const settingsProfileInput = document.getElementById('settingsProfileInput');
+// A button opens the chooser: it used to be a <label> for this hidden input,
+// and neither can take focus, so the keyboard could not change the photo.
+const settingsProfileBtn = document.getElementById('settingsProfileBtn');
+if (settingsProfileBtn && settingsProfileInput) {
+    settingsProfileBtn.addEventListener('click', () => settingsProfileInput.click());
+}
 if (settingsProfileInput) {
     settingsProfileInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
