@@ -205,7 +205,10 @@ localises damage and survives a re-encode. Either alone would be weaker.
   `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, no
   `'unsafe-inline'` for scripts, and no CDN at all: socket.io, DOMPurify and
   Inter are vendored (Font Awesome has been dropped), so the only third-party
-  origins left are Google's, for Firebase sign-in. Inline *styles* are still
+  origins left are Google's, for Firebase sign-in, loaded only when Firebase
+  is configured and chosen. `tests/test_startup_path.py` holds that line:
+  no element in a template, no `url()` or `@import` in any stylesheet, and no
+  script other than the Firebase loader names another origin. Inline *styles* are still
   allowed. The app's own pages no longer use any -- no `style` attributes or
   `<style>` blocks in the templates or in markup built by script
   (`tests/test_styles_in_stylesheets.py`) -- but Google's sign-in scripts

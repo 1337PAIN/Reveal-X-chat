@@ -222,3 +222,39 @@ def test_the_offline_indicator_draws_its_own_icon():
     start = index.index('id="offlineIndicator"')
     indicator = index[start:index.index('</div>', start)]
     assert '<svg' in indicator and 'aria-label="Offline"' in indicator
+
+
+# --- No request leaves the origin ------------------------------------------
+# The checks above cover <script src> and <link href>. These cover the rest of
+# what a page can fetch: other elements in the templates, url() and @import in
+# every stylesheet (vendored ones included), and absolute URLs in scripts.
+# Opening the app should tell nobody but this server that it was opened. The
+# one exception is Firebase sign-in, which loads Google's SDK -- and only
+# when Firebase is configured and the user chooses it.
+
+EXTERNAL = re.compile(r'(?:https?:)?//(?!localhost|127\.0\.0\.1)[a-z0-9.-]+\.[a-z]{2,}', re.I)
+
+
+@pytest.mark.parametrize('template', templates(), ids=lambda p: p.name)
+def test_no_element_fetches_from_another_origin(template):
+    markup = template.read_text(encoding='utf-8')
+    # <a href> is a link the user may follow, not a request the page makes.
+    fetching = re.findall(r'<(?!a\s)[a-z]+[^>]*\s(?:src|srcset|href|poster|data)=["\']([^"\']+)', markup, re.I)
+    assert not [url for url in fetching if EXTERNAL.match(url)], template.name
+
+
+def test_no_stylesheet_fetches_from_another_origin():
+    for sheet in STATIC.rglob('*.css'):
+        text = sheet.read_text(encoding='utf-8', errors='replace')
+        refs = re.findall(r'url\(\s*["\']?([^"\')]+)', text) + re.findall(r'@import\s+["\']([^"\']+)', text)
+        external = [ref for ref in refs if EXTERNAL.match(ref.strip())]
+        assert not external, f'{sheet.relative_to(STATIC)}: {external}'
+
+
+def test_only_the_firebase_loader_names_another_origin():
+    named = sorted(
+        script.relative_to(STATIC).as_posix()
+        for script in STATIC.glob('js/**/*.js')
+        if re.search(r'["\'`]https://(?!localhost)', script.read_text(encoding='utf-8'))
+    )
+    assert named == ['js/firebase-auth.js'], named
