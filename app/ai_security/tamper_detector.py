@@ -77,7 +77,11 @@ class TamperDetector:
                 self.model = None
 
     def extract_features(self, image: np.ndarray) -> np.ndarray:
-        image = ensure_gray(image)
+        return self._features(ensure_gray(image))[0]
+
+    def _features(self, image: np.ndarray) -> tuple[np.ndarray, tuple]:
+        """The feature vector, plus the 16-px block grid it was built from so
+        predict() can hand that grid to the heatmap instead of rebuilding it."""
         flat = image.ravel().astype(np.float64)
         hist = np.bincount(image.ravel(), minlength=256).astype(np.float64)
         total = max(float(flat.size), 1.0)
@@ -99,8 +103,11 @@ class TamperDetector:
             corr_v = 0.0
 
         lap_var = float(cv2.Laplacian(image, cv2.CV_64F).var())
-        block_means, block_stds = self._block_stats(image, block=16)
-        unique_ratio = float(np.unique(image).size / 256.0)
+        blocks = self._block_grid(image, block=16)
+        block_means, block_stds, _ = blocks
+        # Distinct grey levels: the histogram already has them, and np.unique
+        # would sort all 1.44 M pixels of a full-size share to find the same.
+        unique_ratio = float(np.count_nonzero(hist) / 256.0)
         zero_ratio = float(np.mean(image == 0))
         sat_ratio = float(np.mean(image == 255))
 
@@ -113,17 +120,17 @@ class TamperDetector:
             corr_h,
             corr_v,
             lap_var,
-            float(np.std(block_means)) if block_means else 0.0,
-            float(np.mean(block_stds)) if block_stds else 0.0,
+            float(np.std(block_means)) if block_means.size else 0.0,
+            float(np.mean(block_stds)) if block_stds.size else 0.0,
             unique_ratio,
             zero_ratio,
             sat_ratio,
-        ], dtype=np.float64)
+        ], dtype=np.float64), blocks
 
     def predict(self, image: np.ndarray) -> Prediction:
         image = ensure_gray(image)
         # Extract image features used to detect possible tampering.
-        features = self.extract_features(image)
+        features, blocks = self._features(image)
         probability_tampered = self._fallback_probability(features)
         model_name = self.model_name
 
@@ -139,7 +146,7 @@ class TamperDetector:
                 probability_tampered = self._fallback_probability(features)
 
         tampered = probability_tampered >= 0.5
-        heatmap = self.generate_heatmap(image)
+        heatmap = self.generate_heatmap(image, global_std=float(features[1]), _blocks=blocks)
         explanation = self.explain(features, probability_tampered)
         return Prediction(
             label="Tampered Share" if tampered else "Clean Share",
@@ -152,36 +159,52 @@ class TamperDetector:
             explanation=explanation,
         )
 
-    def generate_heatmap(self, image: np.ndarray, grid: int = 16) -> np.ndarray:
-        """Generate a visual suspicious-region heatmap as a grayscale image."""
+    def generate_heatmap(self, image: np.ndarray, grid: int = 16,
+                         global_std: float | None = None, _blocks: tuple | None = None) -> np.ndarray:
+        """Generate a visual suspicious-region heatmap as a grayscale image.
+
+        Each grid block is scored on its own entropy, mean, spread and share
+        of pure black/white pixels. All blocks are scored at once with NumPy:
+        a Python loop over the 5,625 blocks of a 1,200-px share took ~400 ms.
+        ``global_std`` is the image's standard deviation; predict() passes the
+        one it already has instead of extracting every feature again.
+        """
         image = ensure_gray(image)
         h, w = image.shape
-        heat = np.zeros((h, w), dtype=np.float32)
-        global_features = self.extract_features(image)
-        global_std = max(global_features[1], 1.0)
+        if h == 0 or w == 0:
+            return np.zeros((h, w), dtype=np.uint8)
+        if global_std is None:
+            global_std = float(image.astype(np.float64).std())
+        global_std = max(global_std, 1.0)
 
-        for y in range(0, h, grid):
-            for x in range(0, w, grid):
-                patch = image[y:y + grid, x:x + grid]
-                if patch.size < 16:
-                    continue
-                ph = np.bincount(patch.ravel(), minlength=256).astype(np.float64)
-                probs = ph / max(float(patch.size), 1.0)
-                entropy = -float(np.sum(probs[probs > 0] * np.log2(probs[probs > 0])))
-                local_std = float(patch.std())
-                local_mean = float(patch.mean())
-                # Patches with very low entropy or large mean/std deviation are suspicious.
-                score = 0.0
-                score += max(0.0, (7.4 - entropy) / 2.0)
-                score += min(1.0, abs(local_mean - 127.5) / 80.0)
-                score += min(1.0, abs(local_std - global_std) / 60.0)
-                if np.mean(patch == 0) > 0.05 or np.mean(patch == 255) > 0.05:
-                    score += 0.6
-                heat[y:y + grid, x:x + grid] = min(score, 2.5)
+        if _blocks is None or grid != 16:
+            _blocks = self._block_grid(image, block=grid)
+        means, stds, counts = _blocks
+        nby, nbx = means.shape
+        rows = np.arange(h) // grid
+        cols = np.arange(w) // grid
+        block_id = rows[:, None] * nbx + cols[None, :]
+        hist = np.bincount((block_id * 256 + image).ravel(),
+                           minlength=nby * nbx * 256).reshape(nby, nbx, 256)
+        probs = hist / counts[..., None]
+        logp = np.zeros_like(probs)
+        np.log2(probs, out=logp, where=probs > 0)
+        entropy = -np.sum(probs * logp, axis=2)
 
+        # Patches with very low entropy or large mean/std deviation are suspicious.
+        score = np.maximum(0.0, (7.4 - entropy) / 2.0)
+        score += np.minimum(1.0, np.abs(means - 127.5) / 80.0)
+        score += np.minimum(1.0, np.abs(stds - global_std) / 60.0)
+        clipped = (hist[..., 0] / counts > 0.05) | (hist[..., 255] / counts > 0.05)
+        score += np.where(clipped, 0.6, 0.0)
+        score = np.minimum(score, 2.5)
+        score[counts < 16] = 0.0  # slivers too small to judge stay cold
+
+        heat = score.astype(np.float32)
         if heat.max() > 0:
             heat = heat / heat.max()
-        heat_u8 = (heat * 255).astype(np.uint8)
+        block_u8 = (heat * 255).astype(np.uint8)
+        heat_u8 = block_u8[rows[:, None], cols[None, :]]
         heat_u8 = cv2.GaussianBlur(heat_u8, (0, 0), 3)
         return heat_u8
 
@@ -205,24 +228,50 @@ class TamperDetector:
 
     @staticmethod
     def _safe_corr(a: np.ndarray, b: np.ndarray) -> float:
+        """Pearson correlation, 0 when either side is constant.
+
+        Computed directly with two dot products: np.corrcoef stacks and
+        copies both 1.4 M-pixel vectors and took ~30 ms per call at 1,200 px.
+        """
+        if a.size < 2:
+            return 0.0
         a = a.astype(np.float64)
         b = b.astype(np.float64)
-        if a.size < 2 or a.std() == 0 or b.std() == 0:
+        a -= a.mean()
+        b -= b.mean()
+        saa = float(np.dot(a, a))
+        sbb = float(np.dot(b, b))
+        if saa == 0.0 or sbb == 0.0:
             return 0.0
-        return float(np.corrcoef(a, b)[0, 1])
+        return float(np.dot(a, b) / math.sqrt(saa * sbb))
 
     @staticmethod
-    def _block_stats(image: np.ndarray, block: int = 16) -> tuple[list[float], list[float]]:
-        means: list[float] = []
-        stds: list[float] = []
+    def _block_grid(image: np.ndarray, block: int = 16) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Mean, standard deviation and pixel count of every block, as grids.
+
+        Edge blocks are whatever is left over, as with slicing. Sums of pixels
+        and of their squares are taken in integers, which is exact, so the
+        variance (n*Q - S^2) / n^2 is rounded once and matches ndarray.std to
+        the last few bits: the model sees the features it was trained on.
+        """
         h, w = image.shape
-        for y in range(0, h, block):
-            for x in range(0, w, block):
-                patch = image[y:y + block, x:x + block]
-                if patch.size:
-                    means.append(float(patch.mean()))
-                    stds.append(float(patch.std()))
-        return means, stds
+        if h == 0 or w == 0:
+            empty = np.zeros((0, 0), dtype=np.float64)
+            return empty, empty, empty
+        ys = np.arange(0, h, block)
+        xs = np.arange(0, w, block)
+        pixels = image.astype(np.int64)
+
+        def block_sum(values: np.ndarray) -> np.ndarray:
+            return np.add.reduceat(np.add.reduceat(values, ys, axis=0), xs, axis=1)
+
+        n = np.outer(np.diff(np.append(ys, h)), np.diff(np.append(xs, w)))
+        s = block_sum(pixels)
+        q = block_sum(pixels * pixels)
+        counts = n.astype(np.float64)
+        means = s / counts
+        stds = np.sqrt((n * q - s * s) / (counts * counts))
+        return means, stds, counts
 
     @staticmethod
     def _fallback_probability(features: np.ndarray) -> float:
