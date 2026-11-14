@@ -32,7 +32,11 @@ def groups_enabled():
 
 
 def groups_required(handler):
-    """Refuse a group event, before anything else runs, when groups are off."""
+    """Refuse a group event when groups are off.
+
+    Applied inside session_required, so a socket with no session still hears
+    auth_required first, the same as from every other handler.
+    """
     @functools.wraps(handler)
     def wrapper(*args, **kwargs):
         if not groups_enabled():
@@ -91,8 +95,8 @@ def _group_notice(group_id, text, extra_user_ids=()):
 
 
 @socketio.on('group_create')
-@groups_required
 @session_required
+@groups_required
 def handle_group_create(data):
     user = chat_room.get_session_user(request.sid)
     if not user:
@@ -113,8 +117,8 @@ def handle_group_create(data):
 
 
 @socketio.on('group_list')
-@groups_required
 @session_required
+@groups_required
 def handle_group_list():
     user = chat_room.get_session_user(request.sid)
     if not user:
@@ -124,8 +128,8 @@ def handle_group_list():
 
 
 @socketio.on('group_open')
-@groups_required
 @session_required
+@groups_required
 def handle_group_open(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -143,8 +147,8 @@ def handle_group_open(data):
 
 
 @socketio.on('group_send')
-@groups_required
 @session_required
+@groups_required
 def handle_group_send(data):
     """One ciphertext per member, encrypted client-side under each member's
     pairwise key. The server never sees a group key because there is not one."""
@@ -206,8 +210,8 @@ def handle_group_send(data):
 
 
 @socketio.on('group_add_members')
-@groups_required
 @session_required
+@groups_required
 def handle_group_add_members(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -231,8 +235,8 @@ def handle_group_add_members(data):
 
 
 @socketio.on('group_remove_member')
-@groups_required
 @session_required
+@groups_required
 def handle_group_remove_member(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -258,8 +262,8 @@ def handle_group_remove_member(data):
 
 
 @socketio.on('group_set_role')
-@groups_required
 @session_required
+@groups_required
 def handle_group_set_role(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -284,8 +288,8 @@ def handle_group_set_role(data):
 
 
 @socketio.on('group_update_info')
-@groups_required
 @session_required
+@groups_required
 def handle_group_update_info(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -307,8 +311,8 @@ def handle_group_update_info(data):
 
 
 @socketio.on('group_update_settings')
-@groups_required
 @session_required
+@groups_required
 def handle_group_update_settings(data):
     data = data or {}
     group_id = data.get('group_id')
@@ -330,8 +334,8 @@ def handle_group_update_settings(data):
 
 
 @socketio.on('group_leave')
-@groups_required
 @session_required
+@groups_required
 def handle_group_leave(data):
     data = data or {}
     group_id = data.get('group_id')
