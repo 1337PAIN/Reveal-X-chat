@@ -255,6 +255,17 @@ Not measured by the script above, but present:
   encryption keys and two-factor setup panels -- was read as "times" or
   "Close" without saying which of the stacked panels it closed. The sidebar's
   "Accounts" heading is an `h2` (`tests/test_dialog_semantics.py`).
+- **The keyboard stays in the open dialog.** `aria-modal` told a screen
+  reader the page behind was out of play, but nothing told the keyboard:
+  Shift+Tab from the sign-in dialog's username box went to "Rebuild an image"
+  in the chat behind it. Focus that lands outside the topmost open dialog is
+  now sent back in -- to its last control on Shift+Tab, its first on Tab --
+  so both directions cycle inside it. It is checked as focus moves rather
+  than by making the page `inert`: the dialogs open and close in many places,
+  and an observer that set `inert` ran after a closing dialog had already
+  handed focus back to its trigger, which was still inert, so focus was lost
+  (`modal-focus.js`, `tests/js/modal-focus.test.mjs`,
+  `tests/test_modal_focus.py`).
 - **Nothing empty is drawn as if it were content.** The reconstruction
   previews were `<img src="">` -- a broken-image icon whose alt text a screen
   reader announced -- until something loaded; they are now hidden and replaced
