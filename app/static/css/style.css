@@ -2198,3 +2198,18 @@ body[data-theme="light"] .message-menu-item.danger {
 .preview-img[src]:not([src=""]) + .preview-placeholder {
     display: none;
 }
+
+
+/* Sidebar footer buttons carry a word under the icon: there is room, and an
+   unlabelled glyph is a guess for anyone, not only screen-reader users. */
+.footer-btn {
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 4px;
+}
+
+.footer-btn .btn-label {
+    font-size: 11px;
+    line-height: 1.2;
+}

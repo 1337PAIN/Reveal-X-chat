@@ -474,6 +474,8 @@ function updateThemeIcon() {
     const icon = document.querySelector('.theme-icon');
     const isDark = document.body.getAttribute('data-theme') !== 'light';
     if (icon) icon.textContent = isDark ? '🌙' : '☀️';
+    // The name says what pressing it will do, not the current state.
+    themeToggle.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
 }
 
 // Data Export all messages as JSON

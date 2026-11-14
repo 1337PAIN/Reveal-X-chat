@@ -243,11 +243,22 @@ if (reconstructPanelBtn) {
 // Key manager link in the sidebar footer. (A phone button beside it opened a
 // fake "active devices" list; it is gone until it can show real sessions --
 // see the comment in index.html where its dialog used to be.)
+// Named for screen readers (the key glyph is decoration) and given a visible
+// word, as the other footer buttons are.
 const keysBtn = document.createElement('button');
-keysBtn.className = 'icon-btn';
-keysBtn.title = 'E2EE Keys';
-keysBtn.innerHTML = '🔑';
-keysBtn.style.marginRight = '8px';
+keysBtn.type = 'button';
+keysBtn.className = 'icon-btn footer-btn';
+keysBtn.title = 'Encryption keys';
+keysBtn.setAttribute('aria-label', 'Encryption keys');
+{
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '🔑';
+    const label = document.createElement('span');
+    label.className = 'btn-label';
+    label.textContent = 'Keys';
+    keysBtn.append(icon, label);
+}
 keysBtn.addEventListener('click', openKeyManagerModal);
 
 const sidebarFooter = document.querySelector('.sidebar-footer');

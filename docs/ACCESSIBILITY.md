@@ -200,6 +200,12 @@ Not measured by the script above, but present:
   320, 375 and 390px with no sideways scroll: its single-column grid used to
   size itself to the metrics table's 325px minimum, which pushed every card
   9px past the screen at 375px (`tests/test_mobile_layout.py`, lab rules).
+- **Icon-only buttons have names.** A button is named from its content
+  before its `title`, so "⚙️" was read as "gear" rather than "Settings"; the
+  same went for rebuild, theme, keys, camera and microphone. Each now has an
+  `aria-label` (the theme button's says what pressing it will do, and the mic's
+  changes while recording), the glyphs are `aria-hidden`, and the sidebar
+  footer shows a word under each icon (`tests/test_icon_buttons.py`).
 - **Every dialog is announced as one, and every close button says what it
   closes.** The settings panel was a plain `<div>` (now `role="dialog"`,
   `aria-modal`, labelled by its heading), and its "×" -- like those of the

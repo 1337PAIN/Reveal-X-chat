@@ -75,7 +75,7 @@
                             <span class="status" id="userStatus">Online</span>
                         </div>
                     </div>
-                    <button id="settingsBtn" class="btn-settings" type="button" title="Settings">⚙️</button>
+                    <button id="settingsBtn" class="btn-settings" type="button" title="Settings" aria-label="Settings"><span aria-hidden="true">⚙️</span></button>
                 </div>
 
                 <div class="sidebar-stats">
@@ -91,8 +91,8 @@
                 </ul>
 
                 <div class="sidebar-footer">
-                    <button id="reconstructImageBtn" class="icon-btn" type="button" title="Manual image reconstruction">🔄</button>
-                    <button id="themeToggle" class="icon-btn theme-btn" type="button" title="Toggle theme"><span class="theme-icon">🌙</span></button>
+                    <button id="reconstructImageBtn" class="icon-btn footer-btn" type="button" title="Rebuild an image from two shares" aria-label="Rebuild an image from two shares"><span aria-hidden="true">🔄</span><span class="btn-label">Rebuild</span></button>
+                    <button id="themeToggle" class="icon-btn theme-btn footer-btn" type="button" title="Toggle theme" aria-label="Switch to light theme"><span class="theme-icon" aria-hidden="true">🌙</span><span class="btn-label">Theme</span></button>
                 </div>
             </aside>
 
@@ -130,10 +130,9 @@
                 </div>
 
                 <div class="message-input">
-                    <!-- [MODIFIED] Added disabled state and aria-label -->
-                    <button id="shareImageBtn" class="btn btn-image" disabled aria-label="Share image">📷</button>
+                    <button id="shareImageBtn" class="btn btn-image" disabled aria-label="Share an image"><span aria-hidden="true">📷</span></button>
                     <input type="file" id="imageInput" accept="image/*" hidden>
-                    <button id="voiceBtn" class="btn btn-image" disabled aria-label="Voice message">🎤</button>
+                    <button id="voiceBtn" class="btn btn-image" disabled aria-label="Record a voice message"><span aria-hidden="true">🎤</span></button>
                     <span id="voiceTimer" class="voice-timer hidden" aria-live="polite" role="timer"></span>
                     <button id="voiceCancelBtn" class="btn btn-image voice-cancel hidden" type="button"
                             aria-label="Discard recording" title="Discard recording">✕</button>
