@@ -366,3 +366,24 @@ tbody tr:hover td { background: rgba(255, 255, 255, .04); }
 .sweep-key { display: inline-block; width: 26px; height: 0; margin-right: .45rem; vertical-align: middle; border-top: 3px solid; }
 .sweep-key-ssim { border-color: #5eead4; }
 .sweep-key-ml { border-top-style: dashed; border-color: #fbbf24; }
+
+/* Heatmap over the received share (rx_lab.js sets --heat-opacity). Both
+   layers fill the same box with object-fit: contain, so with the same aspect
+   ratio (the heatmap is computed at the share's size) they line up pixel for
+   pixel; "fill" would have stretched the heatmap over the letterboxing. */
+.heat-overlay {
+    position: relative;
+    margin-bottom: .75rem;
+}
+.heat-overlay img {
+    display: block;
+    margin: 0;
+}
+.heat-overlay .heat-top {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: var(--heat-opacity, .6);
+}

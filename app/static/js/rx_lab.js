@@ -20,6 +20,19 @@ const ids = {
     heatmap: 'imgHeatmap'
 };
 
+// The heatmap's opacity over the share. A custom property set through the
+// CSSOM: no style attribute is written into the markup.
+const heatmapOpacity = document.getElementById('heatmapOpacity');
+const heatOverlay = document.querySelector('.heat-overlay');
+if (heatmapOpacity && heatOverlay) {
+    const applyHeat = () => {
+        heatOverlay.style.setProperty('--heat-opacity', String(Number(heatmapOpacity.value) / 100));
+        document.getElementById('heatmapOpacityValue').textContent = `${heatmapOpacity.value}%`;
+    };
+    heatmapOpacity.addEventListener('input', applyHeat);
+    applyHeat();
+}
+
 strengthRange.addEventListener('input', () => {
     strengthValue.textContent = `${strengthRange.value}%`;
 });
@@ -329,6 +342,9 @@ function renderResults(data) {
         const el = document.getElementById(elementId);
         if (el && data.images[key]) el.src = data.images[key];
     });
+    // The share under the heatmap overlay.
+    const heatBase = document.getElementById('imgHeatBase');
+    if (heatBase && data.images.share1_received) heatBase.src = data.images.share1_received;
 
     const integrityCard = document.getElementById('integrityResult').parentElement;
     const mlCard = document.getElementById('mlResult').parentElement;

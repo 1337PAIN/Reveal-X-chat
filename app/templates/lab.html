@@ -103,7 +103,18 @@
             <article class="image-card"><h3>Share 1 clean</h3><img id="imgShare1Clean" alt="Clean Share 1"><p>Random-looking transmitted share before attack.</p></article>
             <article class="image-card"><h3>Share 1 received</h3><img id="imgShare1Received" alt="Received Share 1"><p>This is the share analyzed by HMAC and ML.</p></article>
             <article class="image-card"><h3>Share 2</h3><img id="imgShare2" alt="Share 2"><p>Second share required for reconstruction.</p></article>
-            <article class="image-card"><h3>Tamper heatmap</h3><img id="imgHeatmap" alt="Tamper heatmap"><p>Bright regions are statistically suspicious.</p></article>
+            <article class="image-card">
+                <h3>Tamper heatmap</h3>
+                <!-- The heatmap over the received share it was computed from, so a
+                     bright patch can be matched to the pixels under it. -->
+                <div class="heat-overlay">
+                    <img id="imgHeatBase" alt="Received Share 1">
+                    <img id="imgHeatmap" class="heat-top" alt="Tamper heatmap laid over the received Share 1">
+                </div>
+                <label class="field-label" for="heatmapOpacity">Heatmap opacity: <output id="heatmapOpacityValue" for="heatmapOpacity">60%</output></label>
+                <input id="heatmapOpacity" type="range" min="0" max="100" value="60" class="range-input">
+                <p>Bright regions are statistically suspicious. At 0% you see the share alone; at 100%, the heatmap alone.</p>
+            </article>
             <article class="image-card"><h3>Reconstructed</h3><img id="imgReconstructed" alt="Reconstructed image"><p>XOR result from received Share 1 and Share 2.</p></article>
             <article class="image-card"><h3 id="enhancedTitle">Enhanced output</h3><img id="imgEnhanced" alt="Enhanced image"><p id="enhancedCaption">Denoised and sharpened output for quality comparison.</p></article>
             <article class="image-card metric-card"><h3>Model explanation</h3><ul id="explanationList"><li>Run analysis to view reasoning.</li></ul></article>
