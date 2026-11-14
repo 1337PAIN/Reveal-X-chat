@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v71-lab-no-innerhtml';
+const CACHE_NAME = 'revealx-cache-v72-lab-card-contrast';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever

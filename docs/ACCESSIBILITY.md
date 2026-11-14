@@ -20,7 +20,7 @@ ten seconds — see [Re-running the audit](#re-running-the-audit).
 | --- | --- | --- | --- |
 | Chat + settings, dark and light, with a text message and an image share on screen (re-measured 14 Nov 2026) | 55 | 0 | 0 |
 | Sign-in screen, dark and light | 14 | 0 | 0 |
-| `/lab` | 56 | 0 | 0 |
+| `/lab` with a run, all seven attacks and a sweep on screen (re-measured 14 Nov 2026) | 160 | 0 | 0 |
 
 Tightest margins, which are the ones to watch when changing colours:
 
@@ -28,7 +28,8 @@ Tightest margins, which are the ones to watch when changing colours:
 | --- | --- | --- |
 | `#userStatus` "Online" (light) | 7.33 | 7 |
 | `#userCount` (light) | 7.63 | 7 |
-| `.summary-card` labels on `/lab` | 7.85 | 7 |
+| `.summary-card` labels on `/lab` | 7.99 | 7 |
+| `/lab` "Tampered" result (large) | 6.37 | 4.5 |
 | `.logo h1` gradient wordmark (dark) | 6.38 | 4.5 (large) |
 | `.message-menu-item.danger` (dark) | 7.29 | 7 |
 | `.message-menu-item.danger` (light) | 7.69 | 7 |
@@ -39,6 +40,13 @@ a share and a sent message on screen, the "ONE-TIME ACCESS SHARE" notice was
 3.34:1 (below AA) and the light theme's sent-bubble name, time and status were
 6.34-6.87:1. The notice is now a neutral chip and those three are coloured for
 that bubble (`tests/test_message_meta_contrast.py`).
+
+`/lab`'s 56-element run had never seen a result state either. With every
+section filled in, the "Tampered" and "Clean" cards measured 3.86:1 for the
+verdict and 4.19:1 for the card's label: the state tint *replaced* the card's
+dark panel instead of sitting on it, so the aurora showed through. Result
+cards now sit on the densest panel with the tint layered over it
+(`tests/test_lab_result_card_contrast.py`).
 
 ## Correction: these numbers were wrong once
 

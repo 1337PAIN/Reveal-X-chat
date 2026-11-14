@@ -215,19 +215,23 @@ option { background: #101528; color: #e8ecf6; }
 .status-text { min-height: 1.4rem; }
 
 .summary-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
-.summary-card { padding: 1.1rem; transition: transform .2s ease, border-color .2s ease; }
+/* Result cards sit on the densest panel: at --panel's .55 the muted labels
+   fell to 6.1-6.5:1 over the brightest part of the aurora. */
+.summary-card { padding: 1.1rem; background: var(--panel-3); transition: transform .2s ease, border-color .2s ease; }
 .summary-card:hover { transform: translateY(-2px); border-color: var(--line-strong); }
 .summary-card span { color: var(--muted); font-weight: 700; font-size: .9rem; }
 .summary-card strong { display: block; font-size: 1.45rem; margin: .45rem 0; }
 
+/* The state tint is layered over the dark panel. It used to replace it, so
+   the aurora showed through and "Tampered" measured 3.86:1. */
 .summary-card.danger {
     border-color: rgba(251, 113, 133, .55);
-    background: rgba(251, 113, 133, .12);
+    background: linear-gradient(rgba(251, 113, 133, .12), rgba(251, 113, 133, .12)), var(--panel-3);
 }
 
 .summary-card.success {
     border-color: rgba(134, 239, 172, .5);
-    background: rgba(134, 239, 172, .10);
+    background: linear-gradient(rgba(134, 239, 172, .10), rgba(134, 239, 172, .10)), var(--panel-3);
 }
 
 .summary-card.danger strong { color: var(--danger); }
