@@ -117,10 +117,27 @@ Both hand you an `https://...` URL with a real certificate.
 
 ### Starting it
 
+The short way is `scripts/run_windows_server.ps1`. It generates the two keys
+that must survive restarts into a git-ignored `.server-secrets.ps1` on its
+first run (back that file up off the PC), sets everything below, loads an
+optional `firebase.local.ps1` of `$env:FIREBASE_*` lines, and starts
+`run.py`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scriptsun_windows_server.ps1
+```
+
+It also sets `REVEALX_BIND_HOST=127.0.0.1`, so the server listens on this PC
+only and the tunnel is the one way in. Without it `run.py` listens on every
+interface, and with proxy trust on, anyone on the same network could connect
+directly and forge the forwarded client address. Done by hand:
+
 ```powershell
 $env:REVEAL_X_SECRET_KEY   = "<a long random string, kept between runs>"
 $env:REVEAL_X_COOKIE_SECURE = "true"   # the tunnel is HTTPS
 $env:REVEALX_TRUST_PROXY    = "true"   # see below
+$env:REVEALX_BIND_HOST      = "127.0.0.1"   # only the tunnel can connect
+$env:REVEALX_CLIENT_IP_HEADER = "CF-Connecting-IP"   # with cloudflared
 $env:REVEALX_ADMIN_USER     = "admin"
 $env:REVEALX_ADMIN_PASSWORD = "<set this, then change it after first sign-in>"
 python run.py
@@ -231,6 +248,7 @@ pip install -r requirements.lock
 | `REVEAL_X_FORCE_HTTPS` | `true` to redirect plain HTTP to HTTPS (301 for GET/HEAD, 308 otherwise), before the request is handled. Behind a proxy this needs `REVEALX_TRUST_PROXY=true`, or every request looks like plain HTTP and is redirected for ever |
 | `REVEALX_ADMIN_USER` / `REVEALX_ADMIN_PASSWORD` | Bootstraps the superadmin on first start |
 | `DATABASE_URL` | PostgreSQL DSN. Unset uses SQLite, in WAL mode with a 5-second busy timeout (so expect `reveal_x.db-wal` and `-shm` beside the database; back up all three, or stop the app first) |
+| `REVEALX_BIND_HOST` | `run.py` only: the address to listen on. Unset listens on every interface, as development on a LAN expects. Set `127.0.0.1` behind a tunnel on the same machine, so nothing else can reach the port and forge forwarded headers |
 | `REVEALX_PG_POOL_MAX` | PostgreSQL only: connections kept in the pool (default 20). Threads beyond that wait up to 30 s for one rather than failing. Keep it under the server's connection limit |
 | `REVEALX_GROUPS` | `true` turns on the server-side group conversation events. **Off by default**: there is no client for groups, so a deployment that leaves it unset refuses every `group_*` event |
 | `FIREBASE_*` | Google sign-in — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md) |
