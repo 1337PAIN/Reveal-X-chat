@@ -506,7 +506,9 @@ async function toggleVoiceRecording() {
     try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (error) {
-        window.revealxDialogs.toast('Microphone access was denied.', { kind: 'error' });
+        // Not always "denied": no microphone at all fails the same way, with
+        // no prompt. mic-errors.js says which, and what to do about it.
+        window.revealxDialogs.toast(window.revealxMicErrors.micErrorMessage(error), { kind: 'error' });
         return;
     }
 

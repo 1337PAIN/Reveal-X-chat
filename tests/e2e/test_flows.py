@@ -229,3 +229,22 @@ def test_after_a_reload_only_the_recipient_can_read_a_sent_message(pair, server)
     open_chat_by_keyboard(bob, ALICE[0])
     message_with(bob, 'readable by bob only, after a reload').wait_for()
     assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_a_pc_without_a_microphone_is_told_so_not_denied(pair):
+    """The server PC this project is demonstrated from has no microphone. The
+    browser then refuses at once, with no prompt, and the app used to call
+    that "access denied" -- leaving nothing the user could allow."""
+    alice, _bob = pair
+    # As if the user would allow it: the failure left is the missing device.
+    alice.context.grant_permissions(['microphone'])
+    has_input = alice.evaluate("""async () => (await navigator.mediaDevices.enumerateDevices())
+        .some((d) => d.kind === 'audioinput')""")
+    if has_input:
+        pytest.skip('this browser has an audio input; the no-microphone case cannot be shown')
+    open_chat_by_keyboard(alice, BOB[0])
+    alice.click('#voiceBtn')
+    toast = alice.locator('text=No microphone was found')
+    toast.wait_for()
+    assert alice.locator('text=Microphone access was denied').count() == 0
+    shot(alice, 'no-microphone')
