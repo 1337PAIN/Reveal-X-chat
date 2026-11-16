@@ -33,7 +33,7 @@ def test_each_section_is_named_by_its_heading():
     found = sections()
     assert [name for name, _ in found] == [
         'settingsProfileHeading', 'settingsSecurityHeading', 'settingsPreferencesHeading',
-        'settingsDataHeading', 'settingsAccountHeading']
+        'settingsPrivacyHeading', 'settingsDataHeading', 'settingsAccountHeading']
     for name, body in found:
         assert f'<h3 id="{name}">' in body
 

@@ -17,6 +17,10 @@ def handle_select_chat(data):
     if not current_user or not recipient or not chat_room.are_contacts(current_user['id'], recipient_id):
         emit('chat_history', {'messages': [], 'recipient_id': recipient_id})
         return
+    # A locked chat's history waits for the chat-lock PIN in this session.
+    if request.sid not in CHAT_LOCK_OPEN and chat_room.is_chat_locked(current_user['id'], recipient_id):
+        emit('chat_history', {'messages': [], 'recipient_id': recipient_id, 'locked': True})
+        return
 
     # Opening a chat normally marks it read, but a user who turned read receipts
     # off must not have that leak out just by looking at the conversation.

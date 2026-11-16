@@ -1,8 +1,9 @@
-// Contacts: the "Add by username" field, the requests list, Remove contact.
+// Contacts: the "Add by username" field and the requests list. Remove
+// contact is in the chat menu (chat/chatmenu.js).
 // The rules (what is sent, what each answer says, the rows) are in
 // contacts-ui.js and tested there; this connects them to the socket.
 
-import { socket, state } from './core.js';
+import { socket } from './core.js';
 import { announceToScreenReader } from './basics.js';
 
 const ui = window.revealxContactsUI;
@@ -10,7 +11,6 @@ const form = document.getElementById('addContactForm');
 const input = document.getElementById('addContactInput');
 const section = document.getElementById('contactRequests');
 const list = document.getElementById('contactRequestsList');
-const removeBtn = document.getElementById('removeContactBtn');
 
 let requests = null;     // the last contacts_updated, to spot new requests
 
@@ -70,17 +70,3 @@ socket.on('contacts_updated', (data) => {
     requests = data;
     renderRequests(data);
 });
-
-if (removeBtn) {
-    removeBtn.addEventListener('click', () => {
-        const user = state.users.find((u) => u.id === state.selectedRecipientId);
-        if (!user) return;
-        window.revealxDialogs.askConfirm({
-            title: `Remove ${user.username}?`,
-            body: 'You will not be able to message each other until one of you adds the other again.',
-            confirmLabel: 'Remove',
-        }).then((agreed) => {
-            if (agreed) socket.emit('contact_remove', { user_id: user.id });
-        });
-    });
-}

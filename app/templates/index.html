@@ -107,6 +107,12 @@
                     <h3 id="contactRequestsTitle">Requests</h3>
                     <ul id="contactRequestsList" class="requests-list"></ul>
                 </section>
+                <div class="chat-folders">
+                    <button id="lockedChatsBtn" class="folder-row" type="button" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-lock"></use></svg><span class="folder-name">Locked chats</span><span id="lockedChatsCount" class="folder-count"></span></button>
+                    <button id="hideLockedBtn" class="folder-row folder-quiet" type="button" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-lock"></use></svg><span class="folder-name">Hide locked chats</span></button>
+                    <button id="archivedBtn" class="folder-row" type="button" aria-expanded="false" aria-controls="archivedList" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg><span class="folder-name">Archived</span><span id="archivedCount" class="folder-count"></span></button>
+                    <ul id="archivedList" class="users-list archived-list" aria-label="Archived chats" hidden></ul>
+                </div>
                 <ul id="usersList" class="users-list">
                     <li class="empty-state">Log in to see your contacts</li>
                 </ul>
@@ -119,11 +125,18 @@
 
             <section class="chat-section">
                 <div class="chat-header">
-                    <div>
-                        <h2 id="chatTitle">Select a contact</h2>
+                    <div class="chat-heading">
+                        <div class="chat-title-row">
+                            <h2 id="chatTitle">Select a contact</h2>
+                            <!-- Everything you can do with this conversation, beside
+                                 the name (chat-menu-ui.js, chat/chatmenu.js). -->
+                            <span class="message-menu-wrap chat-menu-wrap">
+                                <button id="chatMenuBtn" class="btn-message-menu chat-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Chat options" title="Chat options" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-more"></use></svg></button>
+                                <span id="chatMenu" class="message-menu chat-menu" role="menu" aria-label="Chat options" hidden></span>
+                            </span>
+                        </div>
                         <p id="chatSubtitle">Choose a contact to start a private chat</p>
                     </div>
-                    <button id="removeContactBtn" class="icon-btn chat-header-btn" type="button" title="Remove contact" aria-label="Remove contact" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-user-minus"></use></svg></button>
                     <input type="search" id="messageSearchInput" class="message-search" placeholder="Search chat..." autocomplete="off">
                 </div>
 
@@ -397,6 +410,21 @@
                     </div>
                 </section>
 
+                <section class="settings-section" aria-labelledby="settingsPrivacyHeading">
+                    <h3 id="settingsPrivacyHeading">Privacy</h3>
+                    <div class="settings-option">
+                        <p class="settings-hint" id="chatLockSummary">Lock a chat from the ⋮ menu beside a contact's name; you set a 4-8 digit PIN the first time.</p>
+                        <button id="changeChatLockPinBtn" class="btn btn-secondary w-100" type="button" hidden>Change chat-lock PIN</button>
+                        <button id="forgotChatLockPinBtn" class="btn btn-secondary w-100" type="button" hidden>Forgot chat-lock PIN</button>
+                    </div>
+                    <div class="settings-option">
+                        <h4 class="settings-subheading" id="blockedHeading">Blocked accounts</h4>
+                        <ul id="blockedList" class="blocked-list" aria-labelledby="blockedHeading">
+                            <li class="settings-hint">Nobody is blocked.</li>
+                        </ul>
+                    </div>
+                </section>
+
                 <section class="settings-section" aria-labelledby="settingsDataHeading">
                     <h3 id="settingsDataHeading">Data & Storage</h3>
                     <div class="settings-option">
@@ -588,6 +616,24 @@
         </div>
     </div>
 
+    <div id="contactInfoModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="contactInfoName">
+        <div class="modal-content contact-info-content">
+            <span id="contactInfoAvatar" class="avatar-dot contact-info-avatar" aria-hidden="true"></span>
+            <img id="contactInfoPhoto" class="contact-info-photo" alt="" hidden>
+            <h2 id="contactInfoName"></h2>
+            <p id="contactInfoStatus" class="contact-info-status"></p>
+            <p id="contactInfoBio" class="contact-info-bio"></p>
+            <div class="contact-info-safety">
+                <h3>Safety number</h3>
+                <p id="contactInfoSafety" class="hash-block"></p>
+                <p class="settings-hint">Compare it with theirs in person or on a call. If both match, nobody is in between.</p>
+            </div>
+            <div class="modal-actions">
+                <button id="contactInfoCloseBtn" class="btn btn-primary" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="secretPromptModal" class="modal hidden" role="dialog" aria-modal="true"
          aria-labelledby="secretPromptTitle">
         <div class="modal-content">
@@ -749,6 +795,9 @@
         <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.5 11.6L19.6 4.4a.6.6 0 0 1 .8.8L13.2 20.3a.6.6 0 0 1-1.1-.1l-1.7-6.4-6.3-1.6a.6.6 0 0 1-.1-1.1zM10.4 13.6L20 4.6"/></symbol>
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.8 7l.9 12.2a1 1 0 0 0 1 .9h6.6a1 1 0 0 0 1-.9L17.2 7M10.2 10.8v5.6M13.8 10.8v5.6"/></symbol>
         <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M8.6 12.2l2.3 2.3 4.6-4.8"/></symbol>
+        <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></symbol>
+        <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5 3 3v1.5H7V11.5l3-3zM12 13v7.5"/></symbol>
+        <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M6.5 16.5h11l-1.5-2v-4a4 4 0 0 0-6.6-3M6.6 9.6A4 4 0 0 0 6.5 10.5v4l-1.5 2M10 19.5a2 2 0 0 0 4 0M4 4l16 16"/></symbol>
         <symbol id="i-user-plus" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.8"/><path d="M2.8 20a6.7 6.7 0 0 1 13.4 0M19 8.5v6M16 11.5h6"/></symbol>
         <symbol id="i-user-minus" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.8"/><path d="M2.8 20a6.7 6.7 0 0 1 13.4 0M16 11.5h6"/></symbol>
         <symbol id="i-shield-alert" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M12 8v5M12 16.2v.3"/></symbol>
@@ -772,6 +821,7 @@
     <script src="{{ asset('js/share-ui.js') }}"></script>
     <script src="{{ asset('js/contacts-ui.js') }}"></script>
     <script src="{{ asset('js/signup-ui.js') }}"></script>
+    <script src="{{ asset('js/chat-menu-ui.js') }}"></script>
     <script src="{{ asset('js/crypto.js') }}"></script>
     <script src="{{ asset('js/vc-client.js') }}"></script>
     <script src="{{ asset('js/contact-row.js') }}"></script>

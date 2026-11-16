@@ -271,7 +271,7 @@ def test_removing_a_contact_closes_the_chat_on_both_sides(pair):
     alice, bob = pair
     open_chat_by_keyboard(alice, BOB[0])
     open_chat_by_keyboard(bob, ALICE[0])
-    alice.click('#removeContactBtn')
+    choose(alice, 'Remove contact')
     alice.wait_for_selector('#confirmDialog:not(.hidden)')
     assert BOB[0] in alice.text_content('#confirmDialogTitle')
     alice.click('#confirmDialogOk')
@@ -309,3 +309,62 @@ def test_create_account_says_when_a_username_is_taken(browser, server):
         assert not page.errors, page.errors
     finally:
         page.context.close()
+
+
+def choose(page, label):
+    """Open the chat menu beside the contact's name and pick an item."""
+    page.click('#chatMenuBtn')
+    page.locator('#chatMenu [role="menuitem"]', has_text=label).click()
+
+
+def row_names(page, selector='#usersList'):
+    return page.eval_on_selector_all(f'{selector} .user-name', 'els => els.map(e => e.textContent)')
+
+
+def test_the_chat_menu_pins_archives_locks_and_blocks(pair):
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+
+    choose(alice, 'Pin chat')
+    alice.locator('#usersList .row-flags').first.wait_for()
+    alice.click('#chatMenuBtn')
+    assert alice.locator('#chatMenu [role="menuitem"]', has_text='Unpin chat').count() == 1
+    alice.keyboard.press('Escape')
+
+    choose(alice, 'Archive chat')
+    alice.wait_for_selector('#archivedBtn:not([hidden])')
+    assert BOB[0] not in row_names(alice)
+    alice.click('#archivedBtn')
+    assert row_names(alice, '#archivedList') == [BOB[0]]
+    choose(alice, 'Unarchive chat')
+    alice.wait_for_function("name => [...document.querySelectorAll('#usersList .user-name')]"
+                            ".some(e => e.textContent === name)", arg=BOB[0])
+
+    # Lock: the first time sets the PIN; the chat stays open in this session.
+    choose(alice, 'Lock chat')
+    alice.wait_for_selector('#secretPromptModal:not(.hidden)')
+    alice.fill('#secretPromptInput', '2468')
+    alice.fill('#secretPromptConfirm', '2468')
+    alice.click('#secretPromptOkBtn')
+    alice.wait_for_selector('#hideLockedBtn:not([hidden])')
+    alice.click('#hideLockedBtn')
+    alice.wait_for_selector('#lockedChatsBtn:not([hidden])')
+    assert BOB[0] not in row_names(alice)
+    assert alice.text_content('#chatTitle') == 'Select a contact'
+    alice.click('#lockedChatsBtn')
+    alice.fill('#secretPromptInput', '0000')
+    alice.click('#secretPromptOkBtn')
+    alice.locator('.app-toast', has_text='not right').wait_for()
+    alice.click('#lockedChatsBtn')
+    alice.fill('#secretPromptInput', '2468')
+    alice.click('#secretPromptOkBtn')
+    alice.wait_for_function("name => [...document.querySelectorAll('#usersList .user-name')]"
+                            ".some(e => e.textContent === name)", arg=BOB[0])
+
+    open_chat_by_keyboard(alice, BOB[0])
+    choose(alice, 'Block')
+    alice.click('#confirmDialogOk')
+    alice.wait_for_function("() => document.getElementById('chatTitle').textContent === 'Select a contact'")
+    assert BOB[0] not in row_names(alice)
+    alice.locator('#blockedList', has_text=BOB[0]).wait_for(state='attached')
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors

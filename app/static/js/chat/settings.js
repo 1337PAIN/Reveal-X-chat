@@ -610,7 +610,8 @@ export function askSecret(options) {
     // it here would be inconsistent rather than safer; passwords and
     // passcodes are masked.
     input.type = opts.numeric ? 'text' : 'password';
-    input.inputMode = opts.numeric ? 'numeric' : '';
+    // A PIN is masked like a password but offers the number pad.
+    input.inputMode = (opts.numeric || opts.pin) ? 'numeric' : '';
     input.autocomplete = opts.autocomplete || 'off';
     input.maxLength = opts.maxLength || 128;
     input.placeholder = opts.placeholder || '';

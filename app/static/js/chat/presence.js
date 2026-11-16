@@ -34,8 +34,12 @@ socket.on('users_updated', (data) => {
     // Removed as a contact (by either side) while their chat was open: the
     // server will refuse anything sent now, so close it rather than let the
     // composer look usable.
-    if (state.selectedRecipientId && !state.users.some(u => u.id === state.selectedRecipientId)) {
+    const selected = state.users.find(u => u.id === state.selectedRecipientId);
+    if (state.selectedRecipientId && (!selected || (selected.locked && !state.chatLock.open))) {
+        // Gone, or locked while the PIN is not entered.
         closeConversation();
+    } else if (late.refreshChatMenu) {
+        late.refreshChatMenu();
     }
 
     if (state.selectedRecipientId) {
@@ -55,37 +59,85 @@ socket.on('public_key_registered', (data) => {
     state.keys.publicKey = data.public_key || '';
 });
 
+const FLAG_ICONS = [['pinned', 'pin'], ['muted', 'bell-off'], ['locked', 'lock']];
+
+/** One contact's row, with its pin / mute / lock marks. */
+function contactRow(user) {
+    const status = user.status || (user.online ? 'online' : 'offline');
+    const row = window.revealxContactRow.buildContactRow(document, user, {
+        selected: user.id === state.selectedRecipientId,
+        unread: state.unreadCounts[user.id] || 0,
+        statusLabel: STATUS_LABELS[status] || status,
+        onSelect: selectUser,
+    });
+    const marks = FLAG_ICONS.filter(([flag]) => user[flag]);
+    const button = row.querySelector('.contact-button');
+    if (marks.length && button) {
+        // The icons are decoration; the same facts are said in words.
+        const words = document.createElement('span');
+        words.className = 'sr-only';
+        words.textContent = window.revealxChatMenuUI.flagWords(user);
+        const icons = document.createElement('span');
+        icons.className = 'row-flags';
+        icons.setAttribute('aria-hidden', 'true');
+        marks.forEach(([, icon]) => icons.append(window.revealxIcons.icon(document, icon)));
+        button.append(words, icons);
+    }
+    return row;
+}
+
+function emptyRow(text) {
+    const li = document.createElement('li');
+    li.className = 'empty-state';
+    li.textContent = text;
+    return li;
+}
+
 export function updateUsersList(nextUsers) {
     state.users = nextUsers || [];
-    const visible = state.users.filter(u =>
+    const matches = state.users.filter(u =>
         u.username.toLowerCase().includes(state.userSearch)
     );
+    // Pinned first; archived and (until the PIN) locked chats out of the
+    // main list. The rules are in chat-menu-ui.js.
+    const groups = window.revealxChatMenuUI.organise(matches, { lockOpen: state.chatLock.open });
 
-    usersList.innerHTML = '';
+    usersList.replaceChildren();
     userCount.textContent = `${state.users.length} contact${state.users.length !== 1 ? 's' : ''}`;
-
-    if (state.users.length === 0) {
-        usersList.innerHTML = '<li class="empty-state">No contacts yet. Add someone by their username above.</li>';
-        return;
-    }
-
-    if (visible.length === 0) {
-        usersList.innerHTML = '<li class="empty-state">No matching contacts</li>';
-        return;
-    }
 
     // Rows are built by contact-row.js: a <button> per account, so the list
     // can be reached and used by keyboard, and nothing from another user is
     // ever parsed as markup.
-    visible.forEach(user => {
-        const status = user.status || (user.online ? 'online' : 'offline');
-        usersList.appendChild(window.revealxContactRow.buildContactRow(document, user, {
-            selected: user.id === state.selectedRecipientId,
-            unread: state.unreadCounts[user.id] || 0,
-            statusLabel: STATUS_LABELS[status] || status,
-            onSelect: selectUser,
-        }));
-    });
+    if (state.users.length === 0) {
+        usersList.append(emptyRow('No contacts yet. Add someone by their username above.'));
+    } else if (groups.main.length === 0) {
+        usersList.append(emptyRow(matches.length ? 'Nothing here: see Archived above.' : 'No matching contacts'));
+    } else {
+        groups.main.forEach(user => usersList.appendChild(contactRow(user)));
+    }
+
+    // Locked chats: one row to open them while hidden, one to hide them again.
+    const lockedBtn = document.getElementById('lockedChatsBtn');
+    const hideLockedBtn = document.getElementById('hideLockedBtn');
+    const lockedTotal = state.users.filter(u => u.locked).length;
+    if (lockedBtn) {
+        lockedBtn.hidden = groups.lockedHidden === 0;
+        document.getElementById('lockedChatsCount').textContent = String(groups.lockedHidden);
+    }
+    if (hideLockedBtn) hideLockedBtn.hidden = !(state.chatLock.open && lockedTotal > 0);
+
+    // Archived: a row that folds the archived chats out beneath it.
+    const archivedBtn = document.getElementById('archivedBtn');
+    const archivedList = document.getElementById('archivedList');
+    if (archivedBtn && archivedList) {
+        const count = groups.archived.length;
+        archivedBtn.hidden = count === 0;
+        document.getElementById('archivedCount').textContent = String(count);
+        const open = state.showArchived && count > 0;
+        archivedBtn.setAttribute('aria-expanded', String(open));
+        archivedList.hidden = !open;
+        archivedList.replaceChildren(...(open ? groups.archived.map(contactRow) : []));
+    }
 }
 
 /** Back to no conversation selected. */
@@ -95,8 +147,8 @@ export function closeConversation() {
     chatSubtitle.textContent = 'Choose a contact to start a private chat';
     typingIndicator.textContent = '';
     setChatEnabled(false);
-    const remove = document.getElementById('removeContactBtn');
-    if (remove) remove.hidden = true;
+    const menuBtn = document.getElementById('chatMenuBtn');
+    if (menuBtn) menuBtn.hidden = true;
     late.showWelcome();
 }
 
@@ -111,8 +163,9 @@ export function selectUser(userId) {
     typingIndicator.textContent = '';
     chatTitle.textContent = user.username;
     chatSubtitle.textContent = describeUser(user);
-    const remove = document.getElementById('removeContactBtn');
-    if (remove) remove.hidden = false;
+    const menuBtn = document.getElementById('chatMenuBtn');
+    if (menuBtn) menuBtn.hidden = false;
+    if (late.refreshChatMenu) late.refreshChatMenu();
 
     state.keyExchangeStatus[userId] = keyExchangeState(userId);
 

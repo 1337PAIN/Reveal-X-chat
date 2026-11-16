@@ -184,6 +184,19 @@ is the entire point of having it.
   an enumeration oracle beyond what any "add by username" field must be:
   someone who guesses a real username learns that it exists. Removing a
   contact takes effect for both sides at once (`tests/test_contacts.py`).
+- **Lock chat is enforced by the server, not only hidden** (17 Nov 2026).
+  The chat-lock PIN is 4-8 digits, stored as an Argon2id hash like a
+  password, and checked on the server: `select_chat` returns no history for a
+  locked chat until this session has entered it, five wrong PINs per 15
+  minutes per account, and every new session starts locked. What it protects
+  against is someone using an unlocked, signed-in device; it is not extra
+  encryption -- the messages are already end-to-end encrypted, and a locked
+  chat's new messages still arrive (their notifications name nobody). A
+  forgotten PIN is reset by clearing the locked chats for that account, so
+  the reset cannot be used to read them.
+- **Block** removes the contact and refuses messages both ways
+  (`can_message`). A blocked person's contact request is accepted silently and
+  never delivered, so blocking is not announced.
 - **Group conversations are off by default.** They have no client -- no page
   in the app uses them -- so in a default deployment every `group_*` event is
   refused before it touches the database (`handlers/groups.py`,

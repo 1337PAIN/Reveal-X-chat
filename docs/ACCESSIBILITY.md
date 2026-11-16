@@ -324,6 +324,27 @@ Added on 17 Nov 2026: the sidebar lists contacts, added by username
   the contact count at 5.0:1, under the 7:1 bar. The drawer is now opaque in
   the light theme on narrow screens (`glass.css`). **0 violations.**
 
+### The chat menu
+
+Added on 17 Nov 2026: the ⋮ beside a contact's name (`chat-menu-ui.js`).
+
+- **It is the same menu as the message menus**: a button named "Chat
+  options" with `aria-haspopup="menu"` and `aria-expanded`, opening a
+  `role="menu"` of `role="menuitem"` buttons; focus goes to the first item,
+  Escape closes it and returns focus to the button. Each item says what it
+  does next ("Pin chat" / "Unpin chat"), and Clear chat, Block and Remove
+  contact ask first in the in-app dialog.
+- **Pin, mute and lock marks on a contact's row are icons said in words**
+  (", pinned, muted"), since an icon alone carries nothing for a screen
+  reader. The Locked chats and Archived rows are buttons; Archived says
+  whether it is expanded (`aria-expanded`, `aria-controls`).
+- **The chat-lock PIN uses the masked secret prompt**, offering the number
+  pad (`inputmode="numeric"`) while staying masked, with a typed-twice check
+  and the error said in place.
+- **Checked by axe**: `test_chat_menu_and_contact_info` scans the open menu
+  and the Contact info dialog at 1440 px and 375 px in both themes, AAA
+  contrast on: **0 violations**.
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

@@ -640,7 +640,8 @@ class ChatRoom:
 
     def can_message(self, sender_id, recipient_id):
         """May this account send to that one: active, and contacts."""
-        return self.is_active_user(recipient_id) and self.are_contacts(sender_id, recipient_id)
+        return (self.is_active_user(recipient_id) and self.are_contacts(sender_id, recipient_id)
+                and not self.is_blocked(recipient_id, sender_id) and not self.is_blocked(sender_id, recipient_id))
 
     def make_contacts(self, a, b):
         """Make two accounts accepted contacts outright (no request)."""
@@ -692,6 +693,8 @@ class ChatRoom:
             return None, None, 'not_found'
         if other['id'] == requester_id:
             return None, None, 'self'
+        if self.is_blocked(requester_id, other['id']):
+            return None, None, 'blocked'
         low, high = self._pair(requester_id, other['id'])
         now = utcnow().isoformat()
         with self._connect() as db:
@@ -705,6 +708,9 @@ class ChatRoom:
                 return 'already_contacts', other, None
             if row['requested_by'] == requester_id:
                 return 'already_requested', other, None
+            # They asked you, but you have blocked them: do not accept for them.
+            if self.is_blocked(requester_id, other['id']):
+                return None, None, 'blocked'
             db.execute(
                 "UPDATE contacts SET status = 'accepted', accepted_at = ? WHERE user_low = ? AND user_high = ?",
                 (now, low, high))
@@ -738,7 +744,154 @@ class ChatRoom:
             if not self._contact_row(db, user_id, other_id):
                 return False
             db.execute("DELETE FROM contacts WHERE user_low = ? AND user_high = ?", (low, high))
+            db.execute("DELETE FROM chat_prefs WHERE (user_id = ? AND peer_id = ?) OR (user_id = ? AND peer_id = ?)",
+                       (user_id, other_id, other_id, user_id))
         return True
+
+    # ------------------------------------------------------------------
+    # Per-conversation settings: the chat menu (migration 13)
+    # ------------------------------------------------------------------
+
+    #: What the chat menu may set with set_chat_pref. Locking has its own path
+    #: (it needs the chat-lock PIN), so it is not in this list.
+    CHAT_PREFS = ('pinned', 'archived', 'muted')
+
+    def _write_chat_pref(self, db, user_id, peer_id, column, value):
+        now = utcnow().isoformat()
+        exists = db.execute("SELECT 1 FROM chat_prefs WHERE user_id = ? AND peer_id = ?",
+                            (user_id, peer_id)).fetchone()
+        if not exists:
+            db.execute(
+                "INSERT INTO chat_prefs (user_id, peer_id, archived, muted, locked, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)", (user_id, peer_id, False, False, False, now))
+        # `column` is one of a fixed set, never caller input.
+        db.execute(f"UPDATE chat_prefs SET {column} = ?, updated_at = ? WHERE user_id = ? AND peer_id = ?",
+                   (value, now, user_id, peer_id))
+
+    def set_chat_pref(self, user_id, peer_id, pref, value):
+        """Pin, archive or mute one contact's chat for this account only.
+        True if it was set; False for an unknown setting or a non-contact."""
+        if pref not in self.CHAT_PREFS or not self.are_contacts(user_id, peer_id):
+            return False
+        value = bool(value)
+        with self._connect() as db:
+            if pref == 'pinned':
+                self._write_chat_pref(db, user_id, peer_id, 'pinned_at',
+                                      utcnow().isoformat() if value else None)
+            else:
+                self._write_chat_pref(db, user_id, peer_id, pref, value)
+        return True
+
+    def chat_prefs_for(self, user_id):
+        """{peer_id: {pinned_at, archived, muted, locked}} for this account."""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT peer_id, pinned_at, archived, muted, locked FROM chat_prefs WHERE user_id = ?",
+                (user_id,)).fetchall()
+        return {row['peer_id']: {
+            'pinned_at': row['pinned_at'],
+            'archived': bool(row['archived']),
+            'muted': bool(row['muted']),
+            'locked': bool(row['locked']),
+        } for row in rows}
+
+    # --- Lock chat: a PIN, and chats behind it (migration 14) ---------------
+
+    CHAT_LOCK_PIN = re.compile(r'^[0-9]{4,8}$')
+
+    def chat_lock_pin_set(self, user_id):
+        with self._connect() as db:
+            row = db.execute("SELECT chat_lock_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+        return bool(row and row['chat_lock_hash'])
+
+    def set_chat_lock_pin(self, user_id, pin):
+        """Store a new PIN's hash. The caller has checked the current one."""
+        if not isinstance(pin, str) or not self.CHAT_LOCK_PIN.fullmatch(pin):
+            return False
+        with self._connect() as db:
+            db.execute("UPDATE users SET chat_lock_hash = ? WHERE id = ?",
+                       (self._hash_password(pin), user_id))
+        return True
+
+    def verify_chat_lock_pin(self, user_id, pin):
+        with self._connect() as db:
+            row = db.execute("SELECT chat_lock_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+        stored = row['chat_lock_hash'] if row else None
+        if not stored or not isinstance(pin, str):
+            return False
+        return self._verify_password(pin, stored)
+
+    def set_chat_locked(self, user_id, peer_id, locked):
+        """Lock or unlock one contact's chat for this account. The handler
+        checks the PIN state first; this only refuses a non-contact."""
+        if not self.are_contacts(user_id, peer_id):
+            return False
+        with self._connect() as db:
+            self._write_chat_pref(db, user_id, peer_id, 'locked', bool(locked))
+        return True
+
+    def is_chat_locked(self, user_id, peer_id):
+        return self.chat_prefs_for(user_id).get(peer_id, {}).get('locked', False)
+
+    def reset_chat_lock(self, user_id):
+        """Forgotten PIN: clear every locked chat's messages for this account,
+        unlock them, and remove the PIN. Nothing the PIN guarded is left."""
+        locked = [peer for peer, prefs in self.chat_prefs_for(user_id).items() if prefs['locked']]
+        for peer_id in locked:
+            self.clear_conversation(user_id, peer_id)
+        with self._connect() as db:
+            db.execute("UPDATE chat_prefs SET locked = ? WHERE user_id = ?", (False, user_id))
+            db.execute("UPDATE users SET chat_lock_hash = NULL WHERE id = ?", (user_id,))
+        return locked
+
+    # --- Block (migration 15) ------------------------------------------------
+
+    def is_blocked(self, blocker_id, blocked_id):
+        with self._connect() as db:
+            row = db.execute("SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?",
+                             (blocker_id, blocked_id)).fetchone()
+        return row is not None
+
+    def block_user(self, blocker_id, blocked_id):
+        """Block someone: the contact (or any request) ends as well."""
+        if not blocker_id or not blocked_id or blocker_id == blocked_id or not self.get_user(blocked_id):
+            return False
+        self.remove_contact(blocker_id, blocked_id)
+        if not self.is_blocked(blocker_id, blocked_id):
+            with self._connect() as db:
+                db.execute("INSERT INTO blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?)",
+                           (blocker_id, blocked_id, utcnow().isoformat()))
+        return True
+
+    def unblock_user(self, blocker_id, blocked_id):
+        with self._connect() as db:
+            db.execute("DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?", (blocker_id, blocked_id))
+        return True
+
+    def blocked_list(self, blocker_id):
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT u.id, u.username FROM blocks b JOIN users u ON u.id = b.blocked_id "
+                "WHERE b.blocker_id = ? ORDER BY LOWER(u.username)", (blocker_id,)).fetchall()
+        return [{'id': row['id'], 'username': row['username']} for row in rows]
+
+    def clear_conversation(self, user_id, peer_id):
+        """Hide every message between the two from this account only. A
+        message both have cleared is deleted, with any stored Share 1."""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT id, sender_id, recipient_id, extra, deleted_by FROM messages "
+                "WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)",
+                (user_id, peer_id, peer_id, user_id)).fetchall()
+            for row in rows:
+                deleted_by = set(_load_deleted_by(row)) | {user_id}
+                if {row['sender_id'], row['recipient_id']} <= deleted_by:
+                    self._remove_share_file(row['extra'])
+                    db.execute("DELETE FROM messages WHERE id = ?", (row['id'],))
+                else:
+                    db.execute("UPDATE messages SET deleted_by = ? WHERE id = ?",
+                               (json.dumps(sorted(deleted_by)), row['id']))
+        return len(rows)
 
     def contact_ids(self, user_id):
         """Ids of this account's accepted contacts."""
@@ -760,9 +913,15 @@ class ChatRoom:
                 "AND u.account_state = 'active' ORDER BY LOWER(u.username)",
                 (user_id, user_id, user_id)).fetchall()
         result = {'incoming': [], 'outgoing': []}
+        blocked = {entry['id'] for entry in self.blocked_list(user_id)}
         for row in rows:
             entry = {'id': row['id'], 'username': row['username'], 'profile_image': row['profile_image'] or ''}
-            result['outgoing' if row['requested_by'] == user_id else 'incoming'].append(entry)
+            if row['requested_by'] == user_id:
+                result['outgoing'].append(entry)
+            elif row['id'] not in blocked:
+                # Someone you blocked may still ask; it waits on their side
+                # and never reaches you, so the block is not announced.
+                result['incoming'].append(entry)
         return result
 
     def get_users_list(self, current_user_id=None):
@@ -785,6 +944,8 @@ class ChatRoom:
         """
         viewer_is_admin = bool(current_user_id) and self.is_admin(current_user_id)
         contacts = self.contact_ids(current_user_id) if current_user_id else set()
+        prefs = self.chat_prefs_for(current_user_id) if current_user_id else {}
+        no_prefs = {'pinned_at': None, 'archived': False, 'muted': False, 'locked': False}
 
         with self._connect() as db:
             rows = db.execute("""
@@ -810,6 +971,15 @@ class ChatRoom:
                 'status': ((row['status'] or 'online') if 'status' in row.keys() else 'online') if online else 'offline',
                 'online': online,
                 'last_seen': row['last_seen'],
+            })
+            # This account's own settings for the chat (the chat menu).
+            mine = prefs.get(row['id'], no_prefs)
+            users[-1].update({
+                'pinned': bool(mine['pinned_at']),
+                'pinned_at': mine['pinned_at'],
+                'archived': mine['archived'],
+                'muted': mine['muted'],
+                'locked': mine['locked'],
             })
         return users
 
@@ -2015,6 +2185,8 @@ class ChatRoom:
             db.execute("DELETE FROM resume_tokens WHERE user_id = ?", (user_id,))
             db.execute("DELETE FROM group_members WHERE user_id = ?", (user_id,))
             db.execute("DELETE FROM contacts WHERE user_low = ? OR user_high = ?", (user_id, user_id))
+            db.execute("DELETE FROM chat_prefs WHERE user_id = ? OR peer_id = ?", (user_id, user_id))
+            db.execute("DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?", (user_id, user_id))
             db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         return True, None
 

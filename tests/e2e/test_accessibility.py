@@ -183,6 +183,25 @@ def test_adding_a_contact(browser, server, width, theme):
         carol.context.close()
 
 
+@pytest.mark.parametrize('theme', THEMES)
+@pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
+def test_chat_menu_and_contact_info(browser, server, width, theme):
+    """The menu beside a contact's name, open; then Contact info."""
+    page = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, ALICE)
+    try:
+        if width == 'phone':
+            page.click('#sidebarToggle')
+        page.locator('#usersList button', has_text=BOB[0]).click()
+        page.click('#chatMenuBtn')
+        page.wait_for_selector('#chatMenu:not([hidden])')
+        check(page, f'chat-menu-{width}-{theme}')
+        page.locator('#chatMenu [role="menuitem"]', has_text='Contact info').click()
+        page.wait_for_selector('#contactInfoModal:not(.hidden)')
+        check(page, f'contact-info-{width}-{theme}')
+    finally:
+        page.context.close()
+
+
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
 def test_lab(browser, server, width):
     page = new_page(browser, *WIDTHS[width])

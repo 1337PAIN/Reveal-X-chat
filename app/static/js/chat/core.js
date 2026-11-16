@@ -38,6 +38,9 @@ export const socket = io();
 export const state = {
     currentUser: null,
     selectedRecipientId: null,
+    // Lock chat: whether a PIN exists, and whether this session entered it.
+    chatLock: { pinSet: false, open: false },
+    showArchived: false,
     users: [],
     userSearch: '',
     unreadCounts: {},

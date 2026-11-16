@@ -16,7 +16,13 @@ def test_the_list_is_drawn_with_the_button_builder():
     presence = (STATIC / 'js' / 'chat' / 'presence.js').read_text(encoding='utf-8')
     draw = presence[presence.index('export function updateUsersList('):]
     draw = draw[:draw.index('\n}\n')]
-    assert 'revealxContactRow.buildContactRow(' in draw
+    # updateUsersList groups the list (chat-menu-ui.js); each row comes from
+    # contactRow, which adds the pin/mute/lock marks to the builder's button.
+    row = presence[presence.index('function contactRow('):]
+    row = row[:row.index('\n}\n')]
+    assert 'revealxContactRow.buildContactRow(' in row
+    assert 'contactRow' in draw
+    draw += row
     assert "li.addEventListener('click'" not in draw
     assert 'user.profile_image' not in draw
 

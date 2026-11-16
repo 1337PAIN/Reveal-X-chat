@@ -36,6 +36,7 @@ def handle_disconnect():
     # Abandon any half-finished second factor or TOTP setup with the socket.
     PENDING_TOTP.pop(request.sid, None)
     PENDING_TOTP_ENROLMENT.pop(request.sid, None)
+    CHAT_LOCK_OPEN.discard(request.sid)
 
     user = chat_room.remove_user(request.sid)
     if user:

@@ -383,9 +383,13 @@ async function notifyForIncoming(msg) {
 
     if (!late.shouldNotifyFor(searchable)) return;
 
+    // Muted: no sound or popup. Locked: neither the name nor the text.
+    const sender = state.users.find(u => u.id === msg.sender_id);
+    const alert = window.revealxChatMenuUI.notification(sender, msg.username, preview);
+    if (!alert) return;
     late.playNotificationSound();
-    late.showNotification(`New message from ${msg.username}`, {
-        body: preview,
+    late.showNotification(alert.title, {
+        body: alert.body,
         icon: '/static/icon-192.png'
     });
 }

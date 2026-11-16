@@ -238,6 +238,45 @@ def m012_username_case(room, db):
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))")
 
 
+def m013_chat_prefs(room, db):
+    """Per-account settings for one conversation: pinned (and when), archived,
+    muted, locked. One row per (account, contact); absent means all off.
+    Kept on the server so they follow the account to another device."""
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS chat_prefs (
+            user_id TEXT NOT NULL,
+            peer_id TEXT NOT NULL,
+            pinned_at TEXT,
+            archived BOOLEAN NOT NULL DEFAULT FALSE,
+            muted BOOLEAN NOT NULL DEFAULT FALSE,
+            locked BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, peer_id)
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_chat_prefs_peer ON chat_prefs(peer_id)")
+
+
+def m014_chat_lock_pin(room, db):
+    """The chat-lock PIN, as an Argon2id hash; NULL until one is set."""
+    _add_columns(room, db, 'users', (
+        ('chat_lock_hash', "ALTER TABLE users ADD COLUMN chat_lock_hash TEXT"),
+    ))
+
+
+def m015_blocks(room, db):
+    """Who has blocked whom. One row per (blocker, blocked)."""
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS blocks (
+            blocker_id TEXT NOT NULL,
+            blocked_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (blocker_id, blocked_id)
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks(blocked_id)")
+
+
 MIGRATIONS = [
     (1, 'base tables', m001_base_tables),
     (2, 'message lifecycle columns', m002_message_lifecycle),
@@ -251,6 +290,9 @@ MIGRATIONS = [
     (10, 'resume tokens and session epoch', m010_resume_tokens),
     (11, 'contacts', m011_contacts),
     (12, 'usernames unique without case', m012_username_case),
+    (13, 'chat preferences', m013_chat_prefs),
+    (14, 'chat lock pin', m014_chat_lock_pin),
+    (15, 'blocks', m015_blocks),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

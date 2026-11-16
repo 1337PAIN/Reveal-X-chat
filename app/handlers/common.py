@@ -193,6 +193,18 @@ SEND_LIMITS = {
 NOT_A_CONTACT = 'You can only message your contacts. Add them by username first.'
 #: Said for a username nobody has, and for one that cannot be added.
 NO_SUCH_ACCOUNT = 'No account with that username.'
+YOU_BLOCKED_THEM = 'You blocked this account. Unblock it in Settings first.'
+
+#: Lock chat (handlers/contacts.py). Sessions that have entered the chat-lock
+#: PIN, by socket id: in-process, like the other per-session state, and
+#: forgotten on disconnect and sign-out, so every new session asks again.
+CHAT_LOCK_OPEN = set()
+CHAT_LOCK_NEEDS_PIN = 'Set a chat-lock PIN first.'
+#: Wrong PINs per account: five, then wait out fifteen minutes. A 4-digit PIN
+#: has 10,000 values; this keeps guessing at about 480 a day.
+CHAT_LOCK_RATE = state.store().window('chat_lock') if state.store().kind == 'memory' else {}
+CHAT_LOCK_MAX_FAILURES = 5
+CHAT_LOCK_WINDOW_SECONDS = 15 * 60
 # The in-memory buckets themselves, kept addressable for the tests.
 SEND_BUCKETS = state.store().buckets if state.store().kind == 'memory' else {}
 SEND_TOO_FAST = 'You are sending too fast. Wait a moment and try again.'
@@ -505,6 +517,11 @@ def _establish_session(user, resume_token=None):
     }, to=request.sid)
     # Pending contact requests, both ways (handlers/contacts.py).
     emit('contacts_updated', chat_room.contact_requests(fresh['id']), to=request.sid)
+    # Lock chat and block (handlers/contacts.py). A new session starts locked.
+    CHAT_LOCK_OPEN.discard(request.sid)
+    emit('chat_lock_state', {'pin_set': chat_room.chat_lock_pin_set(fresh['id']), 'open': False},
+         to=request.sid)
+    emit('blocked_updated', {'blocked': chat_room.blocked_list(fresh['id'])}, to=request.sid)
     # Admins get the account list immediately, so the panel and its pending
     # badge are populated before they open it.
     if chat_room.is_admin(fresh['id']):

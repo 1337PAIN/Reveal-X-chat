@@ -1,6 +1,6 @@
 # API reference
 
-Everything the server exposes: 9 HTTP routes and 48 Socket.IO events, with the
+Everything the server exposes: 9 HTTP routes and 57 Socket.IO events, with the
 fields each one actually reads. Extracted from `app/handlers/`, not written from
 memory.
 
@@ -183,6 +183,45 @@ history. The storage layer refuses a message between non-contacts as well.
 Conversations that existed before contacts (migration 11) were kept: each pair
 with a direct message between them started as contacts.
 
+### The chat menu: pin, archive, mute, clear, lock, block
+
+| Event | In | Out |
+| --- | --- | --- |
+| `chat_pref` | `peer_id`, `pref` (`pinned`, `archived` or `muted`), `value` | `users_updated` (this account's sessions) |
+| `clear_chat` | `peer_id` | `chat_cleared` |
+| `chat_lock_set_pin` | `pin`, `current_pin` (to change one), `lock_peer_id` (optional) | `chat_lock_state`, `chat_lock_error` |
+| `chat_lock` | `peer_id`, `value` | `users_updated`, `chat_lock_error` |
+| `chat_lock_open` | `pin` | `chat_lock_state`, `chat_lock_error` |
+| `chat_lock_close` | — | `chat_lock_state` |
+| `chat_lock_reset` | — | `chat_cleared`, `chat_lock_state`, `users_updated` |
+| `block_user` | `user_id` | `blocked_updated`, `users_updated`, `contacts_updated` |
+| `unblock_user` | `user_id` | `blocked_updated`, `contacts_updated` |
+
+Pin, archive and mute are this account's own view of a conversation, stored
+per (account, contact) (migration 13) and sent in each roster entry as
+`pinned`, `pinned_at`, `archived`, `muted` and `locked`. Only a contact's chat
+can be set; anything else is ignored. `clear_chat` hides every message in the
+conversation from the caller only; a message both people have cleared is
+deleted, with its stored Share 1.
+
+**Lock chat.** A 4-8 digit PIN, stored as an Argon2id hash (migration 14).
+`chat_lock_set_pin` sets it, or changes it given `current_pin`, and opens this
+session; with `lock_peer_id` it also locks that chat in the same step, because
+two separate events run in parallel and the lock could otherwise be checked
+before the hash is written. `chat_lock` needs a PIN to exist; unlocking a chat
+also needs the PIN entered in this session. `select_chat` on a locked chat
+returns an empty history with `locked: true` until `chat_lock_open` succeeds;
+five wrong PINs in fifteen minutes and it waits. A new session starts locked
+(`chat_lock_state` `{pin_set, open: false}` on sign-in). `chat_lock_reset`, for
+a forgotten PIN, clears the locked chats for the caller, unlocks them and
+removes the PIN, so it gives away nothing the PIN guarded.
+
+**Block** ends the contact (and any request) and stops messages both ways
+(`can_message`). The blocked person is not told: a request from them answers
+`requested` as usual and waits on their side, never shown to the blocker; the
+blocker cannot add them until they unblock (migration 15). `blocked_updated`
+`{blocked: [{id, username}]}` is also sent on sign-in.
+
 ### Messaging
 
 | Event | In | Out |
@@ -334,7 +373,8 @@ tested for refusal from a non-admin and from an anonymous socket
 `new_message`, `users_updated`, `chat_history`, `message_reactions`,
 `message_deleted`, `share_revoked`, `profile_updated`, `public_key_registered`,
 `totp_state`, `totp_enrolment`, `totp_required`, `admin_accounts`, `admin_ok`,
-`contacts_updated`, `contact_result`, `username_status`,
+`contacts_updated`, `contact_result`, `username_status`, `chat_cleared`,
+`chat_lock_state`, `chat_lock_error`, `blocked_updated`,
 `force_signed_out`, `auth_success`, `auth_required`, and the error channels `auth_error`,
 `admin_error`, `settings_error`, `message_error`, `image_error`, `totp_error`.
 

@@ -20,4 +20,5 @@ import './messaging.js';
 import './images.js';
 import './reconstruction.js';
 import './settings.js';
+import './chatmenu.js';
 import './shell.js';
