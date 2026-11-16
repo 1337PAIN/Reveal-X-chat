@@ -188,6 +188,12 @@ export function makeDocument() {
                 const self = this;
                 return {
                     add: (...names) => { self.className = [...new Set([...self.className.split(' ').filter(Boolean), ...names])].join(' '); },
+                    remove: (...names) => { self.className = self.className.split(' ').filter((c) => c && !names.includes(c)).join(' '); },
+                    toggle: (name, force) => {
+                        const on = force === undefined ? !self.className.split(' ').includes(name) : Boolean(force);
+                        if (on) self.classList.add(name); else self.classList.remove(name);
+                        return on;
+                    },
                     contains: (name) => self.className.split(' ').includes(name),
                 };
             },

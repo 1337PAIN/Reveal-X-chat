@@ -26,12 +26,32 @@ def server(tmp_path_factory):
 
 
 @pytest.fixture(scope='session')
-def browser():
+def playwright():
+    """One Playwright for the whole run: its sync API refuses a second
+    instance in the same process, so every browser is launched from this."""
     sync_api = pytest.importorskip('playwright.sync_api')
-    with sync_api.sync_playwright() as playwright:
-        chromium = playwright.chromium.launch()
-        yield chromium
-        chromium.close()
+    with sync_api.sync_playwright() as instance:
+        yield instance
+
+
+@pytest.fixture(scope='session')
+def browser(playwright):
+    chromium = playwright.chromium.launch()
+    yield chromium
+    chromium.close()
+
+
+@pytest.fixture(scope='session')
+def mic_browser(playwright):
+    """Chromium with a fake microphone (it plays a tone) and no permission
+    prompt, for recording real voice notes. The plain `browser` has no audio
+    input at all, which the no-microphone test depends on."""
+    chromium = playwright.chromium.launch(args=[
+        '--use-fake-device-for-media-stream',
+        '--use-fake-ui-for-media-stream',
+    ])
+    yield chromium
+    chromium.close()
 
 
 @pytest.fixture

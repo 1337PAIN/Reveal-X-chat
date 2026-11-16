@@ -248,6 +248,31 @@ Two things to know when running axe by hand:
   the contact list, but `axe.commons.text.accessibleText()` gave a contact's
   name as "e2ebobOffline". That is now fixed (below).
 
+### Voice notes
+
+The browser's own `<audio controls>` was replaced on 16 Nov 2026 by a player
+built for this app (`voice-ui.js`), and the recorder by a recording bar.
+Both were designed to the same bar as the rest:
+
+- **Play/pause and speed are real buttons, named for what they do next**:
+  "Play voice message" / "Pause voice message", "Playback speed 1.5 times,
+  change". The play button is the primary buttons' opaque indigo with white,
+  the same 8:1-plus pairing measured above.
+- **The waveform is a slider.** It takes focus, speaks its position as
+  "0:04 of 0:08", and seeks with the Arrow keys (one second), Page Up/Down
+  (five) and Home/End. Clicking it seeks too. Heights and progress are
+  classes, not inline styles, so both themes style them in the stylesheet.
+- **The recording bar** reads, in tab order, *Discard recording*, the clock,
+  and *Send voice message*. The clock is `role="timer"` and is not announced
+  every second; the start of recording and the last ten seconds are
+  announced once each instead. The level meter is decorative
+  (`aria-hidden`). Reduced motion stops the recording dot pulsing.
+- **Checked by axe like everything else.** `tests/e2e/test_voice_notes_e2e.py` records
+  a real note with Chromium's fake microphone, plays it on the other side and
+  runs axe (AAA contrast on) over the recording bar and the player in both
+  themes, and over the player at 375 px, where it also checks that no
+  waveform bar is clipped: **0 violations**.
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

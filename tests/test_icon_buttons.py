@@ -63,4 +63,5 @@ def test_the_mic_keeps_its_name_and_hidden_glyph_while_recording():
     state = messaging[messaging.index('function setVoiceButtonState('):]
     state = state[:state.index('\n}\n')]
     assert 'voiceBtn.textContent' not in state, 'that would drop the aria-hidden wrapper'
-    assert "'Record a voice message'" in state and "'Stop and send recording'" in state
+    # While recording the button sends: its name says so, not "stop".
+    assert "'Record a voice message'" in state and "'Send voice message'" in state

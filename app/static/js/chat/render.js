@@ -176,13 +176,67 @@ async function fillTextContent(node, msg) {
     filterVisibleMessages();
 }
 
-/** Attach an audio player to a voice message, decrypting first when needed. */
-async function fillVoiceContent(player, status, msg) {
+const VOICE_BARS = 36;
+let voiceDecoder = null;
+
+/**
+ * The waveform and true length of a recording, from its bytes. An
+ * OfflineAudioContext decodes without needing a user gesture and plays
+ * nothing. Null when this engine cannot decode the container; the player
+ * then draws a stable placeholder and takes the length from the element.
+ */
+async function decodeVoice(bytes) {
+    const Context = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!Context || !bytes) return null;
+    try {
+        voiceDecoder = voiceDecoder || new Context(1, 1, 44100);
+        // decodeAudioData detaches the buffer it is given; hand it a copy.
+        const audio = await voiceDecoder.decodeAudioData(bytes.slice(0));
+        return {
+            peaks: window.revealxVoiceUI.peaksFromSamples(audio.getChannelData(0), VOICE_BARS),
+            duration: audio.duration,
+        };
+    } catch (error) {
+        return null;
+    }
+}
+
+/** The bytes inside a base64 data: URL (an unencrypted voice note). */
+function dataUrlBytes(url) {
+    try {
+        const binary = atob(String(url).slice(String(url).indexOf(',') + 1));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        return bytes.buffer;
+    } catch (error) {
+        return null;
+    }
+}
+
+async function drawVoiceWaveform(parts, bytes, msg) {
+    if (!parts) return;
+    const ui = window.revealxVoiceUI;
+    const decoded = await decodeVoice(bytes);
+    if (decoded) {
+        ui.setPeaks(parts, decoded.peaks);
+        ui.setDuration(parts, decoded.duration);
+    } else {
+        ui.setPeaks(parts, ui.placeholderPeaks(msg.id, VOICE_BARS));
+    }
+}
+
+/**
+ * Attach a voice message to its player, decrypting first when needed. The
+ * <audio> element is the engine and stays hidden; `parts` is the visible
+ * player from voice-ui.js.
+ */
+async function fillVoiceContent(player, status, msg, parts) {
     if (!player) return;
 
     if (!msg.encrypted) {
         player.src = msg.content;
         if (status) status.textContent = '';
+        drawVoiceWaveform(parts, dataUrlBytes(msg.content), msg);
         return;
     }
 
@@ -191,6 +245,7 @@ async function fillVoiceContent(player, status, msg) {
 
     if (opened.status !== 'ok') {
         player.remove();
+        if (parts) parts.root.remove();
         if (status) {
             status.textContent = OPEN_NOTICES[opened.status]
                 || 'Voice message - cannot be opened with the current key pair.';
@@ -205,6 +260,7 @@ async function fillVoiceContent(player, status, msg) {
     state.voiceObjectUrls.push(objectUrl);
     player.src = objectUrl;
     if (status) status.textContent = '';
+    drawVoiceWaveform(parts, bytes, msg);
 
     // Recordings made before the sender's browser agreed on a common container
     // can arrive in one this engine cannot decode -- an iPhone receiving
@@ -212,6 +268,7 @@ async function fillVoiceContent(player, status, msg) {
     // silently there: it loads, shows controls and plays nothing. Say so, and
     // hand over the file so the recording is not simply lost.
     if (player.canPlayType(mime) === '' && status) {
+        if (parts) parts.root.remove();
         status.textContent = 'This browser cannot play ' + mime + '. ';
         status.classList.add('undecryptable');
         const link = document.createElement('a');
@@ -526,7 +583,8 @@ export function displayMessage(msg) {
         messageDiv.innerHTML = `
             <div class="message-username">${isSent ? 'You' : sanitizedUsername}</div>
             <div class="message-content">
-                <audio class="voice-player" controls preload="metadata"></audio>
+                <span class="voice-note-slot"></span>
+                <audio class="voice-player" preload="metadata" hidden></audio>
                 <span class="voice-status"></span>
             </div>
             <div class="message-meta">
@@ -544,10 +602,18 @@ export function displayMessage(msg) {
             <div class="message-reactions"></div>
         `;
 
+        // The browser's own <audio controls> looked different everywhere and
+        // showed "0:00 / Infinity" for a fresh WebM recording. voice-ui.js
+        // draws the player; the <audio> element underneath plays the sound.
+        const voicePlayer = messageDiv.querySelector('.voice-player');
+        const voiceParts = window.revealxVoiceUI.buildVoicePlayer(document, { bars: VOICE_BARS });
+        messageDiv.querySelector('.voice-note-slot').replaceWith(voiceParts.root);
+        window.revealxVoiceUI.attachVoicePlayer(voiceParts, voicePlayer);
         fillVoiceContent(
-            messageDiv.querySelector('.voice-player'),
+            voicePlayer,
             messageDiv.querySelector('.voice-status'),
-            msg
+            msg,
+            voiceParts
         );
 
         // Delete sits in a per-message menu (dialogs.js) rather than as a bare

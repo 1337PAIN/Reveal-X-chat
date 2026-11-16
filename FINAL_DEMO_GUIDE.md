@@ -26,7 +26,7 @@ The `content` column is base64 ciphertext. The server cannot read it.
 
 ### 2. Send a voice note
 
-Click the 🎤 button, speak, then click ⏹ to send. The recipient gets a playable audio message with a padlock.
+Click the 🎤 button and speak: the composer becomes a recording bar with a red dot, the clock against the one-minute cap and a live level meter. Click the send arrow to send it, or the bin to discard it. The recipient gets a voice note with a play button, a waveform drawn from the recording that fills as it plays, its length, and a 1×/1.5×/2× speed button, plus the padlock chip.
 
 **Record from a device that has a microphone.** The server PC has none: on it the app says "No microphone was found", and the browser shows no permission prompt because there is nothing to ask about. Use a laptop or phone for this step, through the tunnel address.
 
@@ -217,7 +217,7 @@ Visual Cryptography + E2EE + HMAC Integrity + ML Tamper Detection + Reconstructi
 pytest
 ```
 
-1082 server tests (8 skip by design) and, with `node --test "tests/js/*.test.mjs"`, 209 browser tests; `pytest -m e2e` adds 23 tests that drive the app in Chromium and scan every page with axe-core. They cover VC round-trips and share secrecy, the browser-side split and everything the server refuses (the image itself, a plaintext Share 2, anything not plausibly a share), tamper detection and its fallback scorer, metrics, HMAC integrity across all seven attacks, one-time share access including eight requests racing for one share, deletion, retention, SQL portability, the HTTP endpoints and every Socket.IO handler, E2EE protocol v4 (a fresh key per message for sender-side forward secrecy, freshness, a replay check that survives a reload, v1 to v3 refused) and key pinning, group events refused while groups are off, every vendored library's hash and version, Firebase token verification, the TOTP second factor and its sealing at rest, the ONNX export, and the interface's accessibility rules.
+1088 server tests (8 skip by design) and, with `node --test "tests/js/*.test.mjs"`, 225 browser tests; `pytest -m e2e` adds 27 tests that drive the app in Chromium and scan every page with axe-core. They cover VC round-trips and share secrecy, the browser-side split and everything the server refuses (the image itself, a plaintext Share 2, anything not plausibly a share), tamper detection and its fallback scorer, metrics, HMAC integrity across all seven attacks, one-time share access including eight requests racing for one share, deletion, retention, SQL portability, the HTTP endpoints and every Socket.IO handler, E2EE protocol v4 (a fresh key per message for sender-side forward secrecy, freshness, a replay check that survives a reload, v1 to v3 refused) and key pinning, group events refused while groups are off, every vendored library's hash and version, Firebase token verification, the TOTP second factor and its sealing at rest, the ONNX export, and the interface's accessibility rules.
 
 The ONNX tests check that the exported model matches scikit-learn on clean shares and all seven attacks, never flips a verdict, still reproduces the model's real `noise` blind spot, and that every browser asset is actually shipped and served — a missing file would silently disable in-browser detection without breaking anything visible.
 

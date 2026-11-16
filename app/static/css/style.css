@@ -1895,13 +1895,119 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     font-size: 11px;
 }
 
-/* Voice messages */
+/* ==========================================================================
+   Voice notes
+   ==========================================================================
+   The browser's <audio controls> was the player: grey, different in every
+   browser, and "0:00 / Infinity" for a fresh WebM recording. voice-ui.js now
+   draws a play button, a waveform from the recording itself, the time and a
+   speed button; the <audio> element stays underneath, hidden.
 
-.voice-player {
-    display: block;
-    width: 240px;
+   Bar heights and progress are classes (lv1-lv8, .played), never inline
+   styles. The play button uses the primary buttons' opaque indigo with
+   white, measured at 8.0:1 and above in both themes (glass.css).
+*/
+
+.voice-player[hidden] { display: none; }
+
+.voice-note {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     max-width: 100%;
+    padding: 2px 0;
 }
+
+.voice-play {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, .3);
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3730a3, #1e40af);
+    color: #fff;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.voice-play .icon { width: 18px; height: 18px; }
+
+.voice-play:hover { box-shadow: 0 6px 18px rgba(55, 48, 163, .35); }
+.voice-play:active { transform: scale(.94); }
+
+.voice-play:focus-visible,
+.voice-speed:focus-visible,
+.voice-wave:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.voice-wave {
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+/* Fixed-width bars, as a waveform is drawn: stretched to fill, they became
+   hairlines in a wide bubble and slabs in the recording bar. */
+.voice-bar {
+    flex: 0 0 3px;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--text-secondary);
+    opacity: .45;
+    transition: opacity .12s linear, background-color .12s linear;
+}
+
+.voice-wave .voice-bar.played {
+    background: var(--accent);
+    opacity: 1;
+}
+
+.voice-bar.lv1 { height: 12%; }
+.voice-bar.lv2 { height: 22%; }
+.voice-bar.lv3 { height: 33%; }
+.voice-bar.lv4 { height: 45%; }
+.voice-bar.lv5 { height: 57%; }
+.voice-bar.lv6 { height: 70%; }
+.voice-bar.lv7 { height: 84%; }
+.voice-bar.lv8 { height: 100%; }
+
+.voice-time {
+    flex: 0 0 auto;
+    min-width: 34px;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.voice-speed {
+    flex: 0 0 auto;
+    min-width: 40px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+
+.voice-speed:hover { border-color: var(--glass-border-strong); }
 
 .voice-status {
     display: block;
@@ -1914,19 +2020,24 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
 
 .voice-status.undecryptable { font-style: italic; }
 
+/* While recording the mic button is Send: the primary indigo, white glyph.
+   The pulse moved to the red dot in the recording bar, where it means
+   "recording" without making the button that sends hard to read. */
 #voiceBtn.recording {
-    background: var(--danger);
+    background: linear-gradient(135deg, #3730a3, #1e40af);
+    border-color: rgba(255, 255, 255, .3);
     color: #fff;
-    animation: voice-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes voice-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .55; }
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .45; transform: scale(.82); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #voiceBtn.recording { animation: none; }
+    .voice-rec-dot { animation: none; }
+    .voice-bar,
+    .voice-play { transition: none; }
 
     /* The spinner cannot simply stop. It runs on the Reconstruct button,
        which is the slowest thing the app does, and it is the only signal
@@ -2079,7 +2190,77 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
 }
 
 .voice-timer.hidden,
-.voice-cancel.hidden {
+.voice-cancel.hidden,
+.voice-recorder.hidden {
+    display: none;
+}
+
+/* The recording bar: discard, a pulsing dot, the clock against the
+   60-second cap, and the live level of the microphone. */
+.voice-recorder {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+}
+
+.voice-rec-dot {
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--danger);
+    animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+.voice-recorder .voice-timer {
+    min-width: 0;
+    padding: 0;
+}
+
+.voice-levels-host {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+}
+
+.voice-levels {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    /* Newest on the right; on a narrow bar the oldest are cut off the left. */
+    justify-content: flex-end;
+    gap: 3px;
+    overflow: hidden;
+}
+
+.voice-levels .voice-bar {
+    background: var(--danger);
+    opacity: .85;
+}
+
+.voice-rec-cap {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+}
+
+/* While recording, the controls that do nothing for a voice note step
+   aside, at every width: it is a different mode of the composer, not a
+   squeeze of the old one. */
+.message-input.is-recording #shareImageBtn,
+.message-input.is-recording #messageInput,
+.message-input.is-recording #composerCounter,
+.message-input.is-recording #sendBtn {
     display: none;
 }
 
@@ -2194,10 +2375,16 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
         display: none;
     }
 
-    .message-input.is-recording .voice-timer {
-        flex: 1 1 auto;
-        justify-content: center;
+    /* The cap is the first thing to go on a narrow screen; the clock stays. */
+    .message-input.is-recording .voice-rec-cap {
+        display: none;
     }
+
+    /* The whole waveform has to fit, or progress runs off its visible end:
+       36 bars at 2px with 1px gaps is 107px, which a phone bubble has. */
+    .voice-note { gap: 8px; }
+    .voice-wave { gap: 1px; }
+    .voice-wave .voice-bar { flex-basis: 2px; width: 2px; }
 }
 
 

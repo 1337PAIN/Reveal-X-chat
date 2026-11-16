@@ -20,7 +20,8 @@ ICONS = (JS / 'icons.js').read_text(encoding='utf-8')
 EMOJI = re.compile(r'[←-⯿☀-➿\U0001F300-\U0001FAFF]')
 
 NAMES = ['settings', 'rebuild', 'moon', 'sun', 'camera', 'mic', 'stop', 'close',
-         'key', 'react', 'more', 'lock']
+         'key', 'react', 'more', 'lock',
+         'play', 'pause', 'send', 'trash']
 
 
 def sprite():
@@ -46,7 +47,7 @@ def test_the_sprite_is_hidden_from_everyone():
     ('themeToggle', 'moon'),
     ('shareImageBtn', 'camera'),
     ('voiceBtn', 'mic'),
-    ('voiceCancelBtn', 'close'),
+    ('voiceCancelBtn', 'trash'),   # discarding a recording, not closing a dialog
 ])
 def test_controls_point_into_the_sprite(element_id, name):
     body = re.search(rf'<button[^>]*\bid="{element_id}"[^>]*>(.*?)</button>', INDEX, re.S).group(1)
@@ -73,7 +74,7 @@ def test_script_built_icons_use_the_helper():
     render = (JS / 'chat' / 'render.js').read_text(encoding='utf-8')
     assert "revealxIcons.icon(document, 'key')" in shell
     assert "revealxIcons.setIcon(" in settings and "'sun'" in settings
-    assert "revealxIcons.icon(document, recording ? 'stop' : 'mic')" in messaging
+    assert "revealxIcons.icon(document, recording ? 'send' : 'mic')" in messaging
     for glyph in ('☺', '⋯', '\U0001F511', '\U0001F319', '☀', '⏹', '\U0001F3A4'):
         for source in (shell, settings, messaging, render):
             assert glyph not in source

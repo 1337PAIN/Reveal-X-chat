@@ -405,8 +405,56 @@ let voiceCancelled = false;
 const voiceBtn = document.getElementById('voiceBtn');
 const voiceCancelBtn = document.getElementById('voiceCancelBtn');
 const voiceTimerEl = document.getElementById('voiceTimer');
+const voiceRecorderBar = document.getElementById('voiceRecorder');
+const voiceLevelsHost = document.getElementById('voiceLevels');
 if (voiceBtn) voiceBtn.addEventListener('click', toggleVoiceRecording);
 if (voiceCancelBtn) voiceCancelBtn.addEventListener('click', cancelVoiceRecording);
+
+// The live level meter in the recording bar: the shape of what is being
+// recorded, so a silent or muted microphone is obvious before sending.
+const levelMeter = voiceLevelsHost ? window.revealxVoiceUI.buildLevelMeter(document, 120) : null;
+if (levelMeter) voiceLevelsHost.append(levelMeter.root);
+let meterContext = null;
+let meterFrame = 0;
+let voiceWarned = false;
+
+function startLevelMeter(stream) {
+    if (!levelMeter) return;
+    levelMeter.reset();
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) return;
+    try {
+        meterContext = new Context();
+        const analyser = meterContext.createAnalyser();
+        analyser.fftSize = 512;
+        meterContext.createMediaStreamSource(stream).connect(analyser);
+        const buffer = new Uint8Array(analyser.fftSize);
+        let last = 0;
+        const draw = (now) => {
+            // About eleven readings a second: enough to look live, few enough
+            // that the bars do not shimmer.
+            if (now - last > 90) {
+                analyser.getByteTimeDomainData(buffer);
+                levelMeter.push(window.revealxVoiceUI.levelFromTimeDomain(buffer));
+                last = now;
+            }
+            meterFrame = requestAnimationFrame(draw);
+        };
+        meterFrame = requestAnimationFrame(draw);
+    } catch (error) {
+        // The meter is a nicety; recording works without it.
+        stopLevelMeter();
+    }
+}
+
+function stopLevelMeter() {
+    cancelAnimationFrame(meterFrame);
+    meterFrame = 0;
+    if (meterContext) {
+        meterContext.close().catch(() => {});
+        meterContext = null;
+    }
+}
 
 /**
  * Container to record in.
@@ -437,28 +485,28 @@ function voiceRecordingActive() {
 }
 
 function formatVoiceClock(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${String(s).padStart(2, '0')}`;
+    return window.revealxVoiceUI.formatClock(seconds);
 }
 
 function setVoiceButtonState(recording) {
     if (voiceBtn) {
         voiceBtn.classList.toggle('recording', recording);
         // The icon is decoration (aria-hidden); the name carries the meaning.
-        voiceBtn.replaceChildren(window.revealxIcons.icon(document, recording ? 'stop' : 'mic'));
-        voiceBtn.setAttribute('aria-label', recording ? 'Stop and send recording' : 'Record a voice message');
-        // The composer carries the state so CSS can lay the row out for it: on
-        // a phone the clock and the discard button do not fit beside a text
-        // field, and the field is the one thing that is no use while recording.
+        // While recording the mic button becomes Send: one press stops and
+        // sends, as in the messaging apps people already know.
+        voiceBtn.replaceChildren(window.revealxIcons.icon(document, recording ? 'send' : 'mic'));
+        voiceBtn.setAttribute('aria-label', recording ? 'Send voice message' : 'Record a voice message');
+        // The composer carries the state so CSS can lay the row out for it:
+        // the text field, camera and Send are no use while recording, so the
+        // row becomes discard, the recording bar and send.
         const composer = voiceBtn.closest('.message-input');
         if (composer) composer.classList.toggle('is-recording', recording);
     }
     if (voiceCancelBtn) voiceCancelBtn.classList.toggle('hidden', !recording);
-    if (voiceTimerEl) {
-        voiceTimerEl.classList.toggle('hidden', !recording);
-        if (!recording) voiceTimerEl.textContent = '';
-    }
+    if (voiceRecorderBar) voiceRecorderBar.classList.toggle('hidden', !recording);
+    if (voiceTimerEl && !recording) voiceTimerEl.textContent = '';
+    if (!recording) stopLevelMeter();
+    voiceWarned = false;
 
     clearInterval(voiceTicker);
     voiceTicker = null;
@@ -473,6 +521,12 @@ function setVoiceButtonState(recording) {
         if (voiceTimerEl) {
             voiceTimerEl.textContent = formatVoiceClock(elapsed);
             voiceTimerEl.classList.toggle('ending', left <= 10);
+        }
+        // Said once rather than every tick: a timer read aloud each second
+        // drowns out everything else.
+        if (left <= 10 && !voiceWarned) {
+            voiceWarned = true;
+            announceToScreenReader('Ten seconds of recording left.');
         }
     };
     tick();
@@ -533,6 +587,7 @@ async function toggleVoiceRecording() {
 
     voiceRecorder.addEventListener('stop', async () => {
         clearTimeout(voiceStopTimer);
+        stopLevelMeter();
         stream.getTracks().forEach(track => track.stop());
         setVoiceButtonState(false);
 
@@ -548,7 +603,8 @@ async function toggleVoiceRecording() {
 
     voiceRecorder.start();
     setVoiceButtonState(true);
-    announceToScreenReader('Recording voice message. Click again to send.');
+    startLevelMeter(stream);
+    announceToScreenReader('Recording voice message. Press Send voice message to send it, or Discard recording.');
 
     // Hard cap so a forgotten recording cannot exceed the server size limit.
     voiceStopTimer = setTimeout(() => {
