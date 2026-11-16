@@ -33,7 +33,7 @@ registerLate({ closeImagePreview });
 
 shareImageBtn.addEventListener('click', () => {
     if (!state.selectedRecipientId) {
-        window.revealxDialogs.toast('Select an account first.');
+        window.revealxDialogs.toast('Select a contact first.');
         return;
     }
     imageInput.click();

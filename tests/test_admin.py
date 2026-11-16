@@ -146,8 +146,11 @@ def test_pending_and_disabled_accounts_are_not_chat_partners(store):
     store.create_user('waiting', 'correct-horse-2', account_state='pending')
     blocked, _ = store.create_user('blocked', 'correct-horse-3')
     store.set_account_state(blocked['id'], 'disabled')
+    # Asked as an account that has all three as contacts (conftest), so only
+    # the account state decides.
+    viewer, _ = store.create_user('viewer', 'correct-horse-4')
 
-    names = [u['username'] for u in store.get_users_list()]
+    names = [u['username'] for u in store.get_users_list(viewer['id'])]
     assert 'active_one' in names
     assert 'waiting' not in names
     assert 'blocked' not in names

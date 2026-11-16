@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from e2e_helpers import ALICE, BOB, new_page, shot, sign_in
+from e2e_helpers import ALICE, BOB, CAROL, new_page, shot, sign_in
 
 pytestmark = pytest.mark.e2e
 
@@ -135,6 +135,37 @@ def test_image_share(browser, server, width, theme, tmp_path):
     finally:
         alice.context.close()
         bob.context.close()
+
+
+@pytest.mark.parametrize('theme', THEMES)
+@pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
+def test_adding_a_contact(browser, server, width, theme):
+    """Carol is nobody's contact. Alice adds her by username; Carol sees the
+    request, is scanned by axe with it showing, and accepts; then each is in
+    the other's list -- and Bob, never added, is not in Carol's."""
+    alice = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, ALICE)
+    carol = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, CAROL)
+    try:
+        assert carol.locator('#usersList button').count() == 0
+        for page in (alice, carol):
+            if width == 'phone':
+                page.click('#sidebarToggle')
+        alice.fill('#addContactInput', '@' + CAROL[0].upper())
+        alice.click('#addContactBtn')
+        alice.locator('#contactRequestsList', has_text='waiting for them to accept').wait_for()
+
+        request = carol.locator('#contactRequestsList li', has_text=ALICE[0])
+        request.wait_for()
+        check(carol, f'contact-request-{width}-{theme}')
+        request.get_by_role('button', name=f'Accept {ALICE[0]}').click()
+
+        carol.locator('#usersList button', has_text=ALICE[0]).wait_for()
+        alice.locator('#usersList button', has_text=CAROL[0]).wait_for()
+        assert carol.locator('#usersList button', has_text=BOB[0]).count() == 0
+        assert carol.locator('#contactRequests').is_hidden()
+    finally:
+        alice.context.close()
+        carol.context.close()
 
 
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))

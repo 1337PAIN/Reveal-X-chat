@@ -594,10 +594,166 @@ class ChatRoom:
         """The subset of `user_ids` that are active accounts."""
         return {uid for uid in (user_ids or ()) if self.is_active_user(uid)}
 
-    def get_users_list(self, current_user_id=None):
-        """The chat roster for one signed-in account.
+    # ------------------------------------------------------------------
+    # Contacts (migration 11)
+    # ------------------------------------------------------------------
+    #
+    # Every account used to see and message every other. Now people add each
+    # other by exact username: the one asked accepts or declines, and until
+    # they accept neither can message the other or see them in their list.
+    # One row per pair, lower id first; see m011_contacts.
 
-        Two kinds of account are filtered out:
+    @staticmethod
+    def _pair(a, b):
+        return (a, b) if a < b else (b, a)
+
+    def _contact_row(self, db, a, b):
+        low, high = self._pair(a, b)
+        row = db.execute(
+            "SELECT requested_by, status FROM contacts WHERE user_low = ? AND user_high = ?",
+            (low, high)).fetchone()
+        return dict(row) if row else None
+
+    def are_contacts(self, a, b):
+        if not a or not b or a == b:
+            return False
+        with self._connect() as db:
+            row = self._contact_row(db, a, b)
+        return bool(row) and row['status'] == 'accepted'
+
+    def can_message(self, sender_id, recipient_id):
+        """May this account send to that one: active, and contacts."""
+        return self.is_active_user(recipient_id) and self.are_contacts(sender_id, recipient_id)
+
+    def make_contacts(self, a, b):
+        """Make two accounts accepted contacts outright (no request)."""
+        if not a or not b or a == b:
+            return
+        low, high = self._pair(a, b)
+        now = utcnow().isoformat()
+        with self._connect() as db:
+            row = self._contact_row(db, a, b)
+            if row:
+                db.execute(
+                    "UPDATE contacts SET status = 'accepted', accepted_at = ? WHERE user_low = ? AND user_high = ?",
+                    (now, low, high))
+            else:
+                db.execute(
+                    "INSERT INTO contacts (user_low, user_high, requested_by, status, created_at, accepted_at) "
+                    "VALUES (?, ?, ?, 'accepted', ?, ?)", (low, high, a, now, now))
+
+    def find_addable(self, requester_id, username):
+        """The account a contact request may go to, or None.
+
+        Pending, disabled and administrator accounts are not addable by an
+        ordinary user, and are reported exactly as a name nobody has, so the
+        field cannot be used to learn which of them exist.
+        """
+        name = (username or '').strip().lstrip('@').strip()
+        if not name or len(name) > 64:
+            return None
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT id, username, profile_image, role, account_state FROM users WHERE LOWER(username) = LOWER(?)",
+                (name,)).fetchone()
+        if not row or (row['account_state'] or 'active') != 'active':
+            return None
+        if self.role_rank(row['role']) >= 1 and not self.is_admin(requester_id):
+            return None
+        return {'id': row['id'], 'username': row['username'], 'profile_image': row['profile_image'] or ''}
+
+    def request_contact(self, requester_id, username):
+        """Ask to add someone by username.
+
+        Returns (status, other, error): status is 'requested',
+        'already_requested', 'accepted' (they had already asked you, so this
+        answers yes) or 'already_contacts'; on failure status is None and
+        error is 'not_found' or 'self'.
+        """
+        other = self.find_addable(requester_id, username)
+        if not other:
+            return None, None, 'not_found'
+        if other['id'] == requester_id:
+            return None, None, 'self'
+        low, high = self._pair(requester_id, other['id'])
+        now = utcnow().isoformat()
+        with self._connect() as db:
+            row = self._contact_row(db, requester_id, other['id'])
+            if row is None:
+                db.execute(
+                    "INSERT INTO contacts (user_low, user_high, requested_by, status, created_at) "
+                    "VALUES (?, ?, ?, 'pending', ?)", (low, high, requester_id, now))
+                return 'requested', other, None
+            if row['status'] == 'accepted':
+                return 'already_contacts', other, None
+            if row['requested_by'] == requester_id:
+                return 'already_requested', other, None
+            db.execute(
+                "UPDATE contacts SET status = 'accepted', accepted_at = ? WHERE user_low = ? AND user_high = ?",
+                (now, low, high))
+            return 'accepted', other, None
+
+    def respond_contact(self, user_id, requester_id, accept):
+        """Accept or decline a request someone else made. Declining leaves no
+        row, so it can be asked again later. Returns True if a request was
+        answered."""
+        if not user_id or not requester_id or user_id == requester_id:
+            return False
+        low, high = self._pair(user_id, requester_id)
+        with self._connect() as db:
+            row = self._contact_row(db, user_id, requester_id)
+            if not row or row['status'] != 'pending' or row['requested_by'] != requester_id:
+                return False
+            if accept:
+                db.execute(
+                    "UPDATE contacts SET status = 'accepted', accepted_at = ? WHERE user_low = ? AND user_high = ?",
+                    (utcnow().isoformat(), low, high))
+            else:
+                db.execute("DELETE FROM contacts WHERE user_low = ? AND user_high = ?", (low, high))
+        return True
+
+    def remove_contact(self, user_id, other_id):
+        """End a contact, or withdraw a request either way. True if there was one."""
+        if not user_id or not other_id or user_id == other_id:
+            return False
+        low, high = self._pair(user_id, other_id)
+        with self._connect() as db:
+            if not self._contact_row(db, user_id, other_id):
+                return False
+            db.execute("DELETE FROM contacts WHERE user_low = ? AND user_high = ?", (low, high))
+        return True
+
+    def contact_ids(self, user_id):
+        """Ids of this account's accepted contacts."""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT user_low, user_high FROM contacts "
+                "WHERE status = 'accepted' AND (user_low = ? OR user_high = ?)",
+                (user_id, user_id)).fetchall()
+        return {row['user_high'] if row['user_low'] == user_id else row['user_low'] for row in rows}
+
+    def contact_requests(self, user_id):
+        """Pending requests to and from this account, active accounts only:
+        {'incoming': [...], 'outgoing': [...]}, each {id, username, profile_image}."""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT c.requested_by, u.id, u.username, u.profile_image FROM contacts c "
+                "JOIN users u ON u.id = CASE WHEN c.user_low = ? THEN c.user_high ELSE c.user_low END "
+                "WHERE c.status = 'pending' AND (c.user_low = ? OR c.user_high = ?) "
+                "AND u.account_state = 'active' ORDER BY LOWER(u.username)",
+                (user_id, user_id, user_id)).fetchall()
+        result = {'incoming': [], 'outgoing': []}
+        for row in rows:
+            entry = {'id': row['id'], 'username': row['username'], 'profile_image': row['profile_image'] or ''}
+            result['outgoing' if row['requested_by'] == user_id else 'incoming'].append(entry)
+        return result
+
+    def get_users_list(self, current_user_id=None):
+        """The chat roster for one signed-in account: its accepted contacts.
+
+        Only people this account has added, and who accepted, are listed
+        (contacts, above) -- not everyone with an account. Of those, two
+        kinds are still filtered out:
 
         * Not `active`. A request that has not been approved must not be
           visible to anyone but an admin, and a disabled account should
@@ -607,9 +763,11 @@ class ChatRoom:
           every user could see it and watch it come online, which is both
           noise and a small piece of information nobody needs.
 
-        Admins still see everyone, so the roster stays useful to them.
+        Admins manage accounts from the admin panel; their chat roster is
+        their contacts like everyone else's.
         """
         viewer_is_admin = bool(current_user_id) and self.is_admin(current_user_id)
+        contacts = self.contact_ids(current_user_id) if current_user_id else set()
 
         with self._connect() as db:
             rows = db.execute("""
@@ -620,7 +778,7 @@ class ChatRoom:
         online_ids = state.store().online_user_ids()
         users = []
         for row in rows:
-            if row['id'] == current_user_id:
+            if row['id'] == current_user_id or row['id'] not in contacts:
                 continue
             if not viewer_is_admin and self.role_rank(row['role']) >= 1:
                 continue
@@ -894,6 +1052,9 @@ class ChatRoom:
         # Checked here as well as in the handlers, so a future send path that
         # forgets cannot write a row for an account that is not active.
         if not self.is_active_user(recipient_id):
+            return None
+        # And only between contacts, for the same reason.
+        if not self.are_contacts(sender_id, recipient_id):
             return None
 
         created_at = utcnow().isoformat()
@@ -1836,6 +1997,7 @@ class ChatRoom:
         with self._connect() as db:
             db.execute("DELETE FROM resume_tokens WHERE user_id = ?", (user_id,))
             db.execute("DELETE FROM group_members WHERE user_id = ?", (user_id,))
+            db.execute("DELETE FROM contacts WHERE user_low = ? OR user_high = ?", (user_id, user_id))
             db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         return True, None
 

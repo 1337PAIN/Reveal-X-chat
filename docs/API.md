@@ -1,6 +1,6 @@
 # API reference
 
-Everything the server exposes: 9 HTTP routes and 44 Socket.IO events, with the
+Everything the server exposes: 9 HTTP routes and 47 Socket.IO events, with the
 fields each one actually reads. Extracted from `app/handlers/`, not written from
 memory.
 
@@ -141,6 +141,39 @@ cannot quietly remove the second factor. Confirming enrolment and disabling
 both draw on the sign-in throttle (8 per account, 50 per address, 15 minutes);
 past it they answer `settings_error` with "Too many failed attempts" and do not
 check the code at all.
+
+### Contacts
+
+| Event | In | Out |
+| --- | --- | --- |
+| `contact_request` | `username` | `contact_result`, `contacts_updated` |
+| `contact_respond` | `user_id` (who asked), `accept` | `contacts_updated`, `users_updated` |
+| `contact_remove` | `user_id` | `contacts_updated`, `users_updated` |
+
+You see and message only your contacts. `contact_request` looks the name up
+exactly (case, surrounding spaces and a leading `@` are forgiven) and creates
+a pending request; the other person's sessions get `contacts_updated` with it
+under `incoming`. `contact_result` answers the asker: `{ok: true, status,
+username}` where `status` is `requested`, `already_requested`, `accepted`
+(they had already asked you, so this said yes) or `already_contacts`; or
+`{ok: false, error}`. A name nobody has, and a pending, disabled or
+administrator account, all answer the same "No account with that username",
+so the field does not reveal which of those exist. Requests share the send
+limiter: 10 at once, then one every 30 seconds.
+
+`contact_respond` is only accepted from the person who was asked; declining
+deletes the request, so it can be made again later. `contact_remove` ends a
+contact or withdraws a request, for both people. `contacts_updated` carries
+`{incoming: [...], outgoing: [...]}`, each `{id, username, profile_image}`,
+and is also sent on sign-in.
+
+Every send path (`send_message`, `send_voice`, `send_share`,
+`forward_message`), `typing` and `select_chat` require the two accounts to be
+contacts: sends answer `message_error` / `image_error` with "You can only
+message your contacts", typing is dropped, and `select_chat` returns an empty
+history. The storage layer refuses a message between non-contacts as well.
+Conversations that existed before contacts (migration 11) were kept: each pair
+with a direct message between them started as contacts.
 
 ### Messaging
 
@@ -293,6 +326,7 @@ tested for refusal from a non-admin and from an anonymous socket
 `new_message`, `users_updated`, `chat_history`, `message_reactions`,
 `message_deleted`, `share_revoked`, `profile_updated`, `public_key_registered`,
 `totp_state`, `totp_enrolment`, `totp_required`, `admin_accounts`, `admin_ok`,
+`contacts_updated`, `contact_result`,
 `force_signed_out`, `auth_success`, `auth_required`, and the error channels `auth_error`,
 `admin_error`, `settings_error`, `message_error`, `image_error`, `totp_error`.
 

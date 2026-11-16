@@ -65,6 +65,9 @@ def handle_send_share(data):
     if not chat_room.is_active_user(recipient_id):
         emit('image_error', {'error': 'Select a user first'})
         return
+    if not chat_room.are_contacts(current_user['id'], recipient_id):
+        emit('image_error', {'error': NOT_A_CONTACT})
+        return
     if not _take_send_token(current_user['id'], 'image'):
         emit('image_error', {'error': SEND_TOO_FAST})
         return

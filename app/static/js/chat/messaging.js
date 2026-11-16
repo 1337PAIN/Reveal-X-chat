@@ -548,7 +548,7 @@ async function toggleVoiceRecording() {
     }
 
     if (!state.selectedRecipientId) {
-        window.revealxDialogs.toast('Select an account first.');
+        window.revealxDialogs.toast('Select a contact first.');
         return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {

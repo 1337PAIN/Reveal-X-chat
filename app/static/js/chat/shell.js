@@ -113,7 +113,7 @@ function showWelcome() {
         <div class="welcome-message">
             <div class="welcome-icon">RX</div>
             <h2>Private Secure Chat</h2>
-            <p>Select an account to start E2E Encrypted sharing</p>
+            <p>Select a contact to start an end-to-end encrypted chat</p>
             <div class="features">
                 <div class="feature"><span>E2EE</span> Private Chat</div>
                 <div class="feature"><span>XOR</span> Visual Shares</div>
@@ -175,7 +175,7 @@ function closeSidebar(restoreFocus = false) {
     sidebarOverlay.classList.remove('active');
     sidebarToggle.classList.remove('active');
     sidebarToggle.setAttribute('aria-expanded', 'false');
-    sidebarToggle.setAttribute('aria-label', 'Open accounts');
+    sidebarToggle.setAttribute('aria-label', 'Open contacts');
     document.removeEventListener('keydown', trapSidebarFocus, true);
 
     if (restoreFocus && wasOpen && sidebarIsDrawer()) sidebarToggle.focus();
@@ -186,7 +186,7 @@ function openSidebar() {
     sidebarOverlay.classList.add('active');
     sidebarToggle.classList.add('active');
     sidebarToggle.setAttribute('aria-expanded', 'true');
-    sidebarToggle.setAttribute('aria-label', 'Close accounts');
+    sidebarToggle.setAttribute('aria-label', 'Close contacts');
 
     if (!sidebarIsDrawer()) return;
     document.addEventListener('keydown', trapSidebarFocus, true);

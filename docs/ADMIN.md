@@ -101,7 +101,7 @@ requests.
 | **Approve** | admin+ | `pending` → `active`. The account can now sign in. |
 | **Reject** | admin+ | Deletes the request outright. |
 | **Create** | admin+ | Makes an account that is `active` immediately. Creating it *as an admin* is superadmin-only. |
-| **Make admin / Demote** | superadmin | Promotes a user to admin, or demotes one back. Ends their session, because the roster they may see depends on their rank. |
+| **Make admin / Demote** | superadmin | Promotes a user to admin, or demotes one back. Ends their session, because what they may do depends on their rank. |
 | **Disable** | admin+ | `active` → `disabled`. Blocks sign-in and **ends any live session**, but keeps the account and its history. Reversible. |
 | **Enable** | admin+ | `disabled` → `active`. |
 | **Reset password** | admin+ | Sets a new password and **ends any live session**. |

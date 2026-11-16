@@ -92,6 +92,7 @@ Full numbers, the tool, and its known limits: [docs/ACCESSIBILITY.md](docs/ACCES
 
 - User registration and login.
 - Private one-to-one messaging with Flask-SocketIO.
+- **Contacts, added by username.** The sidebar lists your contacts, not every account. Type someone's exact username under *Contacts* and press **Add**; they get a request to **Accept** or **Decline** (and you can **Cancel** it). Until they accept, neither of you can message the other, see the other in your list, or see whether they are online -- and the server enforces it on every send, typing notice and chat history, not only in the list. **Remove contact** in the chat header ends it for both. A name nobody has and a pending, disabled or administrator account all answer "No account with that username", and lookups are rate limited, so the field cannot be used to list accounts. People who had already chatted before this change were kept as contacts (migration 11). See [docs/API.md](docs/API.md#contacts).
 - Group conversations exist on the server only, with **no client**, and are **off by default**: every `group_*` event is refused unless `REVEALX_GROUPS=true` is set (see [docs/API.md](docs/API.md#groups)). No page in the app creates or opens a group.
 - **End-to-end encrypted text and voice messages** (see section 2).
 - Voice notes recorded in-browser with `MediaRecorder`, capped at 60 seconds and 2 MB. Recording turns the composer into a recording bar -- discard, a pulsing dot, the clock against the one-minute cap, a live microphone level, and send -- and a voice note plays in a chat-style player: play/pause, a waveform drawn from the recording itself that fills as it plays (click or arrow keys to seek), the length (taken from the decoded audio, since a fresh WebM recording carries none), and a 1x/1.5x/2x speed button (`voice-ui.js`, [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md#voice-notes)). When the microphone cannot be opened the app says why -- no microphone connected, blocked for this site, blocked by the operating system, or in use by another app -- rather than "access denied" for all of them (`mic-errors.js`). A PC with no microphone gets no permission prompt at all, so it needs a device that has one.
@@ -513,8 +514,8 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 1092 server tests
-node --test "tests/js/*.test.mjs"   # 238 browser tests
+pytest                          # 1132 server tests
+node --test "tests/js/*.test.mjs"   # 246 browser tests
 ```
 
 Both run on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
@@ -528,9 +529,10 @@ leaves them out, so the counts above need no browser). Two people in two real
 Chromium contexts sign in, open a chat by keyboard, send text both ways and see
 the **E2EE** chip, send an image that is split in the browser, checked and
 reconstructed, revoke a share, lose and regain the server and watch the session
-resume, and get the blocking warning when a peer's key changes. axe-core then
+resume, get the blocking warning when a peer's key changes, add a contact by
+username and accept it, and remove one. axe-core then
 scans login, chat, settings, the image send dialog, a received share with its
-evidence open, and `/lab` at 1440 and 375 px in both themes with
+evidence open, a contact request, and `/lab` at 1440 and 375 px in both themes with
 the AAA contrast rule on, failing on any violation; and the vendored DOMPurify
 is run against XSS payloads in the page itself. Setup:
 `pip install -r requirements-dev.txt`, `python -m playwright install chromium`,
@@ -545,9 +547,9 @@ even imported, since importing it runs `init_db`), and the SQLite-only tests
 -- the WAL settings and the upgrades of historical SQLite files -- skip with
 a reason.
 
-**1092 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
+**1132 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
 
-**238 browser tests** run the shipped `app/static/js` files verbatim on Node's
+**246 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
 They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v4 reflection, associated-data, freshness and replay cases, the replay check surviving a reload, forward secrecy for the sender (her own reloaded key cannot open what she sent) and its documented limit on the recipient's side, sender authenticity against a forged message; key pinning and the safety number; the send policy that decides when plaintext is allowed; the browser-side visual cryptography split, its PNG codec and the end-to-end hash; and the shipped v1, v2 and v3 clients as fixtures, so their payloads are proven to be refused rather than decrypted), the escaping layer, the image share card's verdict rules (any failing check means "tampered", which copy each check describes, bad news opening its own evidence), and the service worker's request scoping.
 
@@ -574,7 +576,7 @@ python scripts/generate_feature_parity_fixture.py
 
 ### Chat demo (shows the feature working in a real application)
 
-1. Open two browsers and register two accounts.
+1. Open two browsers and register two accounts. In one, type the other's username under **Contacts** and press **Add**; in the other, press **Accept** on the request.
 2. Open the key manager (🔑) and show that both sides have exchanged real ECDH public keys, and that both screens show the same 60-digit safety number.
 3. Send a text message. Show in the database that only ciphertext is stored:
 
@@ -603,7 +605,7 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 | Document | What it covers |
 | --- | --- |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model: assets, adversaries, every control mapped to the code and test that holds it — and an explicit list of what is **not** defended |
-| [docs/API.md](docs/API.md) | All 9 HTTP routes and 44 Socket.IO events, with the fields each reads |
+| [docs/API.md](docs/API.md) | All 9 HTTP routes and 47 Socket.IO events, with the fields each reads |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, Render, and running it from Windows behind a tunnel |
 | [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) | Google sign-in, start to finish, including the failures and what each means |
 | [docs/ADMIN.md](docs/ADMIN.md) | Roles, the approval gate, and the rank rules |

@@ -3,7 +3,7 @@
     python tests/e2e/serve.py <data dir> <port>
 
 The store is pointed at <data dir> before any account exists, so these tests
-never touch app/data/reveal_x.db. Two active accounts are seeded; their
+never touch app/data/reveal_x.db. Three active accounts are seeded; their
 passwords are test values that exist only in this throwaway database.
 """
 
@@ -32,10 +32,15 @@ chat_room.shares_folder = str(DATA / 'shares')
 app.config['SHARES_FOLDER'] = str(DATA / 'shares')
 chat_room.init_db()
 
-ACCOUNTS = (('e2ealice', 'e2e-local-pass-a1'), ('e2ebob', 'e2e-local-pass-b2'))
+# Alice and Bob are contacts, as two people who had already chatted would be.
+# Carol is nobody's contact, for the add-by-username test.
+ACCOUNTS = (('e2ealice', 'e2e-local-pass-a1'), ('e2ebob', 'e2e-local-pass-b2'),
+            ('e2ecarol', 'e2e-local-pass-c3'))
 existing = {u['username'] for u in chat_room.list_accounts()}
 for name, password in ACCOUNTS:
     if name not in existing:
         chat_room.create_user(name, password)
+ids = {u['username']: u['id'] for u in chat_room.list_accounts()}
+chat_room.make_contacts(ids['e2ealice'], ids['e2ebob'])
 
 socketio.run(app, host='127.0.0.1', port=PORT, allow_unsafe_werkzeug=True)

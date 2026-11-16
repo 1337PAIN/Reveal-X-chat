@@ -14,6 +14,7 @@ import './utils.js';
 import './auth.js';
 import './reactions.js';
 import './presence.js';
+import './contacts.js';
 import './render.js';
 import './messaging.js';
 import './images.js';

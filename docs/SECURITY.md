@@ -171,6 +171,19 @@ is the entire point of having it.
   id. A member disabled after joining a group stays a member and gets nothing
   until reinstated. An inactive id is refused exactly as an unknown one is
   (`test_active_targets.py`).
+- **Only contacts can reach each other** (17 Nov 2026). The roster used to
+  list every active account and any of them could message any other. Now a
+  person is added by exact username and must accept; until then neither can
+  message the other, send a voice note, share an image, forward, see the
+  other typing, open the conversation's history, or see the other online.
+  Checked in each handler (`can_message`, `are_contacts`) and again in
+  `add_message`, so a send path that forgets is still refused. The lookup
+  answers a name nobody has, a pending or disabled account and an
+  administrator identically ("No account with that username"), and shares
+  the per-user send limiter (10 at once, then one every 30 s), so it is not
+  an enumeration oracle beyond what any "add by username" field must be:
+  someone who guesses a real username learns that it exists. Removing a
+  contact takes effect for both sides at once (`tests/test_contacts.py`).
 - **Group conversations are off by default.** They have no client -- no page
   in the app uses them -- so in a default deployment every `group_*` event is
   refused before it touches the database (`handlers/groups.py`,

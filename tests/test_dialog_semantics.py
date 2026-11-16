@@ -41,4 +41,4 @@ def test_every_close_button_names_what_it_closes(element_id):
 def test_the_sidebar_heading_is_an_h2():
     header = INDEX[INDEX.index('<div class="sidebar-header">'):]
     header = header[:header.index('</div>')]
-    assert '<h2>Accounts</h2>' in header
+    assert '<h2>Contacts</h2>' in header

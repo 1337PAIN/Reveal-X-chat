@@ -164,6 +164,50 @@ def m010_resume_tokens(room, db):
     db.execute("CREATE INDEX IF NOT EXISTS idx_resume_tokens_user ON resume_tokens(user_id)")
 
 
+def m011_contacts(room, db):
+    """Contacts: who may see and message whom.
+
+    One row per pair of accounts, the lower id first, so "are these two
+    contacts?" is one primary-key lookup whichever of them asks. `status` is
+    'pending' until the person who did not ask accepts, then 'accepted'.
+
+    Before this table every account could message every other. So nobody
+    loses a conversation they already had, each pair that has a direct
+    message between them starts as accepted contacts. Group messages are not
+    direct conversations and do not count. Done in Python rather than one
+    INSERT ... SELECT so it reads the same on SQLite and PostgreSQL.
+    """
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS contacts (
+            user_low TEXT NOT NULL,
+            user_high TEXT NOT NULL,
+            requested_by TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            accepted_at TEXT,
+            PRIMARY KEY (user_low, user_high)
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_contacts_high ON contacts(user_high)")
+
+    columns = room._existing_columns(db, 'messages')
+    direct = " AND group_id IS NULL" if 'group_id' in columns else ''
+    user_ids = {row["id"] for row in db.execute("SELECT id FROM users").fetchall()}
+    pairs = set()
+    for row in db.execute(f"SELECT DISTINCT sender_id, recipient_id FROM messages WHERE sender_id <> recipient_id{direct}").fetchall():
+        a, b = row['sender_id'], row['recipient_id']
+        if a in user_ids and b in user_ids:
+            pairs.add((min(a, b), max(a, b)))
+    now = utcnow().isoformat()
+    for low, high in sorted(pairs):
+        exists = db.execute("SELECT 1 FROM contacts WHERE user_low = ? AND user_high = ?", (low, high)).fetchone()
+        if not exists:
+            db.execute(
+                "INSERT INTO contacts (user_low, user_high, requested_by, status, created_at, accepted_at) "
+                "VALUES (?, ?, ?, 'accepted', ?, ?)",
+                (low, high, low, now, now))
+
+
 MIGRATIONS = [
     (1, 'base tables', m001_base_tables),
     (2, 'message lifecycle columns', m002_message_lifecycle),
@@ -175,6 +219,7 @@ MIGRATIONS = [
     (8, 'groups', m008_groups),
     (9, 'e2ee v2 message uuid', m009_e2ee_v2_message_uuid),
     (10, 'resume tokens and session epoch', m010_resume_tokens),
+    (11, 'contacts', m011_contacts),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

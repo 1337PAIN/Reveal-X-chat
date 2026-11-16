@@ -19,7 +19,7 @@
     // in step.
     const NAMES = new Set(['settings', 'rebuild', 'moon', 'sun', 'camera', 'mic',
         'stop', 'close', 'key', 'react', 'more', 'lock', 'play', 'pause', 'send', 'trash',
-        'shield-check', 'shield-alert']);
+        'shield-check', 'shield-alert', 'user-plus', 'user-minus']);
 
     function check(name) {
         // A typo would otherwise draw an empty square and nobody would notice.

@@ -31,6 +31,12 @@ registerLate({ setChatEnabled, updateUsersList });
 socket.on('users_updated', (data) => {
     updateUsersList(data.users);
     refreshPeerPins();
+    // Removed as a contact (by either side) while their chat was open: the
+    // server will refuse anything sent now, so close it rather than let the
+    // composer look usable.
+    if (state.selectedRecipientId && !state.users.some(u => u.id === state.selectedRecipientId)) {
+        closeConversation();
+    }
 
     if (state.selectedRecipientId) {
         const selected = state.users.find(u => u.id === state.selectedRecipientId);
@@ -56,15 +62,15 @@ export function updateUsersList(nextUsers) {
     );
 
     usersList.innerHTML = '';
-    userCount.textContent = `${state.users.length} account${state.users.length !== 1 ? 's' : ''}`;
+    userCount.textContent = `${state.users.length} contact${state.users.length !== 1 ? 's' : ''}`;
 
     if (state.users.length === 0) {
-        usersList.innerHTML = '<li class="empty-state">No other accounts yet</li>';
+        usersList.innerHTML = '<li class="empty-state">No contacts yet. Add someone by their username above.</li>';
         return;
     }
 
     if (visible.length === 0) {
-        usersList.innerHTML = '<li class="empty-state">No matching accounts</li>';
+        usersList.innerHTML = '<li class="empty-state">No matching contacts</li>';
         return;
     }
 
@@ -82,6 +88,18 @@ export function updateUsersList(nextUsers) {
     });
 }
 
+/** Back to no conversation selected. */
+export function closeConversation() {
+    state.selectedRecipientId = null;
+    chatTitle.textContent = 'Select a contact';
+    chatSubtitle.textContent = 'Choose a contact to start a private chat';
+    typingIndicator.textContent = '';
+    setChatEnabled(false);
+    const remove = document.getElementById('removeContactBtn');
+    if (remove) remove.hidden = true;
+    late.showWelcome();
+}
+
 export function selectUser(userId) {
     const user = state.users.find(u => u.id === userId);
     if (!user) return;
@@ -93,6 +111,8 @@ export function selectUser(userId) {
     typingIndicator.textContent = '';
     chatTitle.textContent = user.username;
     chatSubtitle.textContent = describeUser(user);
+    const remove = document.getElementById('removeContactBtn');
+    if (remove) remove.hidden = false;
 
     state.keyExchangeStatus[userId] = keyExchangeState(userId);
 
@@ -125,6 +145,6 @@ export function setChatEnabled(enabled) {
 
     messageInput.placeholder = enabled && selected
         ? `Message ${selected.username}...`
-        : 'Select an account first...';
+        : 'Select a contact first...';
 }
 

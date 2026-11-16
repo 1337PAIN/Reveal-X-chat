@@ -14,7 +14,7 @@ def handle_select_chat(data):
     recipient_id = data.get('recipient_id')
     recipient = chat_room.get_user(recipient_id)
 
-    if not current_user or not recipient:
+    if not current_user or not recipient or not chat_room.are_contacts(current_user['id'], recipient_id):
         emit('chat_history', {'messages': [], 'recipient_id': recipient_id})
         return
 
@@ -50,7 +50,10 @@ def handle_message(data):
         emit('message_error', {'error': 'Message is too long'})
         return
 
-    if not current_user or not message or not chat_room.is_active_user(recipient_id):
+    if not current_user or not message:
+        return
+    if not chat_room.can_message(current_user['id'], recipient_id):
+        emit('message_error', {'error': NOT_A_CONTACT})
         return
     if not _take_send_token(current_user['id'], 'message'):
         emit('message_error', {'error': SEND_TOO_FAST})
@@ -99,7 +102,10 @@ def handle_voice(data):
     iv = data.get('iv') or ''
     mime = (data.get('mime') or '').lower().split(';', 1)[0].strip()
 
-    if not current_user or not chat_room.is_active_user(recipient_id):
+    if not current_user:
+        return
+    if not chat_room.can_message(current_user['id'], recipient_id):
+        emit('message_error', {'error': NOT_A_CONTACT})
         return
     if not _take_send_token(current_user['id'], 'voice'):
         emit('message_error', {'error': SEND_TOO_FAST})
@@ -199,7 +205,10 @@ def handle_forward(data):
     message_id = data.get('message_id')
     recipient_id = data.get('recipient_id')
 
-    if not current_user or not chat_room.is_active_user(recipient_id):
+    if not current_user:
+        return
+    if not chat_room.can_message(current_user['id'], recipient_id):
+        emit('message_error', {'error': NOT_A_CONTACT})
         return
 
     source = chat_room.get_message_for_user(message_id, current_user['id'])
@@ -249,7 +258,7 @@ def handle_typing(data):
     recipient_id = data.get('recipient_id')
     is_typing = bool(data.get('is_typing'))
 
-    if not current_user or not chat_room.is_active_user(recipient_id):
+    if not current_user or not chat_room.can_message(current_user['id'], recipient_id):
         return
 
     payload = {

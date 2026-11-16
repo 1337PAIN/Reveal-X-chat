@@ -35,7 +35,7 @@
     <div class="container">
         <header class="header">
             <div class="logo">
-                <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Open accounts" aria-expanded="false">
+                <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Open contacts" aria-expanded="false">
                     <span></span>
                     <span></span>
                     <span></span>
@@ -67,7 +67,7 @@
 
         <main class="main-content">
             <div id="sidebarOverlay" class="sidebar-overlay"></div>
-            <aside id="accountsSidebar" class="sidebar" tabindex="-1" aria-label="Accounts">
+            <aside id="accountsSidebar" class="sidebar" tabindex="-1" aria-label="Contacts">
                 <div class="sidebar-profile">
                     <div class="profile-info">
                         <!-- A button, not a label: the file input is hidden, and neither a
@@ -92,11 +92,23 @@
                 </div>
 
                 <div class="sidebar-header">
-                    <h2>Accounts</h2>
-                    <input type="search" id="userSearchInput" class="user-search" placeholder="Search accounts..." autocomplete="off">
+                    <h2>Contacts</h2>
+                    <!-- Contacts are added by exact username and accepted by the
+                         other person (contacts-ui.js, chat/contacts.js); the
+                         server refuses messages between anyone else. -->
+                    <form id="addContactForm" class="add-contact" novalidate>
+                        <label for="addContactInput" class="sr-only">Add a contact by username</label>
+                        <input type="text" id="addContactInput" class="user-search add-contact-input" placeholder="Add by username" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64" enterkeyhint="send">
+                        <button type="submit" id="addContactBtn" class="add-contact-btn"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-user-plus"></use></svg><span>Add</span></button>
+                    </form>
+                    <input type="search" id="userSearchInput" class="user-search" placeholder="Search contacts..." aria-label="Search contacts" autocomplete="off">
                 </div>
+                <section id="contactRequests" class="contact-requests" aria-labelledby="contactRequestsTitle" hidden>
+                    <h3 id="contactRequestsTitle">Requests</h3>
+                    <ul id="contactRequestsList" class="requests-list"></ul>
+                </section>
                 <ul id="usersList" class="users-list">
-                    <li class="empty-state">Log in to see accounts</li>
+                    <li class="empty-state">Log in to see your contacts</li>
                 </ul>
 
                 <div class="sidebar-footer">
@@ -108,9 +120,10 @@
             <section class="chat-section">
                 <div class="chat-header">
                     <div>
-                        <h2 id="chatTitle">Select a user</h2>
-                        <p id="chatSubtitle">Choose someone online to start a private chat</p>
+                        <h2 id="chatTitle">Select a contact</h2>
+                        <p id="chatSubtitle">Choose a contact to start a private chat</p>
                     </div>
+                    <button id="removeContactBtn" class="icon-btn chat-header-btn" type="button" title="Remove contact" aria-label="Remove contact" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-user-minus"></use></svg></button>
                     <input type="search" id="messageSearchInput" class="message-search" placeholder="Search chat..." autocomplete="off">
                 </div>
 
@@ -716,6 +729,8 @@
         <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.5 11.6L19.6 4.4a.6.6 0 0 1 .8.8L13.2 20.3a.6.6 0 0 1-1.1-.1l-1.7-6.4-6.3-1.6a.6.6 0 0 1-.1-1.1zM10.4 13.6L20 4.6"/></symbol>
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.8 7l.9 12.2a1 1 0 0 0 1 .9h6.6a1 1 0 0 0 1-.9L17.2 7M10.2 10.8v5.6M13.8 10.8v5.6"/></symbol>
         <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M8.6 12.2l2.3 2.3 4.6-4.8"/></symbol>
+        <symbol id="i-user-plus" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.8"/><path d="M2.8 20a6.7 6.7 0 0 1 13.4 0M19 8.5v6M16 11.5h6"/></symbol>
+        <symbol id="i-user-minus" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.8"/><path d="M2.8 20a6.7 6.7 0 0 1 13.4 0M16 11.5h6"/></symbol>
         <symbol id="i-shield-alert" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M12 8v5M12 16.2v.3"/></symbol>
     </svg>
 
@@ -735,6 +750,7 @@
     <script src="{{ asset('js/mic-errors.js') }}"></script>
     <script src="{{ asset('js/voice-ui.js') }}"></script>
     <script src="{{ asset('js/share-ui.js') }}"></script>
+    <script src="{{ asset('js/contacts-ui.js') }}"></script>
     <script src="{{ asset('js/crypto.js') }}"></script>
     <script src="{{ asset('js/vc-client.js') }}"></script>
     <script src="{{ asset('js/contact-row.js') }}"></script>

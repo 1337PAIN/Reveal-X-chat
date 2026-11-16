@@ -19,6 +19,7 @@ ARTIFACTS = Path(__file__).resolve().parent / 'artifacts'
 
 ALICE = ('e2ealice', 'e2e-local-pass-a1')
 BOB = ('e2ebob', 'e2e-local-pass-b2')
+CAROL = ('e2ecarol', 'e2e-local-pass-c3')
 
 
 def _free_port():

@@ -184,7 +184,15 @@ SEND_LIMITS = {
     'message': (30, 1.0),       # 30 at once, then one a second
     'voice': (10, 1 / 6),       # 10 at once, then one every 6 s
     'image': (5, 1 / 15),       # 5 at once, then one every 15 s
+    'contact': (10, 1 / 30),    # contact requests: 10 at once, then one every 30 s
 }
+
+#: Said when a send, a forward or an image share goes to someone who is not a
+#: contact (handlers/contacts.py). The same words for an unknown account, so
+#: the refusal does not tell anyone which ids exist.
+NOT_A_CONTACT = 'You can only message your contacts. Add them by username first.'
+#: Said for a username nobody has, and for one that cannot be added.
+NO_SUCH_ACCOUNT = 'No account with that username.'
 # The in-memory buckets themselves, kept addressable for the tests.
 SEND_BUCKETS = state.store().buckets if state.store().kind == 'memory' else {}
 SEND_TOO_FAST = 'You are sending too fast. Wait a moment and try again.'
@@ -480,6 +488,8 @@ def _establish_session(user, resume_token=None):
         'resume_token': token,
         'resumed': bool(resume_token),
     }, to=request.sid)
+    # Pending contact requests, both ways (handlers/contacts.py).
+    emit('contacts_updated', chat_room.contact_requests(fresh['id']), to=request.sid)
     # Admins get the account list immediately, so the panel and its pending
     # badge are populated before they open it.
     if chat_room.is_admin(fresh['id']):

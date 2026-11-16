@@ -6,7 +6,11 @@ Two demos. Run the **chat demo first** — it shows the security features workin
 
 ## Demo 1 — Tamper detection in the live chat
 
-Open two browser windows at `http://127.0.0.1:5000` and register two accounts (say **alice** and **bob**).
+Open two browser windows at `http://127.0.0.1:5000` and register two accounts (say **alice** and **bob**). They start as strangers: neither sees the other. In alice's window type `bob` under **Contacts** and press **Add**; bob gets a request -- press **Accept**. Now each is in the other's list.
+
+Say:
+
+> You only see and message people you have added by username and who accepted. That is enforced by the server, not just hidden in the list: a message to someone who is not a contact is refused, and a name that does not exist gets the same answer as an account you are not allowed to add.
 
 ### 1. Show that E2EE is real
 
@@ -219,7 +223,7 @@ Visual Cryptography + E2EE + HMAC Integrity + ML Tamper Detection + Reconstructi
 pytest
 ```
 
-1092 server tests (8 skip by design) and, with `node --test "tests/js/*.test.mjs"`, 238 browser tests; `pytest -m e2e` adds 31 tests that drive the app in Chromium and scan every page with axe-core. They cover VC round-trips and share secrecy, the browser-side split and everything the server refuses (the image itself, a plaintext Share 2, anything not plausibly a share), tamper detection and its fallback scorer, metrics, HMAC integrity across all seven attacks, one-time share access including eight requests racing for one share, deletion, retention, SQL portability, the HTTP endpoints and every Socket.IO handler, E2EE protocol v4 (a fresh key per message for sender-side forward secrecy, freshness, a replay check that survives a reload, v1 to v3 refused) and key pinning, group events refused while groups are off, every vendored library's hash and version, Firebase token verification, the TOTP second factor and its sealing at rest, the ONNX export, and the interface's accessibility rules.
+1132 server tests (8 skip by design) and, with `node --test "tests/js/*.test.mjs"`, 246 browser tests; `pytest -m e2e` adds 37 tests that drive the app in Chromium and scan every page with axe-core. They cover VC round-trips and share secrecy, the browser-side split and everything the server refuses (the image itself, a plaintext Share 2, anything not plausibly a share), tamper detection and its fallback scorer, metrics, HMAC integrity across all seven attacks, one-time share access including eight requests racing for one share, deletion, retention, SQL portability, the HTTP endpoints and every Socket.IO handler, E2EE protocol v4 (a fresh key per message for sender-side forward secrecy, freshness, a replay check that survives a reload, v1 to v3 refused) and key pinning, group events refused while groups are off, every vendored library's hash and version, Firebase token verification, the TOTP second factor and its sealing at rest, the ONNX export, and the interface's accessibility rules.
 
 The ONNX tests check that the exported model matches scikit-learn on clean shares and all seven attacks, never flips a verdict, still reproduces the model's real `noise` blind spot, and that every browser asset is actually shipped and served — a missing file would silently disable in-browser detection without breaking anything visible.
 

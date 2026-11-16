@@ -301,6 +301,29 @@ dialog was redrawn. The same bar applies:
   opens the send dialog and a received share with its evidence open, at
   1440 px and 375 px in both themes, AAA contrast on: **0 violations**.
 
+### Contacts
+
+Added on 17 Nov 2026: the sidebar lists contacts, added by username
+(`contacts-ui.js`).
+
+- **The add field has a real label** ("Add a contact by username",
+  visually hidden; the placeholder is not its name), and **Add** is a submit
+  button, so Enter in the field sends the request.
+- **Request buttons say whose request they answer**: "Accept alice",
+  "Decline alice", "Cancel request to carol". The visible word starts each
+  name, as speech input needs. The initial beside the name is decoration.
+- **A new request is announced**, as a polite toast and through the screen
+  reader live region, so it is not only a change in a list nobody is looking
+  at. The requests already waiting at sign-in are shown, not announced.
+- **Remove contact asks first**, in the same in-app dialog as every other
+  destructive action, with focus on Cancel.
+- **Checked by axe**: `test_adding_a_contact` scans the sidebar with a
+  request waiting, at 1440 px and 375 px in both themes. Its first run found
+  a gap that predates contacts: in the light theme the open phone drawer took
+  on the grey of the scrim behind it, leaving the account name at 6.6:1 and
+  the contact count at 5.0:1, under the 7:1 bar. The drawer is now opaque in
+  the light theme on narrow screens (`glass.css`). **0 violations.**
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

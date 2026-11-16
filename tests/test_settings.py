@@ -169,11 +169,11 @@ def test_unknown_status_falls_back_to_online(pair, store):
 
 def test_offline_users_report_offline_not_their_chosen_status(store, users):
     """A chosen status only means something while connected."""
-    alice, _ = users
+    alice, bob = users
     store.update_status(alice['id'], 'dnd')
 
-    # Nobody is connected in this fixture, so alice reads as offline.
-    listed = store.get_users_list(current_user_id='someone-else')
+    # Nobody is connected in this fixture, so alice reads as offline to bob.
+    listed = store.get_users_list(current_user_id=bob['id'])
     assert [u['status'] for u in listed if u['id'] == alice['id']] == ['offline']
 
 

@@ -47,7 +47,7 @@ if USING_POSTGRES:
     _truncate_postgres()
 
 from app import app as flask_app  # noqa: E402
-from app.models import chat_room  # noqa: E402
+from app.models import ChatRoom, chat_room  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -68,6 +68,32 @@ def _fresh_send_buckets():
     routes.SEND_BUCKETS.clear()
     yield
     routes.SEND_BUCKETS.clear()
+
+
+@pytest.fixture(autouse=True)
+def _everyone_is_a_contact(request, monkeypatch):
+    """Make each test account a contact of every account created before it.
+
+    Messaging needs the two people to be contacts (tests/test_contacts.py).
+    Most tests are about something else -- encryption, shares, limits -- and
+    their accounts are meant to be able to talk, so this does the adding for
+    them. Tests about contacts themselves are marked `real_contacts` and get
+    the real behaviour: nobody is anybody's contact until they accept.
+    """
+    if request.node.get_closest_marker('real_contacts'):
+        return
+    original = ChatRoom.create_user
+
+    def create_and_connect(self, *args, **kwargs):
+        user, error = original(self, *args, **kwargs)
+        if user:
+            with self._connect() as db:
+                others = [row['id'] for row in db.execute("SELECT id FROM users WHERE id <> ?", (user['id'],)).fetchall()]
+            for other in others:
+                self.make_contacts(user['id'], other)
+        return user, error
+
+    monkeypatch.setattr(ChatRoom, 'create_user', create_and_connect)
 
 
 @pytest.fixture

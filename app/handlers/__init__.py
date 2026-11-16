@@ -5,4 +5,4 @@ the others share; the order below only matters in that common comes first.
 """
 
 from app.handlers import common  # noqa: F401
-from app.handlers import http, auth, admin, settings, messaging, shares, groups  # noqa: F401,E402
+from app.handlers import http, auth, admin, settings, messaging, shares, groups, contacts  # noqa: F401,E402

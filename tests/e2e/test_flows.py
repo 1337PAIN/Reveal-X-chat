@@ -265,3 +265,19 @@ def test_opening_the_drawer_on_a_phone_does_not_open_the_keyboard(browser, serve
         assert page.evaluate("() => document.activeElement.id") == 'accountsSidebar'
     finally:
         context.close()
+
+
+def test_removing_a_contact_closes_the_chat_on_both_sides(pair):
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    open_chat_by_keyboard(bob, ALICE[0])
+    alice.click('#removeContactBtn')
+    alice.wait_for_selector('#confirmDialog:not(.hidden)')
+    assert BOB[0] in alice.text_content('#confirmDialogTitle')
+    alice.click('#confirmDialogOk')
+    for page, peer in ((alice, BOB[0]), (bob, ALICE[0])):
+        page.wait_for_function(
+            "() => document.getElementById('chatTitle').textContent === 'Select a contact'")
+        assert page.locator('#usersList button', has_text=peer).count() == 0
+        assert page.is_disabled('#messageInput')
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors

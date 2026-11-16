@@ -2709,3 +2709,137 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
 #accountsSidebar:focus {
     outline: none;
 }
+
+/* ==========================================================================
+   Contacts: add by username, and pending requests
+   ==========================================================================
+   The sidebar lists contacts only (contacts-ui.js). The add field shares the
+   search box's look (.user-search), so the two read as one header. */
+
+.add-contact {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.add-contact .add-contact-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+.add-contact-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid rgba(255, 255, 255, .3);
+    border-radius: 999px;
+    background: linear-gradient(135deg, #3730a3, #1e40af);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.add-contact-btn .icon { width: 16px; height: 16px; }
+
+.add-contact-btn:focus-visible,
+.request-btn:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.contact-requests {
+    margin-bottom: 12px;
+}
+
+.contact-requests[hidden] { display: none; }
+
+.contact-requests h3 {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.requests-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+/* Name on the first line, the buttons beneath it on the right: side by
+   side they were wider than the 280px sidebar. */
+.request-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-tertiary);
+}
+
+.request-row.incoming {
+    border-color: var(--accent);
+}
+
+.request-avatar {
+    flex: 0 0 auto;
+}
+
+.request-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.request-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.request-note {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.request-actions {
+    flex: 1 0 100%;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.request-btn {
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.request-btn.accept {
+    border-color: rgba(255, 255, 255, .3);
+    background: linear-gradient(135deg, #3730a3, #1e40af);
+    color: #fff;
+}
+
+.chat-header-btn[hidden] { display: none; }

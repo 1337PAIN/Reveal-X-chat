@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revealx-cache-v80-share-ui';
+const CACHE_NAME = 'revealx-cache-v81-contacts';
 // The HTML pages are deliberately NOT precached. An app shell held in the
 // cache is the classic reason a deploy "needs a hard refresh": the page is
 // served from cache, still listing the old scripts, so nothing new is ever
@@ -42,6 +42,8 @@ const ASSETS_TO_CACHE = [
     '/static/js/mic-errors.js',
     '/static/js/voice-ui.js',
     '/static/js/share-ui.js',
+    '/static/js/contacts-ui.js',
+    '/static/js/chat/contacts.js',
     '/static/js/vc-client.js',
     '/static/js/contact-row.js',
     '/static/js/dialogs.js',
