@@ -91,6 +91,15 @@ updateOnlineStatus();
 // ==========================================
 
 /**
+ * True on a touch screen, where focusing a text field opens the on-screen
+ * keyboard. Asked of the pointer, not the width: a narrow desktop window has
+ * a physical keyboard and should still land in the search box.
+ */
+export function typingOpensKeyboard() {
+    return Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+}
+
+/**
  * Announce messages/actions directly to screen readers
  * @param {string} text - Message description
  */

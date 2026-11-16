@@ -248,3 +248,20 @@ def test_a_pc_without_a_microphone_is_told_so_not_denied(pair):
     toast.wait_for()
     assert alice.locator('text=Microphone access was denied').count() == 0
     shot(alice, 'no-microphone')
+
+
+def test_opening_the_drawer_on_a_phone_does_not_open_the_keyboard(browser, server):
+    """On a touch screen focus goes to the drawer, not the search box, so the
+    on-screen keyboard does not cover the list."""
+    context = browser.new_context(service_workers='block', viewport={'width': 390, 'height': 844},
+                                  is_mobile=True, has_touch=True)
+    page = context.new_page()
+    try:
+        sign_in(page, server, ALICE)
+        assert page.evaluate("() => matchMedia('(pointer: coarse)').matches")
+        assert page.evaluate("() => document.activeElement.tagName") != 'INPUT'
+        page.tap('#sidebarToggle')
+        page.wait_for_selector('#accountsSidebar.open')
+        assert page.evaluate("() => document.activeElement.id") == 'accountsSidebar'
+    finally:
+        context.close()

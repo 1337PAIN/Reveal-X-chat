@@ -332,6 +332,15 @@ together, the reaction picker never took focus, settings neither took focus
 nor gave it back, and focus fell to `<body>` after signing in and after a
 delete.
 
+**On a touch screen** (17 Nov 2026) the account search is not focused for
+you, after signing in or when the accounts drawer opens: focusing a text
+field there opens the on-screen keyboard, which covered the list the drawer
+was opened to show. The drawer itself takes focus instead (`tabindex="-1"`,
+no ring), so the focus trap and a screen reader behave as before. The test
+is the pointer, `(pointer: coarse)`, not the width, so a narrow desktop
+window still lands in the search box. `tests/e2e/test_flows.py` checks it on
+an emulated phone.
+
 ## Other accessibility work
 
 Not measured by the script above, but present:

@@ -18,6 +18,7 @@ import {
 } from './core.js';
 import {
     showOwnInitial,
+    typingOpensKeyboard,
     updateConnectionBanner,
 } from './basics.js';
 import {
@@ -217,8 +218,10 @@ socket.on('auth_success', (data) => {
     // Focus was in the sign-in form, which has just been hidden, so it fell
     // to <body>. Put it on the account search, the first thing to do next.
     // Only if focus really was lost: after a resume the user may be typing.
+    // Not on a touch screen, where it would open the on-screen keyboard.
     const focused = document.activeElement;
-    if (!focused || focused === document.body || authModal.contains(focused)) {
+    if (!typingOpensKeyboard()
+        && (!focused || focused === document.body || authModal.contains(focused))) {
         const search = document.getElementById('userSearchInput');
         if (search) search.focus();
     }

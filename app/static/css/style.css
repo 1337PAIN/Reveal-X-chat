@@ -2703,3 +2703,9 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
 .msg-chip.neutral {
     border-color: var(--glass-border-strong, var(--border));
 }
+
+/* The drawer takes focus itself on a touch screen (shell.js), so the
+   on-screen keyboard stays shut. It is not a Tab stop, so no ring. */
+#accountsSidebar:focus {
+    outline: none;
+}

@@ -19,6 +19,7 @@ import {
     userSearchInput,
 } from './core.js';
 import {
+    typingOpensKeyboard,
     updateConnectionBanner,
 } from './basics.js';
 import {
@@ -189,8 +190,15 @@ function openSidebar() {
 
     if (!sidebarIsDrawer()) return;
     document.addEventListener('keydown', trapSidebarFocus, true);
-    // Land on the search box: the drawer exists to find someone, and typing is
-    // the fastest way through a list that grows.
+    // On a touch screen focusing the search box opens the on-screen keyboard
+    // over the list the drawer was opened to show, so focus the drawer itself:
+    // still inside it for the trap and screen readers, no keyboard until the
+    // search box is tapped. Elsewhere, land on the search box: typing is the
+    // fastest way through a list that grows.
+    if (typingOpensKeyboard()) {
+        accountsSidebar.focus({ preventScroll: true });
+        return;
+    }
     const target = userSearchInput || sidebarFocusables()[0];
     if (target) target.focus();
 }
