@@ -752,3 +752,16 @@ body[data-theme="light"] .logo h1 {
     -webkit-background-clip: text;
     background-clip: text;
 }
+
+/* --- The phone drawer in the light theme ----------------------------------
+   As a drawer the sidebar sits over the scrim that dims the page, and its
+   light glass took on that grey: the account name measured 6.6:1 and the
+   contact count 5.0:1, under the 7:1 every other surface meets. Found when
+   axe first scanned the drawer open in the light theme (the contacts test,
+   tests/e2e/test_accessibility.py). Opaque there, as the no-blur fallback
+   already makes it; docked on a wide screen it keeps its glass. */
+@media (max-width: 899px) {
+    body[data-theme="light"] .sidebar {
+        background: #f4f7fc;
+    }
+}
