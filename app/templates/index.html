@@ -497,8 +497,17 @@
     <div id="imagePreviewModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="imagePreviewTitle">
         <div class="modal-content image-preview-content">
             <h2 id="imagePreviewTitle">Send an image share</h2>
-            <img id="imagePreview" class="image-preview" src="" alt="Selected image preview">
-            <p id="imagePreviewMeta"></p>
+            <div class="image-preview-stage">
+                <img id="imagePreview" class="image-preview" src="" alt="Selected image preview">
+            </div>
+            <p id="imagePreviewMeta" class="image-preview-meta"></p>
+            <!-- What "Split & Send" does, in three steps, so the button is not
+                 a leap of faith. Static text: no user input goes in here. -->
+            <ol class="split-steps">
+                <li><span class="split-step-n" aria-hidden="true">1</span><span><strong>Split here</strong>, in your browser, into two shares that each look like noise</span></li>
+                <li><span class="split-step-n" aria-hidden="true">2</span><span><strong>Share 1</strong> goes to the server, which cannot see the picture in it</span></li>
+                <li><span class="split-step-n" aria-hidden="true">3</span><span><strong>Share 2</strong> is end-to-end encrypted to the person you are chatting with</span></li>
+            </ol>
             <div class="modal-actions">
                 <button id="cancelImageBtn" class="btn btn-secondary" type="button">Cancel</button>
                 <button id="confirmImageBtn" class="btn btn-primary" type="button">Split &amp; Send</button>
@@ -706,6 +715,8 @@
         <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" stroke="none"/></symbol>
         <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.5 11.6L19.6 4.4a.6.6 0 0 1 .8.8L13.2 20.3a.6.6 0 0 1-1.1-.1l-1.7-6.4-6.3-1.6a.6.6 0 0 1-.1-1.1zM10.4 13.6L20 4.6"/></symbol>
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.8 7l.9 12.2a1 1 0 0 0 1 .9h6.6a1 1 0 0 0 1-.9L17.2 7M10.2 10.8v5.6M13.8 10.8v5.6"/></symbol>
+        <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M8.6 12.2l2.3 2.3 4.6-4.8"/></symbol>
+        <symbol id="i-shield-alert" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M12 8v5M12 16.2v.3"/></symbol>
     </svg>
 
     <!-- Connection banner: "Reconnecting..." / "Signed out - sign in again".
@@ -723,6 +734,7 @@
     <script src="{{ asset('js/send-policy.js') }}"></script>
     <script src="{{ asset('js/mic-errors.js') }}"></script>
     <script src="{{ asset('js/voice-ui.js') }}"></script>
+    <script src="{{ asset('js/share-ui.js') }}"></script>
     <script src="{{ asset('js/crypto.js') }}"></script>
     <script src="{{ asset('js/vc-client.js') }}"></script>
     <script src="{{ asset('js/contact-row.js') }}"></script>

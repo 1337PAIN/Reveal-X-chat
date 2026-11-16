@@ -38,16 +38,17 @@ Show the stored row again: the `content` column has no `data:audio/` header, jus
 
 ### 3. Send an image and show automatic verification
 
-Send an image from alice to bob. Bob's message bubble immediately shows:
+Send an image from alice to bob. The send dialog shows the picture, its size, and the three steps Split & Send takes. Bob's bubble arrives as a sealed tile with a lock and immediately shows a green shield:
 
 ```text
-✅ Share 1 verified intact
-HMAC-SHA256: match (bit-for-bit identical)
-ML: Clean Share - 96.3% confidence
-RandomForest VC share tamper detector - checked in 29 ms
+Share 1 verified intact
+How it was checked - 2 of 2 passed
+  ✓ HMAC-SHA256: match (bit-for-bit identical)
+  ✓ ML: Clean Share - 96.3% confidence
+  RandomForest VC share tamper detector - checked in 29 ms
 ```
 
-Once bob opens it, one more row appears: `End-to-end SHA-256: match (the sender's Share 1, unchanged)`.
+Open **How it was checked** to show the rows. Once bob opens the image, one more row appears: `End-to-end SHA-256: match (the sender's Share 1, unchanged)`.
 
 Say:
 
@@ -61,15 +62,16 @@ The chat ships no button that causes tampering — it only detects it. So play t
 python -c "import cv2,glob,sys; sys.path.insert(0,'.'); from app.ai_security.attacks import tamper_share; p=sorted(glob.glob('app/shares/*.png'))[-1]; cv2.imwrite(p, tamper_share(cv2.imread(p,0), attack='block', strength=0.4)); print('tampered:', p)"
 ```
 
-Back in bob's chat, press **Re-check integrity**. The verdict flips:
+Back in bob's chat, press **Re-check**. The shield turns red and the evidence opens by itself:
 
 ```text
-⚠️ Tampering detected in Share 1
-HMAC-SHA256: MISMATCH (share was modified)
-ML: Tampered Share - 100.0% confidence
+Tampering detected in Share 1
+How it was checked - 0 of 2 passed
+  ✕ HMAC-SHA256: MISMATCH (share was modified)
+  ✕ ML: Tampered Share - 100.0% confidence
 ```
 
-Expand **Suspicious-region heatmap and reasoning** to show the heatmap and the model's explanation. When bob reconstructs, the end-to-end row also reads `MISMATCH (not the Share 1 the sender made)`.
+Further down the same section are the heatmap and the model's explanation. When bob reconstructs, the end-to-end row also reads `MISMATCH (not the Share 1 the sender made)`.
 
 Say:
 
@@ -77,16 +79,16 @@ Say:
 
 ### 5. Reconstruct — and show the browser checking for itself
 
-Click **Reconstruct**. The panel repeats the warning before opening the image, and the reconstructed result is visibly damaged.
+Click **Reconstruct**. The panel repeats the warning before opening the image, and the reconstructed result is visibly damaged. It also replaces the sealed tile in bob's bubble (in memory only; a reload seals it again, and the share is spent).
 
 Point at the third row in the verdict, which appears only at this moment:
 
 ```text
-⚠️ Tampering detected in Share 1
-HMAC-SHA256: MISMATCH (share was modified)
-Server ML (share as stored): Tampered Share - 100.0% confidence
-In-browser ML (bytes you received): Tampered Share - 100.0% confidence (30 ms, ONNX/wasm)
-Suspicious-region heatmap and reasoning (computed in your browser)
+Tampering detected in Share 1
+  ✕ HMAC-SHA256: MISMATCH (share was modified)
+  ✕ Server ML (share as stored): Tampered Share - 100.0% confidence
+  ✕ In-browser ML (bytes you received): Tampered Share - 100.0% confidence (30 ms, ONNX/wasm)
+  Suspicious-region heatmap and reasoning (computed in your browser)
 ```
 
 Say:
@@ -217,7 +219,7 @@ Visual Cryptography + E2EE + HMAC Integrity + ML Tamper Detection + Reconstructi
 pytest
 ```
 
-1088 server tests (8 skip by design) and, with `node --test "tests/js/*.test.mjs"`, 225 browser tests; `pytest -m e2e` adds 27 tests that drive the app in Chromium and scan every page with axe-core. They cover VC round-trips and share secrecy, the browser-side split and everything the server refuses (the image itself, a plaintext Share 2, anything not plausibly a share), tamper detection and its fallback scorer, metrics, HMAC integrity across all seven attacks, one-time share access including eight requests racing for one share, deletion, retention, SQL portability, the HTTP endpoints and every Socket.IO handler, E2EE protocol v4 (a fresh key per message for sender-side forward secrecy, freshness, a replay check that survives a reload, v1 to v3 refused) and key pinning, group events refused while groups are off, every vendored library's hash and version, Firebase token verification, the TOTP second factor and its sealing at rest, the ONNX export, and the interface's accessibility rules.
+1092 server tests (8 skip by design) and, with `node --test "tests/js/*.test.mjs"`, 238 browser tests; `pytest -m e2e` adds 31 tests that drive the app in Chromium and scan every page with axe-core. They cover VC round-trips and share secrecy, the browser-side split and everything the server refuses (the image itself, a plaintext Share 2, anything not plausibly a share), tamper detection and its fallback scorer, metrics, HMAC integrity across all seven attacks, one-time share access including eight requests racing for one share, deletion, retention, SQL portability, the HTTP endpoints and every Socket.IO handler, E2EE protocol v4 (a fresh key per message for sender-side forward secrecy, freshness, a replay check that survives a reload, v1 to v3 refused) and key pinning, group events refused while groups are off, every vendored library's hash and version, Firebase token verification, the TOTP second factor and its sealing at rest, the ONNX export, and the interface's accessibility rules.
 
 The ONNX tests check that the exported model matches scikit-learn on clean shares and all seven attacks, never flips a verdict, still reproduces the model's real `noise` blind spot, and that every browser asset is actually shipped and served — a missing file would silently disable in-browser detection without breaking anything visible.
 
@@ -228,8 +230,8 @@ python scripts/validate_final_product.py
 ## Screenshots worth capturing
 
 - The key manager showing the same safety number in both windows.
-- A clean share bubble (green, ✅ verified intact).
-- A tampered share bubble (red, HMAC mismatch + ML confidence).
+- A clean share bubble (sealed tile, green shield, verified intact).
+- A tampered share bubble (red shield, evidence open: HMAC mismatch + ML confidence).
 - The expanded heatmap and reasoning.
 - The `/lab` PSNR/SSIM table for clean vs tampered runs.
 - A voice message bubble with its padlock, next to the ciphertext row in the database.

@@ -80,7 +80,13 @@ imageInput.addEventListener('change', (event) => {
             };
             
             imagePreview.src = compressedUrl;
-            imagePreviewMeta.textContent = `${file.name} - compressed preview`;
+            // What will actually be split: the downscaled size, not the file's.
+            imagePreviewMeta.textContent = window.revealxShareUI.previewMeta({
+                name: file.name,
+                width: w,
+                height: h,
+                bytes: window.revealxShareUI.dataUrlBytes(compressedUrl),
+            });
             imagePreviewModal.classList.remove('hidden');
         };
         img.src = e.target.result;

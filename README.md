@@ -95,6 +95,7 @@ Full numbers, the tool, and its known limits: [docs/ACCESSIBILITY.md](docs/ACCES
 - Group conversations exist on the server only, with **no client**, and are **off by default**: every `group_*` event is refused unless `REVEALX_GROUPS=true` is set (see [docs/API.md](docs/API.md#groups)). No page in the app creates or opens a group.
 - **End-to-end encrypted text and voice messages** (see section 2).
 - Voice notes recorded in-browser with `MediaRecorder`, capped at 60 seconds and 2 MB. Recording turns the composer into a recording bar -- discard, a pulsing dot, the clock against the one-minute cap, a live microphone level, and send -- and a voice note plays in a chat-style player: play/pause, a waveform drawn from the recording itself that fills as it plays (click or arrow keys to seek), the length (taken from the decoded audio, since a fresh WebM recording carries none), and a 1x/1.5x/2x speed button (`voice-ui.js`, [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md#voice-notes)). When the microphone cannot be opened the app says why -- no microphone connected, blocked for this site, blocked by the operating system, or in use by another app -- rather than "access denied" for all of them (`mic-errors.js`). A PC with no microphone gets no permission prompt at all, so it needs a device that has one.
+- An image share is drawn as a picture message, not a box of text (`share-ui.js`): a sealed tile -- grain, since each share on its own is noise, and a lock -- with a caption saying who can rebuild it; the tamper verdict as one line with a shield, and the evidence (HMAC, both ML verdicts, the end-to-end hash, the heatmap) folded under "How it was checked", which opens by itself when a check fails. Once the recipient reconstructs the image it appears in the bubble, in that tab's memory only. The send dialog shows the picture on a dark stage with its file name, the size that will actually be split and the bytes, and says in three steps what Split & Send does.
 - Typing indicators, read receipts, emoji reactions, forwarding, deletion, profile image support, and responsive UI.
 - **Failures are reported.** The server had always emitted `image_error` and `message_error`; nothing on the client listened, so a refused send -- recipient offline, message too long, unsupported image type -- looked exactly like a successful one. They now surface in a banner that is also announced to screen readers.
 - Messages and shares auto-delete after 1 hour.
@@ -512,8 +513,8 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 1088 server tests
-node --test "tests/js/*.test.mjs"   # 225 browser tests
+pytest                          # 1092 server tests
+node --test "tests/js/*.test.mjs"   # 238 browser tests
 ```
 
 Both run on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
@@ -528,7 +529,8 @@ Chromium contexts sign in, open a chat by keyboard, send text both ways and see
 the **E2EE** chip, send an image that is split in the browser, checked and
 reconstructed, revoke a share, lose and regain the server and watch the session
 resume, and get the blocking warning when a peer's key changes. axe-core then
-scans login, chat, settings and `/lab` at 1440 and 375 px in both themes with
+scans login, chat, settings, the image send dialog, a received share with its
+evidence open, and `/lab` at 1440 and 375 px in both themes with
 the AAA contrast rule on, failing on any violation; and the vendored DOMPurify
 is run against XSS payloads in the page itself. Setup:
 `pip install -r requirements-dev.txt`, `python -m playwright install chromium`,
@@ -543,11 +545,11 @@ even imported, since importing it runs `init_db`), and the SQLite-only tests
 -- the WAL settings and the upgrades of historical SQLite files -- skip with
 a reason.
 
-**1088 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
+**1092 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
 
-**225 browser tests** run the shipped `app/static/js` files verbatim on Node's
+**238 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
-They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v4 reflection, associated-data, freshness and replay cases, the replay check surviving a reload, forward secrecy for the sender (her own reloaded key cannot open what she sent) and its documented limit on the recipient's side, sender authenticity against a forged message; key pinning and the safety number; the send policy that decides when plaintext is allowed; the browser-side visual cryptography split, its PNG codec and the end-to-end hash; and the shipped v1, v2 and v3 clients as fixtures, so their payloads are proven to be refused rather than decrypted), the escaping layer, and the service worker's request scoping.
+They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v4 reflection, associated-data, freshness and replay cases, the replay check surviving a reload, forward secrecy for the sender (her own reloaded key cannot open what she sent) and its documented limit on the recipient's side, sender authenticity against a forged message; key pinning and the safety number; the send policy that decides when plaintext is allowed; the browser-side visual cryptography split, its PNG codec and the end-to-end hash; and the shipped v1, v2 and v3 clients as fixtures, so their payloads are proven to be refused rather than decrypted), the escaping layer, the image share card's verdict rules (any failing check means "tampered", which copy each check describes, bad news opening its own evidence), and the service worker's request scoping.
 
 ### Feature parity (M2)
 
@@ -580,10 +582,10 @@ python scripts/generate_feature_parity_fixture.py
 python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reveal_x.db').execute('select content, extra from messages')])"
 ```
 
-4. Send an image. It is split in the sender's browser; the recipient's bubble shows **✅ Share 1 verified intact**, HMAC match, ML confidence and the check time.
-5. Modify the stored Share 1 from outside the app with the one-liner in [Tamper Detection in the Live Chat](#6-tamper-detection-in-the-live-chat) -- the chat itself has no control for causing tampering -- then press **Re-check integrity** on the message.
-6. The verdict flips to **⚠️ Tampering detected**, with the HMAC mismatch, the ML confidence, the heatmap and the model's reasoning. On Reconstruct, the end-to-end SHA-256 row reports a mismatch as well.
-7. Click Reconstruct. The panel repeats the warning, and the reconstructed image is visibly damaged.
+4. Send an image. It is split in the sender's browser; the recipient's bubble shows a green shield and **Share 1 verified intact**; **How it was checked** lists the HMAC match, ML confidence and the check time.
+5. Modify the stored Share 1 from outside the app with the one-liner in [Tamper Detection in the Live Chat](#6-tamper-detection-in-the-live-chat) -- the chat itself has no control for causing tampering -- then press **Re-check** on the message.
+6. The verdict flips to a red shield and **Tampering detected in Share 1**, and the evidence opens by itself: the HMAC mismatch, the ML confidence, the heatmap and the model's reasoning. On Reconstruct, the end-to-end SHA-256 row reports a mismatch as well.
+7. Click Reconstruct. The panel repeats the warning, and the reconstructed image is visibly damaged; it also replaces the sealed tile in the bubble.
 8. Try to open the share a second time — access is one-time, so it is refused.
 
 ### Lab demo (shows the measurements)

@@ -18,7 +18,8 @@
     // Every symbol in the sprite; tests/test_svg_icons.py keeps the two lists
     // in step.
     const NAMES = new Set(['settings', 'rebuild', 'moon', 'sun', 'camera', 'mic',
-        'stop', 'close', 'key', 'react', 'more', 'lock', 'play', 'pause', 'send', 'trash']);
+        'stop', 'close', 'key', 'react', 'more', 'lock', 'play', 'pause', 'send', 'trash',
+        'shield-check', 'shield-alert']);
 
     function check(name) {
         // A typo would otherwise draw an empty square and nobody would notice.

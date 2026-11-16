@@ -383,109 +383,28 @@ function setShareActionsDisabled(panel, disabled) {
 export function renderTamperPanel(panel, data, local) {
     local = local || state.localAnalysis[data.message_id];
     const endToEnd = state.endToEndHash[data.message_id];
-    const tampered = data.integrity.exact_tamper_detected || data.ml.tampered
-        || (local ? local.tampered : false) || (endToEnd ? !endToEnd.matches : false);
-    panel.className = `tamper-panel ${tampered ? 'danger' : 'success'}`;
-    panel.innerHTML = '';
+    // The rules (any failing check makes it "tampered", which copy each row
+    // describes, the server/browser disagreement) live in share-ui.js, where
+    // tests/js/share-ui.test.mjs checks them; this only picks the inputs.
+    const summary = window.revealxShareUI.verdictSummary(data, local, endToEnd);
+    window.revealxShareUI.drawVerdict(document, panel, summary);
+}
 
-    const verdict = document.createElement('div');
-    verdict.className = 'tamper-verdict';
-    verdict.textContent = tampered
-        ? '⚠️ Tampering detected in Share 1'
-        : '✅ Share 1 verified intact';
-    panel.appendChild(verdict);
-
-    const rows = document.createElement('div');
-    rows.className = 'tamper-rows';
-
-    const hmacRow = document.createElement('div');
-    hmacRow.className = `tamper-row ${data.integrity.hmac_match ? 'ok' : 'bad'}`;
-    hmacRow.textContent = data.integrity.hmac_match
-        ? 'HMAC-SHA256: match (bit-for-bit identical)'
-        : 'HMAC-SHA256: MISMATCH (share was modified)';
-    rows.appendChild(hmacRow);
-
-    const mlRow = document.createElement('div');
-    mlRow.className = `tamper-row ${data.ml.tampered ? 'bad' : 'ok'}`;
-    // Once a local verdict exists it is worth being explicit about *which copy*
-    // each row describes: the server scored the file it holds, the browser
-    // scored the bytes that actually arrived. They are not the same claim.
-    mlRow.textContent = (local ? 'Server ML (share as stored): ' : 'ML: ')
-        + `${data.ml.label} - ${(data.ml.confidence * 100).toFixed(1)}% confidence`;
-    rows.appendChild(mlRow);
-
-    const timing = document.createElement('div');
-    timing.className = 'tamper-row muted';
-    timing.textContent = `${data.ml.model_name} - checked in ${data.processing_ms} ms`;
-    rows.appendChild(timing);
-
-    if (local) {
-        const localRow = document.createElement('div');
-        localRow.className = `tamper-row ${local.tampered ? 'bad' : 'ok'}`;
-        localRow.textContent = `In-browser ML (bytes you received): ${local.label} - `
-            + `${(local.confidence * 100).toFixed(1)}% confidence `
-            + `(${local.timing_ms.total} ms, ONNX/wasm)`;
-        rows.appendChild(localRow);
-
-        // The two engines are the same forest and agree to ~1e-7 on identical
-        // input, so a split verdict does not mean one of them is buggy -- it
-        // means they were shown different bytes. Say so instead of silently
-        // preferring whichever is more reassuring.
-        if (local.tampered !== data.ml.tampered) {
-            const conflict = document.createElement('div');
-            conflict.className = 'tamper-row bad';
-            conflict.textContent = 'The server and your browser scored different data. '
-                + 'The share you received is not the one the server verified. '
-                + 'Treat it as tampered.';
-            rows.appendChild(conflict);
-        }
-    }
-
-    // The only row that does not rely on the server at all: the sender's
-    // browser hashed Share 1 before uploading it and sealed the hash in the
-    // envelope, so a server that altered the share *and* its own HMAC record
-    // is still caught here.
-    if (endToEnd) {
-        const hashRow = document.createElement('div');
-        hashRow.className = `tamper-row ${endToEnd.matches ? 'ok' : 'bad'}`;
-        hashRow.textContent = endToEnd.matches
-            ? "End-to-end SHA-256: match (the sender's Share 1, unchanged)"
-            : 'End-to-end SHA-256: MISMATCH (not the Share 1 the sender made)';
-        rows.appendChild(hashRow);
-    }
-
-    panel.appendChild(rows);
-
-    // Prefer the locally computed heatmap and reasoning when we have them:
-    // they describe the bytes the recipient actually holds.
-    const source = local || data.ml;
-    if (source.heatmap_data_url) {
-        const details = document.createElement('details');
-        details.className = 'tamper-details';
-
-        const summary = document.createElement('summary');
-        summary.textContent = local
-            ? 'Suspicious-region heatmap and reasoning (computed in your browser)'
-            : 'Suspicious-region heatmap and reasoning';
-        details.appendChild(summary);
-
-        const heatmap = document.createElement('img');
-        heatmap.className = 'tamper-heatmap';
-        heatmap.src = source.heatmap_data_url;
-        heatmap.alt = 'Tamper heatmap: bright regions are statistically suspicious';
-        details.appendChild(heatmap);
-
-        const list = document.createElement('ul');
-        list.className = 'tamper-explanation';
-        (source.explanation || []).forEach(line => {
-            const item = document.createElement('li');
-            item.textContent = line;
-            list.appendChild(item);
-        });
-        details.appendChild(list);
-
-        panel.appendChild(details);
-    }
+/**
+ * Show the rebuilt picture in its bubble, so an image share ends up looking
+ * like an image. Memory only, like the reconstruction panel itself.
+ */
+export function revealShareImage(messageId, src) {
+    const root = messagesContainer.querySelector(
+        `[data-message-id="${messageId}"] .share-card`
+    );
+    if (!root || !src) return;
+    window.revealxShareUI.showImage(document, {
+        root,
+        tile: root.querySelector('.share-tile'),
+        caption: root.querySelector('.share-caption'),
+        detail: root.querySelector('.share-detail'),
+    }, src);
 }
 
 /** Draw a status chip from chips.js: an aria-hidden glyph and the words. */
@@ -658,14 +577,12 @@ export function displayMessage(msg) {
 
         messageDiv.innerHTML = `
             <div class="message-username">${isSent ? 'You' : sanitizedUsername}</div>
-            <div class="message-content">
-                <div class="encrypted-image-notice">
-                    <span class="share-status"></span>
-                </div>
+            <div class="message-content share-content">
+                <div class="share-card-slot"></div>
                 ${!isSent ? '<div class="tamper-panel" data-role="tamper-panel"></div>' : ''}
                 <div class="share-actions">
-                    ${!isSent ? `<button class="share-action primary" type="button" data-action="reconstruct" ${hasShare1 && hasLiveShare2 ? '' : 'disabled'}>Reconstruct</button>` : ''}
-                    ${!isSent && hasShare1 ? '<button class="share-action" type="button" data-action="recheck">Re-check integrity</button>' : ''}
+                    ${!isSent ? `<button class="share-action primary" type="button" data-action="reconstruct" ${hasShare1 && hasLiveShare2 ? '' : 'disabled'}><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-rebuild"></use></svg>Reconstruct</button>` : ''}
+                    ${!isSent && hasShare1 ? '<button class="share-action share-recheck" type="button" data-action="recheck" aria-label="Re-check integrity" title="Re-check integrity"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-shield-check"></use></svg><span class="btn-label">Re-check</span></button>' : ''}
                     ${isSent ? '<button class="share-action secondary" type="button" data-action="revoke">Revoke</button>' : ''}
                 </div>
             </div>
@@ -684,6 +601,9 @@ export function displayMessage(msg) {
             <div class="message-reactions"></div>
         `;
 
+        // The sealed tile: what a picture looks like before it is rebuilt.
+        const card = window.revealxShareUI.buildShareCard(document, { sent: isSent });
+        messageDiv.querySelector('.share-card-slot').replaceWith(card.root);
         messageDiv.querySelector('.share-status').textContent = statusMessage;
         messageDiv.querySelectorAll('.share-action').forEach(button => {
             button.addEventListener('click', () => {

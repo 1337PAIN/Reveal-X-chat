@@ -273,6 +273,34 @@ Both were designed to the same bar as the rest:
   themes, and over the player at 375 px, where it also checks that no
   waveform bar is clipped: **0 violations**.
 
+### Image shares
+
+The share bubble was a grey box of text over a green box listing every check
+line by line. On 17 Nov 2026 it became a card (`share-ui.js`), and the send
+dialog was redrawn. The same bar applies:
+
+- **Nothing in the card depends on colour alone.** The verdict is words
+  ("Share 1 verified intact", "Tampering detected in Share 1") beside a
+  shield whose shape differs too (a tick or an exclamation mark); each check
+  says "match" or "MISMATCH" in words, and the tick or cross before it is
+  decoration with an empty alternative (`content: '\2713' / ''`).
+- **The evidence is a native `<details>`.** It is reachable and operable by
+  keyboard with no script, is folded when every check passed, and is open
+  from the start when one failed, so bad news never waits behind a click.
+- **The grain and lock are decoration** (`aria-hidden`), and no text sits on
+  the grain: the caption and status are below the tile, on the bubble, in the
+  AAA text colours. The grain is an SVG filter in a `data:` URL, which the
+  CSP's `img-src` already allowed.
+- **Re-check keeps its full name.** The button shows "Re-check" and is named
+  "Re-check integrity"; the visible words start the name, as speech input
+  needs.
+- **The send dialog's three steps are an ordered list**, the numbers in their
+  circles hidden from screen readers since the list already numbers them;
+  white on the primary indigo, the 8:1-plus pairing above.
+- **Checked by axe.** `test_image_share` in `tests/e2e/test_accessibility.py`
+  opens the send dialog and a received share with its evidence open, at
+  1440 px and 375 px in both themes, AAA contrast on: **0 violations**.
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

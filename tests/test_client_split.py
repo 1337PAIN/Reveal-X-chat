@@ -286,11 +286,17 @@ def test_the_recipient_hashes_share1_bytes_before_decoding_them():
 
 
 def test_the_panel_shows_all_four_checks():
+    # The rows are worded in share-ui.js (tests/js/share-ui.test.mjs runs
+    # them); the panel must hand it all three inputs.
+    from pathlib import Path
     chat = _chat()
     panel = chat[chat.index('function renderTamperPanel('):]
     panel = panel[:panel.index('\n}\n')]
+    assert 'verdictSummary(data, local, endToEnd)' in panel
+    share_ui = (Path(__file__).resolve().parent.parent / 'app' / 'static' / 'js'
+                / 'share-ui.js').read_text(encoding='utf-8')
     for label in ('HMAC-SHA256', 'Server ML', 'In-browser ML', 'End-to-end SHA-256'):
-        assert label in panel, label
+        assert label in share_ui, label
 
 
 def test_vc_client_is_loaded_and_precached():

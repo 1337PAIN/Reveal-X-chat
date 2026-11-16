@@ -17,6 +17,7 @@ import {
 } from './basics.js';
 import {
     renderTamperPanel,
+    revealShareImage,
     runLocalShareVerification,
     runShareAnalysis,
     tamperPanelFor,
@@ -86,7 +87,7 @@ async function openReconstruction(msg) {
     if (recPrev) recPrev.src = '';
     downloadReconstructedBtn.disabled = true;
     downloadReconstructedBtn.dataset.image = '';
-    shared.currentShares = { share1Url: null, share2Live, envelope, share1Bytes: null };
+    shared.currentShares = { share1Url: null, share2Live, envelope, share1Bytes: null, messageId: msg ? msg.id : null };
 
     // Opened from a message: the shares arrive on their own, so no file pickers.
     if (isClientSplitShare(msg) && !envelope) {
@@ -217,6 +218,8 @@ reconstructBtn.addEventListener('click', async () => {
             if (preview) preview.src = image;
             downloadReconstructedBtn.disabled = false;
             downloadReconstructedBtn.dataset.image = image;
+            // The bubble shows the picture too, so the chat reads as a chat.
+            revealShareImage(shared.currentShares.messageId, image);
         } else {
             // Manually supplied shares, and shares from the old server split.
             await window.reconstructSharesLocally(shared.currentShares.share1Url, shared.currentShares.share2Live);

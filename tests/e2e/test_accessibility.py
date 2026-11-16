@@ -108,6 +108,35 @@ def test_settings(browser, server, width, theme):
         page.context.close()
 
 
+@pytest.mark.parametrize('theme', THEMES)
+@pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
+def test_image_share(browser, server, width, theme, tmp_path):
+    """The send dialog, and the recipient's share card with its evidence open."""
+    from test_flows import png_bytes
+
+    alice = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, ALICE)
+    bob = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, BOB)
+    try:
+        for page, peer in ((alice, BOB[0]), (bob, ALICE[0])):
+            if width == 'phone':
+                page.click('#sidebarToggle')
+            page.locator('#usersList button', has_text=peer).click()
+        picture = tmp_path / 'axe.png'
+        picture.write_bytes(png_bytes())
+        alice.set_input_files('#imageInput', str(picture))
+        alice.wait_for_selector('#imagePreviewModal:not(.hidden)')
+        check(alice, f'share-preview-{width}-{theme}')
+        alice.click('#confirmImageBtn')
+
+        share = bob.locator('#messagesContainer .message:has([data-role="tamper-panel"])').last
+        share.locator('text=verified intact').wait_for(timeout=30000)
+        share.locator('.tamper-details summary').click()
+        check(bob, f'share-received-{width}-{theme}')
+    finally:
+        alice.context.close()
+        bob.context.close()
+
+
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
 def test_lab(browser, server, width):
     page = new_page(browser, *WIDTHS[width])

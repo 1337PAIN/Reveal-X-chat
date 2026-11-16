@@ -1096,21 +1096,123 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     border-radius: 4px;
 }
 
-.encrypted-image-notice {
-    background: var(--bg-tertiary);
+/* ==========================================================================
+   Image shares
+   ==========================================================================
+   A share was a grey box of text over a green box of check lines. It is now
+   drawn like a picture message (share-ui.js): a sealed tile -- grain, since
+   each share alone is noise, and a lock -- with a caption, the verdict as
+   one line with a shield, and the evidence folded under "How it was
+   checked". Once rebuilt, the tile shows the picture (memory only).
+
+   The grain is an SVG turbulence filter in a data: URL, which img-src
+   already allows; it is decoration (aria-hidden) and never carries text.
+   Captions sit below the tile, on the bubble, in the AAA text colours.
+*/
+
+.share-content {
+    width: 300px;
+    max-width: 100%;
+}
+
+.share-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.share-tile {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #312e81, #0f3d55 55%, #134e4a);
+}
+
+.share-grain {
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+    opacity: .38;
+}
+
+.share-lock {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, .35);
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3730a3, #1e40af);
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+
+.share-lock .icon { width: 22px; height: 22px; }
+
+.share-card.revealed .share-tile {
+    aspect-ratio: auto;
+    max-height: 320px;
+    background: var(--bg-tertiary);
+}
+
+.share-tile .share-image {
+    display: block;
+    width: 100%;
+    max-height: 320px;
+    object-fit: contain;
+    border: 0;
+    border-radius: 0;
+}
+
+.share-label {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.share-caption {
+    font-size: 14px;
+    font-weight: 700;
     color: var(--text-primary);
-    font-size: 13px;
-    margin-top: 4px;
-    padding: 10px 12px;
+}
+
+.share-detail {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-secondary);
 }
 
 .share-actions {
     display: flex;
     flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.share-action {
+    display: inline-flex;
+    align-items: center;
     gap: 6px;
-    margin-top: 8px;
+}
+
+.share-action .icon {
+    width: 15px;
+    height: 15px;
+}
+
+.share-action.primary {
+    flex: 1 1 auto;
+    justify-content: center;
 }
 
 .share-action {
@@ -1119,8 +1221,10 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     border-radius: 6px;
     color: var(--text-primary);
     cursor: pointer;
-    font-size: 12px;
-    padding: 6px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    min-height: 36px;
+    padding: 6px 14px;
 }
 
 .share-action:hover {
@@ -1307,13 +1411,71 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     max-width: 520px;
 }
 
-.image-preview {
-    background: white;
-    border-radius: var(--radius-xs);
+/* The picture sits on a dark stage, not in white letterbox bars. */
+.image-preview-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+    max-height: 340px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: #0b1020;
+}
+
+.image-preview-stage .image-preview {
     display: block;
-    max-height: 320px;
+    max-width: 100%;
+    max-height: 340px;
     object-fit: contain;
-    width: 100%;
+    border: 0;
+    border-radius: 0;
+}
+
+.image-preview-meta {
+    margin: 8px 0 0;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.split-steps {
+    list-style: none;
+    margin: 14px 0 4px;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+    text-align: left;
+}
+
+.split-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.split-steps strong {
+    color: var(--text-primary);
+}
+
+.split-step-n {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3730a3, #1e40af);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .modal-actions {
@@ -1786,32 +1948,77 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
 }
 
 .tamper-verdict {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: 700;
     font-size: 13px;
-    margin-bottom: 6px;
 }
+
+.tamper-verdict .icon {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+}
+
+.tamper-title {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 
 .tamper-panel.success .tamper-verdict { color: var(--success); }
 .tamper-panel.danger .tamper-verdict { color: var(--danger); }
 
 .tamper-rows {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
 }
 
-.tamper-row.ok { color: var(--success); }
+/* A tick or a cross before each check. The words ("match", "MISMATCH")
+   carry the meaning too, so colour is never the only signal. */
+.tamper-row {
+    position: relative;
+    padding-left: 20px;
+    color: var(--text-primary);
+}
+
+.tamper-row::before {
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-weight: 700;
+}
+
+.tamper-row.ok::before { content: '\2713' / ''; color: var(--success); }
+.tamper-row.bad::before { content: '\2715' / ''; color: var(--danger); }
 .tamper-row.bad { color: var(--danger); }
-.tamper-row.muted { color: var(--text-secondary); font-size: 11px; }
+
+.tamper-row-label {
+    font-weight: 700;
+}
+
+.tamper-timing,
+.tamper-heatmap-caption {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
 
 .tamper-details {
-    margin-top: 8px;
+    margin-top: 6px;
 }
 
 .tamper-details summary {
     cursor: pointer;
     color: var(--accent);
     font-size: 12px;
+    font-weight: 600;
+    padding-left: 28px;
 }
 
 .tamper-heatmap {
@@ -2383,6 +2590,7 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     /* The whole waveform has to fit, or progress runs off its visible end:
        36 bars at 2px with 1px gaps is 107px, which a phone bubble has. */
     .voice-note { gap: 8px; }
+    .share-content { width: 100%; }
     .voice-wave { gap: 1px; }
     .voice-wave .voice-bar { flex-basis: 2px; width: 2px; }
 }
