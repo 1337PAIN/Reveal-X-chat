@@ -172,9 +172,15 @@ Three details worth knowing:
 
 - A first-time **Google sign-in creates a pending account too**. Without that
   the gate would be decorative.
-- Requesting an account with a **name that is already taken** returns the same
-  "Request submitted" message as any other request, because requests are
-  invisible to the requester and an honest answer would enumerate accounts.
+- **A username belongs to one account, whatever the capitals** ("Alice" and
+  "alice" are the same name; a unique index on `LOWER(username)` enforces it),
+  and sign-in accepts any capitals. The **Create account** form checks the name
+  as it is typed and says "That username is already taken" or "available", and
+  asks for the password twice. That answer reveals whether a name is in use --
+  as adding a contact by username must anyway -- so the check is rate limited
+  (30 a minute per address). Until 17 Nov 2026 a taken name got "Request
+  submitted" while nothing was created, which kept names private but left
+  people wondering why they never got in.
 - The system refuses any operation that would leave it unadministrable: you
   cannot disable or delete your own account, and the last active admin cannot be
   removed.
@@ -514,8 +520,8 @@ pip install -r requirements-dev.txt
 ```
 
 ```bash
-pytest                          # 1132 server tests
-node --test "tests/js/*.test.mjs"   # 246 browser tests
+pytest                          # 1142 server tests
+node --test "tests/js/*.test.mjs"   # 253 browser tests
 ```
 
 Both run on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
@@ -530,7 +536,8 @@ Chromium contexts sign in, open a chat by keyboard, send text both ways and see
 the **E2EE** chip, send an image that is split in the browser, checked and
 reconstructed, revoke a share, lose and regain the server and watch the session
 resume, get the blocking warning when a peer's key changes, add a contact by
-username and accept it, and remove one. axe-core then
+username and accept it, remove one, and be told a username is taken when
+creating an account. axe-core then
 scans login, chat, settings, the image send dialog, a received share with its
 evidence open, a contact request, and `/lab` at 1440 and 375 px in both themes with
 the AAA contrast rule on, failing on any violation; and the vendored DOMPurify
@@ -547,9 +554,9 @@ even imported, since importing it runs `init_db`), and the SQLite-only tests
 -- the WAL settings and the upgrades of historical SQLite files -- skip with
 a reason.
 
-**1132 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
+**1142 server tests** cover VC round-trips, share secrecy, the tamper detector and its fallback, metrics, HMAC integrity, one-time share access (including eight requests racing for the same share), deletion, retention, SQL portability across SQLite/PostgreSQL, the HTTP endpoints, and the Socket.IO handlers (voice, E2EE payloads, key registration, account settings), Firebase token verification including clock-drift tolerance, the TOTP second factor, the ONNX export (faithfulness to scikit-learn across all seven attacks, and that the browser assets are actually shipped and served), administration (the approval gate, the superadmin rank hierarchy, the lockout guards, and that every admin event is refused for non-admins and anonymous sockets), brute-force throttling with its audit trail, the message lifecycle (that an uninvolved user can neither revoke nor delete someone else's message, that a sender's delete removes Share 1 from disk while a recipient's does not, and that deleting an account leaves unrelated conversations intact), and the image path -- that the server stores the browser's Share 1 byte for byte and refuses anything that is not plausibly a share or that carries the image, that the sender never receives the capability token, that the recorded HMAC covers the bytes on disk, and that the numbers quoted in these docs match the constants in the code. The count includes the handful of tests that skip by design.
 
-**246 browser tests** run the shipped `app/static/js` files verbatim on Node's
+**253 browser tests** run the shipped `app/static/js` files verbatim on Node's
 built-in runner — no build step, no npm dependency added to a Python project.
 They cover the E2EE session (two independent sessions, so a symmetrically broken key agreement cannot pass by talking to itself; protocol v4 reflection, associated-data, freshness and replay cases, the replay check surviving a reload, forward secrecy for the sender (her own reloaded key cannot open what she sent) and its documented limit on the recipient's side, sender authenticity against a forged message; key pinning and the safety number; the send policy that decides when plaintext is allowed; the browser-side visual cryptography split, its PNG codec and the end-to-end hash; and the shipped v1, v2 and v3 clients as fixtures, so their payloads are proven to be refused rather than decrypted), the escaping layer, the image share card's verdict rules (any failing check means "tampered", which copy each check describes, bad news opening its own evidence), and the service worker's request scoping.
 
@@ -605,7 +612,7 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 | Document | What it covers |
 | --- | --- |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model: assets, adversaries, every control mapped to the code and test that holds it — and an explicit list of what is **not** defended |
-| [docs/API.md](docs/API.md) | All 9 HTTP routes and 47 Socket.IO events, with the fields each reads |
+| [docs/API.md](docs/API.md) | All 9 HTTP routes and 48 Socket.IO events, with the fields each reads |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, Render, and running it from Windows behind a tunnel |
 | [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) | Google sign-in, start to finish, including the failures and what each means |
 | [docs/ADMIN.md](docs/ADMIN.md) | Roles, the approval gate, and the rank rules |

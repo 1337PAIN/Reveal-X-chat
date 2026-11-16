@@ -482,6 +482,14 @@
                 <div class="auth-divider"><span>or use a local account</span></div>
             </div>
 
+            <!-- Sign in, or create an account: one form, two modes. In Create
+                 account the name is checked as it is typed and the password is
+                 typed twice (signup-ui.js, chat/auth.js). -->
+            <div class="auth-mode" role="group" aria-label="Sign in or create an account">
+                <button id="authModeSignIn" class="auth-mode-btn" type="button" aria-pressed="true">Sign in</button>
+                <button id="authModeSignUp" class="auth-mode-btn" type="button" aria-pressed="false">Create account</button>
+            </div>
+
             <input
                 type="text"
                 id="usernameInput"
@@ -489,7 +497,9 @@
                 autocomplete="username"
                 maxlength="30"
                 aria-label="Username"
+                aria-describedby="usernameStatus"
             >
+            <p id="usernameStatus" class="username-status" aria-live="polite"></p>
             <input
                 type="password"
                 id="passwordInput"
@@ -498,9 +508,19 @@
                 maxlength="128"
                 aria-label="Password"
             >
+            <input
+                type="password"
+                id="confirmPasswordInput"
+                class="signup-only"
+                placeholder="Type the password again"
+                autocomplete="new-password"
+                maxlength="128"
+                aria-label="Type the password again"
+                hidden
+            >
             <div class="modal-actions">
                 <button id="loginBtn" class="btn btn-primary" type="button">Login</button>
-                <button id="registerBtn" class="btn btn-secondary" type="button">Request account</button>
+                <button id="registerBtn" class="btn btn-primary" type="button" hidden>Request account</button>
             </div>
             <div id="authError" class="auth-error" aria-live="polite"></div>
             <div id="authNotice" class="auth-notice hidden" aria-live="polite"></div>
@@ -751,6 +771,7 @@
     <script src="{{ asset('js/voice-ui.js') }}"></script>
     <script src="{{ asset('js/share-ui.js') }}"></script>
     <script src="{{ asset('js/contacts-ui.js') }}"></script>
+    <script src="{{ asset('js/signup-ui.js') }}"></script>
     <script src="{{ asset('js/crypto.js') }}"></script>
     <script src="{{ asset('js/vc-client.js') }}"></script>
     <script src="{{ asset('js/contact-row.js') }}"></script>

@@ -208,6 +208,36 @@ def m011_contacts(room, db):
                 (low, high, low, now, now))
 
 
+def case_duplicate_usernames(db):
+    """Lower-cased usernames held by more than one account."""
+    rows = db.execute(
+        "SELECT LOWER(username) AS name FROM users GROUP BY LOWER(username) HAVING COUNT(*) > 1"
+    ).fetchall()
+    return sorted(row['name'] for row in rows)
+
+
+def m012_username_case(room, db):
+    """One account per username, whatever the capitals.
+
+    The UNIQUE constraint on users.username compares exactly, so "Alice" and
+    "alice" could both be created, while contacts, renaming and the admin
+    tools all compare without case. A unique index on LOWER(username) makes
+    the database refuse that; SQLite and PostgreSQL both index expressions.
+
+    A database that already holds such a pair cannot take the index. It is
+    then skipped and the names logged, so the server still starts and an
+    administrator can rename one of each; create_user refuses new ones either
+    way.
+    """
+    duplicates = case_duplicate_usernames(db)
+    if duplicates:
+        from app.log import log
+        log.warning('Usernames held twice with different capitals; rename one of each, '
+                    'then restart to add the index: %s', ', '.join(duplicates))
+        return
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))")
+
+
 MIGRATIONS = [
     (1, 'base tables', m001_base_tables),
     (2, 'message lifecycle columns', m002_message_lifecycle),
@@ -220,6 +250,7 @@ MIGRATIONS = [
     (9, 'e2ee v2 message uuid', m009_e2ee_v2_message_uuid),
     (10, 'resume tokens and session epoch', m010_resume_tokens),
     (11, 'contacts', m011_contacts),
+    (12, 'usernames unique without case', m012_username_case),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

@@ -442,6 +442,10 @@ class ChatRoom:
             return None, 'Password is too long'
         if password.lower() == username.lower():
             return None, 'Password cannot match username'
+        # The UNIQUE constraint compares exactly; "Alice" and "alice" are one
+        # name everywhere else (migration 12 indexes it as well).
+        if self.username_taken(username):
+            return None, 'Username already exists'
 
         user = {
             'id': str(uuid.uuid4()),
@@ -482,10 +486,23 @@ class ChatRoom:
     ERROR_PENDING = 'This account is waiting for administrator approval'
     ERROR_DISABLED = 'This account has been disabled by an administrator'
 
+    def username_taken(self, username):
+        """Is this name held by any account, in any state, with any capitals?"""
+        with self._connect() as db:
+            row = db.execute("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)",
+                             ((username or '').strip(),)).fetchone()
+        return row is not None
+
     def authenticate(self, username, password):
         username = (username or '').strip()
         with self._connect() as db:
             row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+            if row is None:
+                # Any capitals sign in. Only when exactly one account matches:
+                # a database from before migration 12 may hold two.
+                rows = db.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(?)",
+                                  (username,)).fetchall()
+                row = rows[0] if len(rows) == 1 else None
 
         # No row, or a Google-only row with no password, used to return here
         # without hashing anything: ~0.3 ms against ~50 ms for a wrong

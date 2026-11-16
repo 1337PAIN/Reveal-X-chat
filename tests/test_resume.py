@@ -245,8 +245,11 @@ def test_every_session_handler_says_so_when_there_is_none(store, event):
 
 
 def test_the_pre_auth_list_is_short_and_deliberate():
+    # check_username: the sign-up form asks before anyone has an account; it
+    # reads one yes/no and is rate limited per address.
     assert routes.PRE_AUTH_EVENTS == {
         'register', 'login', 'firebase_login', 'verify_totp', 'resume_session', 'logout',
+        'check_username',
     }
 
 

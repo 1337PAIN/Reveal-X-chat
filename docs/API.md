@@ -1,6 +1,6 @@
 # API reference
 
-Everything the server exposes: 9 HTTP routes and 47 Socket.IO events, with the
+Everything the server exposes: 9 HTTP routes and 48 Socket.IO events, with the
 fields each one actually reads. Extracted from `app/handlers/`, not written from
 memory.
 
@@ -77,6 +77,7 @@ set out in [SECURITY.md](SECURITY.md).
 | Event | In | Out |
 | --- | --- | --- |
 | `register` | `username`, `password` | `registration_submitted`, `auth_error` |
+| `check_username` | `username` | `username_status` |
 | `login` | `username`, `password` | `auth_success` / `totp_required` / `auth_error` |
 | `firebase_login` | `id_token` | `auth_success` / `totp_required` / `auth_error` |
 | `verify_totp` | `code` | `auth_success`, `totp_error`, `auth_error` |
@@ -92,14 +93,21 @@ when the account's password is reset, its role changes, it is disabled, or it
 is deleted. The server stores only its SHA-256. The client keeps it in memory,
 so a page reload means signing in again.
 
-Every event other than `register`, `login`, `firebase_login`, `verify_totp`,
-`resume_session` and `logout` needs a session. Without one it answers
+Every event other than `register`, `check_username`, `login`, `firebase_login`,
+`verify_totp`, `resume_session` and `logout` needs a session. Without one it answers
 `auth_required` with an `error` string and does nothing else. It used to return
 silently, so a page whose connection had dropped looked signed in and quietly
 ignored everything.
 
 `register` **does not sign anyone in.** Accounts start `pending` and an
-administrator approves them.
+administrator approves them. A username belongs to one account whatever the
+capitals; a taken one answers `auth_error` "That username is already taken.
+Choose another."
+
+`check_username` is what the Create account form asks as a name is typed:
+`username_status` is `{username, available: true}`, or `{username, available:
+false, error}` for a taken name (any capitals, any account state), a malformed
+one, or more than 30 checks a minute from one address.
 
 `login` returns one of three generic failures — bad credentials, awaiting
 approval, disabled — and only *bad credentials* counts toward the throttle (8
@@ -326,7 +334,7 @@ tested for refusal from a non-admin and from an anonymous socket
 `new_message`, `users_updated`, `chat_history`, `message_reactions`,
 `message_deleted`, `share_revoked`, `profile_updated`, `public_key_registered`,
 `totp_state`, `totp_enrolment`, `totp_required`, `admin_accounts`, `admin_ok`,
-`contacts_updated`, `contact_result`,
+`contacts_updated`, `contact_result`, `username_status`,
 `force_signed_out`, `auth_success`, `auth_required`, and the error channels `auth_error`,
 `admin_error`, `settings_error`, `message_error`, `image_error`, `totp_error`.
 

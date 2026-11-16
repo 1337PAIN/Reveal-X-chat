@@ -281,3 +281,31 @@ def test_removing_a_contact_closes_the_chat_on_both_sides(pair):
         assert page.locator('#usersList button', has_text=peer).count() == 0
         assert page.is_disabled('#messageInput')
     assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_create_account_says_when_a_username_is_taken(browser, server):
+    """Sign-up checks the name as it is typed; a taken one (any capitals) is
+    named as taken and the request is not sent; a free one goes through."""
+    page = new_page(browser)
+    try:
+        page.goto(server.url + '/')
+        page.click('#authModeSignUp')
+        assert page.is_visible('#confirmPasswordInput') and page.is_hidden('#loginBtn')
+        page.fill('#usernameInput', ALICE[0].upper())
+        page.locator('#usernameStatus', has_text='already taken').wait_for()
+        page.fill('#passwordInput', 'brand-new-pass-1')
+        page.fill('#confirmPasswordInput', 'brand-new-pass-1')
+        page.click('#registerBtn')
+        assert 'already taken' in page.text_content('#authError')
+
+        page.fill('#usernameInput', 'e2efreshname')
+        page.locator('#usernameStatus', has_text='e2efreshname is available').wait_for()
+        page.fill('#confirmPasswordInput', 'something-else-1')
+        page.click('#registerBtn')
+        assert 'do not match' in page.text_content('#authError')
+        page.fill('#confirmPasswordInput', 'brand-new-pass-1')
+        page.click('#registerBtn')
+        page.locator('#authNotice', has_text='Request submitted').wait_for()
+        assert not page.errors, page.errors
+    finally:
+        page.context.close()

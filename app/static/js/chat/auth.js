@@ -32,6 +32,66 @@ import {
 // 8. Auth, Login and Account CRUD
 // ==========================================
 
+// ==========================================
+// 8a. Sign in, or create an account
+// ==========================================
+//
+// One form, two modes. Create account checks the name as it is typed (the
+// server's check_username) and asks for the password twice; the rules and
+// wording are in signup-ui.js.
+
+const signup = window.revealxSignupUI;
+const modeSignIn = document.getElementById('authModeSignIn');
+const modeSignUp = document.getElementById('authModeSignUp');
+const confirmPasswordInput = document.getElementById('confirmPasswordInput');
+const usernameStatus = document.getElementById('usernameStatus');
+let authMode = 'login';
+let lastUsernameStatus = null;
+let checkTimer = 0;
+
+function showUsernameHint(status) {
+    const hint = signup.usernameHint(status);
+    usernameStatus.textContent = hint.text;
+    usernameStatus.className = `username-status ${hint.state}`;
+}
+
+function setAuthMode(mode) {
+    authMode = mode;
+    const creating = mode === 'register';
+    modeSignIn.setAttribute('aria-pressed', String(!creating));
+    modeSignUp.setAttribute('aria-pressed', String(creating));
+    confirmPasswordInput.hidden = !creating;
+    loginBtn.hidden = creating;
+    registerBtn.hidden = !creating;
+    passwordInput.setAttribute('autocomplete', creating ? 'new-password' : 'current-password');
+    authError.textContent = '';
+    lastUsernameStatus = null;
+    showUsernameHint(null);
+    if (creating) requestUsernameCheck();
+}
+
+function requestUsernameCheck() {
+    clearTimeout(checkTimer);
+    const name = usernameInput.value.trim();
+    if (authMode !== 'register' || !signup.worthChecking(name)) {
+        showUsernameHint(null);
+        return;
+    }
+    // Asked once typing pauses, not on every key: the server limits it.
+    checkTimer = setTimeout(() => socket.emit('check_username', { username: name }), 350);
+}
+
+modeSignIn.addEventListener('click', () => setAuthMode('login'));
+modeSignUp.addEventListener('click', () => setAuthMode('register'));
+usernameInput.addEventListener('input', requestUsernameCheck);
+
+socket.on('username_status', (status) => {
+    // Answers for a name that has since been changed are stale.
+    if (authMode !== 'register' || !status || status.username !== usernameInput.value.trim()) return;
+    lastUsernameStatus = status;
+    showUsernameHint(status);
+});
+
 function submitAuth(mode) {
     const username = usernameInput.value.trim();
     const password = passwordInput.value;
@@ -41,6 +101,16 @@ function submitAuth(mode) {
     if (!username || !password) {
         authError.textContent = 'Enter username and password';
         return;
+    }
+
+    if (mode === 'register') {
+        const problem = signup.signupProblem({
+            username, password, confirm: confirmPasswordInput.value, status: lastUsernameStatus,
+        });
+        if (problem) {
+            authError.textContent = problem;
+            return;
+        }
     }
 
     if (!validateUsername(username)) {
@@ -295,6 +365,8 @@ socket.on('registration_submitted', (data) => {
     const password = document.getElementById('passwordInput');
     if (username) username.value = '';
     if (password) password.value = '';
+    if (confirmPasswordInput) confirmPasswordInput.value = '';
+    showUsernameHint(null);
 });
 
 socket.on('force_signed_out', (data) => {

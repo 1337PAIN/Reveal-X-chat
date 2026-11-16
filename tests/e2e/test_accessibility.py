@@ -77,6 +77,21 @@ def test_login(browser, server, width, theme):
 
 @pytest.mark.parametrize('theme', THEMES)
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
+def test_create_account(browser, server, width, theme):
+    """The Create account mode, showing that a name is taken."""
+    page = themed(new_page(browser, *WIDTHS[width]), theme)
+    try:
+        page.goto(server.url + '/')
+        page.click('#authModeSignUp')
+        page.fill('#usernameInput', ALICE[0])
+        page.locator('#usernameStatus', has_text='already taken').wait_for()
+        check(page, f'signup-{width}-{theme}')
+    finally:
+        page.context.close()
+
+
+@pytest.mark.parametrize('theme', THEMES)
+@pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
 def test_chat(browser, server, width, theme):
     bob = sign_in(new_page(browser), server, BOB)
     page = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, ALICE)

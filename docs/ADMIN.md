@@ -161,12 +161,23 @@ filling in the request form. Without this the gate would be decorative: anyone
 with a Google account could walk in while password sign-ups waited.
 `test_a_first_google_sign_in_only_requests_an_account` pins it.
 
-### Registration does not confirm whether a username exists
+### Registration says when a username is taken
 
-Requesting an account with a name that is already taken returns the same
-"Request submitted" message as any other request. Since requests are invisible
-to the requester, an honest "already exists" would turn the form into a way to
-enumerate who holds an account.
+A username belongs to one account, whatever the capitals (migration 12 adds a
+unique index on `LOWER(username)`). The Create account form asks
+`check_username` as the name is typed and shows "That username is already
+taken" or "available"; submitting a taken name gets the same words.
+
+Until 17 Nov 2026 a taken name was answered "Request submitted" while nothing
+was created, so the form could not be used to learn who holds an account.
+That was traded for an honest answer: people could not tell why they never
+got in, and contacts are added by username, which reveals a name in use
+anyway. The check is limited to 30 a minute per address.
+
+If an older database already holds the same name twice in different capitals,
+the index is skipped and the names are written to the server log; rename one
+of each and restart to add it. Sign-in by a differently-capitalised name only
+works where exactly one account matches.
 
 Separately, a wrong password is reported as *"Invalid username or password"*
 before any "awaiting approval" message — otherwise the state of an account would

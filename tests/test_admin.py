@@ -129,15 +129,17 @@ def test_the_wrong_password_is_reported_before_the_account_state(store):
     assert error == 'Invalid username or password'
 
 
-def test_registration_does_not_reveal_that_a_username_is_taken(store):
-    """Requests are invisible to the requester, so an honest 'already exists'
-    would turn this form into a username oracle."""
+def test_registration_says_when_a_username_is_taken(store):
+    """It used to answer "Request submitted" and create nothing, so the form
+    could not be used to learn who holds an account. People could not tell
+    why they never got in, and contacts are now added by username anyway, so
+    it says so (tests/test_username_unique.py)."""
     store.create_user('taken', 'correct-horse-1')
 
     sock = socketio.test_client(flask_app)
     sock.emit('register', {'username': 'taken', 'password': 'different-pass-9'})
-    assert events(sock, 'registration_submitted')
-    assert events(sock, 'auth_error') == []
+    assert events(sock, 'registration_submitted') == []
+    assert events(sock, 'auth_error')
     sock.disconnect()
 
 

@@ -2843,3 +2843,72 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
 }
 
 .chat-header-btn[hidden] { display: none; }
+
+/* ==========================================================================
+   Sign in / Create account
+   ========================================================================== */
+
+.auth-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    margin: 4px 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+}
+
+.auth-mode-btn {
+    min-height: 38px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* The chosen mode: the primary indigo with white, 8:1 and above in both
+   themes, so "which one am I in" does not rest on a faint tint. */
+.auth-mode-btn[aria-pressed="true"] {
+    background: linear-gradient(135deg, #3730a3, #1e40af);
+    color: #fff;
+}
+
+.auth-mode-btn:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.username-status {
+    min-height: 0;
+    margin: -4px 0 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.username-status:empty { display: none; }
+.username-status.ok { color: var(--success); }
+.username-status.bad { color: var(--danger); }
+.username-status.ok::before { content: '\2713  ' / ''; }
+.username-status.bad::before { content: '\2715  ' / ''; }
+
+#confirmPasswordInput[hidden],
+#loginBtn[hidden],
+#registerBtn[hidden] {
+    display: none;
+}
+
+/* --danger (#dc2626) is under 7:1 on the light modal, and so is #991b1b
+   there (6.5:1 on its #d8e4f6, measured by axe); #7f1d1d is 9.6:1. */
+body[data-theme="light"] .username-status.bad {
+    color: #7f1d1d;
+}
+
+/* One action at a time in the local form: Login, or Request account. */
+#authModal > .modal-content > .modal-actions {
+    grid-template-columns: 1fr;
+}

@@ -48,8 +48,8 @@ def handle_register(data):
     """Submit an account *request*. It does not sign anyone in.
 
     Self-service registration creates a 'pending' row that cannot authenticate
-    until an administrator approves it. The reply is deliberately the same
-    whether or not the username was already taken -- see below.
+    until an administrator approves it. A taken name, in any capitals, is
+    reported as taken (tests/test_username_unique.py).
     """
     try:
         data = data or {}
@@ -66,16 +66,12 @@ def handle_register(data):
             data.get('username'), data.get('password'), account_state='pending'
         )
         if error:
-            # A duplicate username is the one error we do not report honestly.
-            # Since requests are not visible to the requester, an accurate
-            # "already exists" would turn this form into a way to enumerate who
-            # holds an account. Validation errors about the caller's own input
-            # are safe to return.
+            # A taken name used to be answered "Request submitted" with nothing
+            # created, so the form could not list accounts. People could not
+            # tell why they never got in, and contacts are added by username
+            # anyway; it now says so, and check_username is rate limited.
             if error == 'Username already exists':
-                emit('registration_submitted', {
-                    'message': 'Request submitted. An administrator will review it.',
-                }, to=request.sid)
-                return
+                error = USERNAME_TAKEN
             emit('auth_error', {'error': error}, to=request.sid)
             return
 
@@ -86,6 +82,27 @@ def handle_register(data):
     except Exception as exc:
         log.exception('Register failed: %s', exc)
         emit('auth_error', {'error': 'Registration failed on the server'}, to=request.sid)
+
+
+@socketio.on('check_username')
+def handle_check_username(data):
+    """Is this name free? Asked by the sign-up form as the name is typed."""
+    name = ((data or {}).get('username') or '')
+    name = name.strip() if isinstance(name, str) else ''
+    if _username_check_limited(_client_address()):
+        emit('username_status', {'username': name, 'available': False,
+                                 'error': 'Too many checks. Wait a minute and try again.'}, to=request.sid)
+        return
+    if not USERNAME_RE.fullmatch(name):
+        emit('username_status', {'username': name, 'available': False,
+                                 'error': 'Use 3-30 letters, numbers, dots, dashes or underscores.'},
+             to=request.sid)
+        return
+    if chat_room.username_taken(name):
+        emit('username_status', {'username': name, 'available': False, 'error': USERNAME_TAKEN},
+             to=request.sid)
+        return
+    emit('username_status', {'username': name, 'available': True}, to=request.sid)
 
 
 @socketio.on('login')

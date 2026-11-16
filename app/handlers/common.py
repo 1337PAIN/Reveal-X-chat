@@ -25,7 +25,7 @@ from flask_socketio import emit
 import numpy as np
 
 from app import app, socketio
-from app.models import FORBIDDEN_EXTRA_KEYS, chat_room
+from app.models import FORBIDDEN_EXTRA_KEYS, USERNAME_RE, chat_room
 from app.timeutil import utcnow
 from app.log import audit as audit_log, log
 from app import state, sweeper
@@ -242,6 +242,20 @@ REGISTER_MAX_REQUESTS = 5        # per address, within the window
 REGISTER_WINDOW_SECONDS = 600
 
 
+#: Sign-up asks whether a name is free as it is typed. Each answer says
+#: whether an account holds that name, so it is limited per address: enough
+#: for someone typing, far too few to list the accounts.
+USERNAME_CHECK_RATE = state.store().window('username_check') if state.store().kind == 'memory' else {}
+USERNAME_CHECK_MAX = 30          # per address, within the window
+USERNAME_CHECK_WINDOW_SECONDS = 60
+USERNAME_TAKEN = 'That username is already taken. Choose another.'
+
+
+def _username_check_limited(address):
+    return state.store().window_reserve('username_check', [(address, USERNAME_CHECK_MAX)],
+                                        USERNAME_CHECK_WINDOW_SECONDS, time.time())
+
+
 def _register_rate_limited(address):
     """Seconds to wait before this address may request another account, or 0."""
     return state.store().window_reserve('register', [(address, REGISTER_MAX_REQUESTS)],
@@ -441,6 +455,7 @@ def emit_users():
 #: table against this set, so a new handler is covered without being listed.
 PRE_AUTH_EVENTS = frozenset({
     'register', 'login', 'firebase_login', 'verify_totp', 'resume_session', 'logout',
+    'check_username',
 })
 
 AUTH_REQUIRED_MESSAGE = 'Your session has ended. Sign in again.'
