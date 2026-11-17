@@ -189,7 +189,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_tunnel.ps1
 `run_tunnel.ps1` runs the named tunnel when `.tunnel-token` exists and a
 quick tunnel when it does not. It passes the token in the environment, not on
 the command line, and gives cloudflared this project's own
-`scripts/cloudflared-revealx.yml`, so a `~/.cloudflared/config.yml` belonging
+`scripts/cloudflared-revealx.yml` in both modes, so a `~/.cloudflared/config.yml` belonging
 to another tunnel on the same PC is never read or changed. Add the hostname to
 Firebase's authorized domains once; it does not change again.
 

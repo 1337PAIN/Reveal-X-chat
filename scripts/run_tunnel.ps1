@@ -23,13 +23,15 @@ if (-not $exe) {
     $exe = $found.Source
 }
 
+# Both modes get this file: without --config, cloudflared loads
+# ~/.cloudflared/config.yml, which may belong to another tunnel on this PC.
+$config = Join-Path $PSScriptRoot 'cloudflared-revealx.yml'
 $tokenFile = Join-Path $root '.tunnel-token'
 if (Test-Path $tokenFile) {
     $env:TUNNEL_TOKEN = (Get-Content $tokenFile -Raw).Trim()
-    $config = Join-Path $PSScriptRoot 'cloudflared-revealx.yml'
     Write-Host 'Named tunnel (fixed address; the hostname is set in the Cloudflare dashboard).'
     & $exe --config $config tunnel run
 } else {
     Write-Host 'No .tunnel-token: quick tunnel, random URL that changes every run.'
-    & $exe tunnel --no-autoupdate --url http://127.0.0.1:5000
+    & $exe --config $config tunnel --url http://127.0.0.1:5000
 }
