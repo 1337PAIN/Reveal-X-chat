@@ -124,7 +124,7 @@ optional `firebase.local.ps1` of `$env:FIREBASE_*` lines, and starts
 `run.py`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scriptsun_windows_server.ps1
+powershell -ExecutionPolicy Bypass -File scripts\run_windows_server.ps1
 ```
 
 It also sets `REVEALX_BIND_HOST=127.0.0.1`, so the server listens on this PC
@@ -157,10 +157,41 @@ password.
       shares tagged before a restart verify as tampered, which looks exactly
       like a real detection on the headline feature
 - [ ] Admin password set, and changed after the first sign-in
-- [ ] Remember the tunnel URL changes each run on the free tiers — the Firebase
-      authorized domain has to be updated with it
+- [ ] Remember the quick-tunnel URL changes each run — the Firebase
+      authorized domain has to be updated with it (a named tunnel, below,
+      keeps one address)
 - [ ] Stop the tunnel when the demo is over. This is your own machine, and the
       app has an upload path and a database on it
+
+### A fixed address on your own domain
+
+A quick tunnel's URL changes every run. A **named tunnel** keeps one hostname,
+such as `revealx.qzz.io`, still free, still with no router changes:
+
+1. In the Cloudflare dashboard, **add the domain** (free plan). Cloudflare
+   gives two nameservers; set them at the registrar (for a DigitalPlat free
+   domain, in its dashboard's nameserver settings) and wait until Cloudflare
+   says the domain is active.
+2. **Create the tunnel** in the dashboard (Zero Trust → Networks → Tunnels →
+   Create a tunnel → Cloudflared). Give it a **public hostname**: the domain,
+   service `HTTP`, URL `127.0.0.1:5000`.
+3. Copy the tunnel's **token** (the long string after `--token` in the install
+   command it shows) into a file named `.tunnel-token` in the project root.
+   It is git-ignored; treat it like a password, since anyone holding it can
+   serve traffic as this hostname.
+4. Start the app with `scripts\run_windows_server.ps1`, then, in a second
+   window:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_tunnel.ps1
+```
+
+`run_tunnel.ps1` runs the named tunnel when `.tunnel-token` exists and a
+quick tunnel when it does not. It passes the token in the environment, not on
+the command line, and gives cloudflared this project's own
+`scripts/cloudflared-revealx.yml`, so a `~/.cloudflared/config.yml` belonging
+to another tunnel on the same PC is never read or changed. Add the hostname to
+Firebase's authorized domains once; it does not change again.
 
 ## Why not `python run.py`
 

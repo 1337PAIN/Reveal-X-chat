@@ -1,0 +1,5 @@
+# cloudflared settings for Reveal-X's named tunnel (scripts/run_tunnel.ps1).
+# The tunnel itself and its hostname -> http://127.0.0.1:5000 route live in the
+# Cloudflare dashboard; the token in the git-ignored .tunnel-token picks it.
+# This file exists so cloudflared does not fall back to ~/.cloudflared/config.yml.
+no-autoupdate: true
