@@ -846,3 +846,131 @@ body[data-theme="light"] .lock-screen {
     color: var(--text-secondary);
     margin: -8px 0 12px;
 }
+
+/* --- Settings: rows and switches ------------------------------------------ */
+
+/* The panel sits inside .modal-content, which centres its text for the small
+   dialogs; a settings list reads down its left edge. */
+.settings-body { text-align: left; }
+
+.settings-section h3 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+}
+
+/* A description straight under a heading (Privacy, Account) gets its own
+   line rather than the -8px pull of the older rule, which left it touching
+   the heading once headings got smaller. */
+.settings-body .settings-hint {
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Security and Preferences: one card per section, a row per setting, the
+   switch on the right and what it does under its name. */
+.settings-toggles > .settings-option {
+    margin: 0;
+    padding: 12px 14px;
+    background: var(--glass-1);
+    border: 1px solid var(--glass-border);
+    border-top: none;
+}
+
+.settings-toggles > h3 + .settings-option {
+    border-top: 1px solid var(--glass-border);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.settings-toggles > .settings-option:last-child {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.settings-toggles > h3 + .settings-option:last-child {
+    border-radius: var(--radius-md);
+}
+
+.settings-toggles .settings-option label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 28px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Under the name, clear of the switch. More specific than the general
+   .settings-hint above, whose negative top margin is for a hint directly
+   under a heading and drew these over their labels. */
+.settings-body .settings-toggles .settings-hint {
+    margin: 4px 60px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* The switch is the native checkbox, restyled: keyboard, form state and the
+   label click all stay the browser's; role="switch" says "on/off". */
+.settings-toggles input[type="checkbox"] {
+    order: 2;
+    flex: none;
+    position: relative;
+    box-sizing: border-box;
+    width: 44px;
+    height: 26px;
+    margin: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    border: 1.5px solid var(--text-secondary);
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    transition: background-color .2s ease, border-color .2s ease;
+}
+
+.settings-toggles input[type="checkbox"]::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition: transform .2s ease, background-color .2s ease;
+}
+
+.settings-toggles input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+/* On, the knob moves right and takes the colour that stands out on the
+   accent: dark on the dark theme's light teal, white on the light theme's
+   deep teal. */
+.settings-toggles input[type="checkbox"]:checked::before {
+    transform: translateX(18px);
+    background: #0b1126;
+}
+
+body[data-theme="light"] .settings-toggles input[type="checkbox"]:checked::before {
+    background: #ffffff;
+}
+
+.settings-toggles input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.settings-toggles input[type="checkbox"]:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-toggles input[type="checkbox"],
+    .settings-toggles input[type="checkbox"]::before { transition: none; }
+}

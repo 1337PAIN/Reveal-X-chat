@@ -345,6 +345,22 @@ Added on 17 Nov 2026: the ⋮ beside a contact's name (`chat-menu-ui.js`).
   and the Contact info dialog at 1440 px and 375 px in both themes, AAA
   contrast on: **0 violations**.
 
+### Settings switches
+
+Redesigned on 18 Nov 2026, after a description in Security was drawn over
+its own label (a negative margin meant for a hint under a heading).
+
+- **Each on/off setting is still the native checkbox**, restyled as a switch
+  and given `role="switch"`, so a screen reader says "switch, on" rather than
+  "checkbox, checked", matching what is drawn. Keyboard, the label click and
+  form state are the browser's own.
+- **On and off differ by more than colour**: the knob moves from left to
+  right, and the off track has a full-contrast outline.
+- **The description sits under the setting's name**, left-aligned and clear
+  of the switch. `test_settings` measures it: no description may start above
+  the bottom of its label, at 1440 px and 375 px in both themes, alongside the
+  axe scan (AAA contrast on): **0 violations**.
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

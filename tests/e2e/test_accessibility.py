@@ -118,6 +118,23 @@ def test_settings(browser, server, width, theme):
             page.click('#sidebarToggle')
         page.click('#settingsBtn')
         page.wait_for_selector('#settingsModal:not(.hidden)')
+        # Text drawn over text cannot be read: each option's description sits
+        # below its label (a stray negative margin once pulled it on top), and
+        # the panel reads left-aligned rather than inheriting the centring of
+        # the modal around it.
+        layout = page.evaluate('''() => [...document.querySelectorAll(
+                '#settingsModal .settings-option')].flatMap(option => {
+            const label = option.querySelector(':scope > label');
+            const hint = option.querySelector(':scope > .settings-hint');
+            if (!label || !hint) return [];
+            return [{id: label.htmlFor,
+                     gap: hint.getBoundingClientRect().top - label.getBoundingClientRect().bottom,
+                     align: getComputedStyle(hint).textAlign}];
+        })''')
+        assert len(layout) == 2, layout
+        for row in layout:
+            assert row['gap'] >= 0, row
+            assert row['align'] in ('left', 'start'), row
         check(page, f'settings-{width}-{theme}')
     finally:
         page.context.close()
