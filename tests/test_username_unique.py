@@ -53,13 +53,22 @@ def test_the_database_refuses_a_case_duplicate_too(store):
 
 def test_the_migration_survives_existing_case_duplicates(store):
     """A database that already holds 'bob' and 'Bob' must still start: the
-    index is skipped and the duplicates logged for an admin to resolve."""
-    with store._connect() as db:
-        db.execute("DROP INDEX IF EXISTS idx_users_username_lower")
-        db.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES ('b1', 'bob', 'h', 'now')")
-        db.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES ('b2', 'Bob', 'h', 'now')")
-        migrations.m012_username_case(store, db)
-        assert migrations.case_duplicate_usernames(db) == ['bob']
+    index is skipped and the duplicates logged for an admin to resolve.
+
+    The index is put back afterwards: on PostgreSQL one database serves the
+    whole run (only its rows are emptied between tests), so a dropped index
+    would stay dropped for every test after this one."""
+    try:
+        with store._connect() as db:
+            db.execute("DROP INDEX IF EXISTS idx_users_username_lower")
+            db.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES ('b1', 'bob', 'h', 'now')")
+            db.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES ('b2', 'Bob', 'h', 'now')")
+            migrations.m012_username_case(store, db)
+            assert migrations.case_duplicate_usernames(db) == ['bob']
+    finally:
+        with store._connect() as db:
+            db.execute("DELETE FROM users WHERE id IN ('b1', 'b2')")
+            migrations.m012_username_case(store, db)
 
 
 def test_sign_in_accepts_any_capitals(store):

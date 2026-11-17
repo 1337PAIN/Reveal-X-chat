@@ -76,7 +76,9 @@ def test_the_pin_is_stored_hashed(world, store):
     a, b, alice, bob = world
     a.emit('chat_lock_set_pin', {'pin': '2468'})
     with store._connect() as db:
-        stored = db.execute("SELECT chat_lock_hash FROM users WHERE id = ?", (alice['id'],)).fetchone()[0]
+        # By name: PostgreSQL rows are dicts (RealDictCursor), not tuples.
+        stored = db.execute("SELECT chat_lock_hash FROM users WHERE id = ?",
+                            (alice['id'],)).fetchone()['chat_lock_hash']
     assert stored and '2468' not in stored and stored.startswith('$argon2')
     assert last(a, 'chat_lock_state') == {'pin_set': True, 'open': True}
 
