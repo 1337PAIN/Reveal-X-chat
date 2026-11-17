@@ -2,8 +2,10 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\run_windows_server.ps1
 #
-# Then, in a second window, start the tunnel (docs/DEPLOYMENT.md):
-#   cloudflared tunnel --url http://localhost:5000
+# One command brings the site up: this also opens the tunnel
+# (scripts\run_tunnel.ps1) in a window of its own, unless a Reveal-X tunnel is
+# already running. -NoTunnel starts the server alone. Closing the tunnel
+# window takes the site offline; the server keeps running.
 #
 # Why each setting is here is in docs/DEPLOYMENT.md, "Running it from a
 # Windows PC". In short: the two keys must survive restarts, the server listens
@@ -17,9 +19,28 @@
 # secret has been sealed with it, and a new REVEAL_X_SECRET_KEY makes every
 # stored image share report as tampered.
 
+param([switch]$NoTunnel)
+
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $secrets = Join-Path $root '.server-secrets.ps1'
+
+# The tunnel goes first, before the keys below are loaded into this
+# process's environment, so its window never inherits them. It retries until
+# the server is listening. A cloudflared already started with this project's
+# config is a Reveal-X tunnel, and a second one is not needed.
+if (-not $NoTunnel) {
+    $running = Get-CimInstance Win32_Process -Filter "Name = 'cloudflared.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like '*cloudflared-revealx.yml*' }
+    if ($running) {
+        Write-Host 'Reveal-X tunnel already running; not opening another.'
+    } else {
+        Start-Process powershell -ArgumentList @(
+            '-NoExit', '-ExecutionPolicy', 'Bypass',
+            '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'run_tunnel.ps1')))
+        Write-Host 'Tunnel opened in its own window.'
+    }
+}
 
 function New-Base64Key([int]$length) {
     $bytes = New-Object byte[] $length

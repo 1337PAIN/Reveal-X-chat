@@ -179,12 +179,17 @@ such as `revealx.qzz.io`, still free, still with no router changes:
    command it shows) into a file named `.tunnel-token` in the project root.
    It is git-ignored; treat it like a password, since anyone holding it can
    serve traffic as this hostname.
-4. Start the app with `scripts\run_windows_server.ps1`, then, in a second
-   window:
+4. Start everything with one command:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run_tunnel.ps1
+powershell -ExecutionPolicy Bypass -File scripts\run_windows_server.ps1
 ```
+
+`run_windows_server.ps1` opens the tunnel (`scripts\run_tunnel.ps1`) in a
+window of its own, before it loads the server's keys so that window never
+inherits them, and skips it when a Reveal-X tunnel is already running.
+`-NoTunnel` starts the server alone. The site is up while this PC is awake
+and both windows are open; closing the tunnel window takes it offline.
 
 `run_tunnel.ps1` runs the named tunnel when `.tunnel-token` exists and a
 quick tunnel when it does not. It passes the token in the environment, not on
