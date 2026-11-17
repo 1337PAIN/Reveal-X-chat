@@ -720,6 +720,11 @@ body[data-theme="light"] .lock-screen {
     width: 100%;
 }
 
+/* A hidden password box takes its show/hide control with it. The box is
+   hidden, not its wrapper (sign-in hides "Type the password again"), and
+   the control left behind floated over the Login button. */
+.password-field:has(> input[hidden]) { display: none; }
+
 /* In the admin create row the input carried the flex sizing, so the wrapper
    takes it over. */
 .admin-create-row .password-field { flex: 1 1 170px; min-width: 0; }

@@ -289,8 +289,13 @@ def test_create_account_says_when_a_username_is_taken(browser, server):
     page = new_page(browser)
     try:
         page.goto(server.url + '/')
+        # One eye per password box you can see: in Sign in the confirm box is
+        # hidden, and its eye went with it (it used to float over Login).
+        reveals = page.locator('#authModal .password-reveal:visible')
+        assert reveals.count() == 1
         page.click('#authModeSignUp')
         assert page.is_visible('#confirmPasswordInput') and page.is_hidden('#loginBtn')
+        assert reveals.count() == 2
         page.fill('#usernameInput', ALICE[0].upper())
         page.locator('#usernameStatus', has_text='already taken').wait_for()
         page.fill('#passwordInput', 'brand-new-pass-1')
