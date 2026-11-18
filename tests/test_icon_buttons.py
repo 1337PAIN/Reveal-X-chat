@@ -25,7 +25,6 @@ def button(element_id):
 
 @pytest.mark.parametrize('element_id,label', [
     ('settingsBtn', 'Settings'),
-    ('reconstructImageBtn', 'Rebuild an image from two shares'),
     ('themeToggle', 'Switch to light theme'),
     ('shareImageBtn', 'Share an image'),
     ('voiceBtn', 'Record a voice message'),
@@ -37,10 +36,22 @@ def test_icon_buttons_are_named(element_id, label):
     assert 'aria-hidden="true"' in body, f'{element_id}: the icon is still read out'
 
 
-@pytest.mark.parametrize('element_id,word', [('reconstructImageBtn', 'Rebuild'), ('themeToggle', 'Theme')])
+@pytest.mark.parametrize('element_id,word', [('themeToggle', 'Theme')])
 def test_footer_buttons_show_a_word(element_id, word):
     _, body = button(element_id)
     assert f'<span class="btn-label">{word}</span>' in body
+
+
+def test_there_is_no_manual_reconstruction():
+    # Removed on 19 Nov 2026. The panel rebuilds only the two shares of a
+    # message the recipient received; there is no sidebar entry that opens it
+    # empty, and no file picker that feeds it shares from disk.
+    assert 'id="reconstructImageBtn"' not in INDEX
+    panel = INDEX[INDEX.index('id="reconstructionPanel"'):]
+    panel = panel[:panel.index('</aside>')]
+    assert 'type="file"' not in panel
+    assert 'Select Image' not in panel
+    assert 'manual' not in SHELL
 
 
 def test_the_keys_button_built_in_script_is_named_and_labelled():

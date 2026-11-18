@@ -29,16 +29,6 @@ registerLate({ blobToDataUrl, openReconstruction });
 // 13. Visual Cryptography Local Reconstruction
 // ==========================================
 
-/**
- * Switch the reconstruction panel between its two entry points.
- *
- * 'message' - opened from a share bubble; both shares load themselves.
- * 'manual'  - opened from the sidebar; the user supplies two files.
- */
-export function setReconstructionMode(mode) {
-    reconstructionPanel.classList.toggle('manual-mode', mode === 'manual');
-}
-
 function blobToDataUrl(blob) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -100,7 +90,6 @@ async function openReconstruction(msg) {
         }
         return;
     }
-    setReconstructionMode('message');
     setShareDownload(downloadShare1Btn, null);
     setShareDownload(downloadShare2Btn, share2Live);
 
@@ -231,41 +220,12 @@ reconstructBtn.addEventListener('click', async () => {
     }
 });
 
-// Manual share uploads. These controls are hidden unless the panel was opened
-// in manual mode; see setReconstructionMode().
-const selectShare1Btn = document.getElementById('selectShare1Btn');
-const selectShare2Btn = document.getElementById('selectShare2Btn');
-const share1Input = document.getElementById('share1Input');
-const share2Input = document.getElementById('share2Input');
+// The panel opens only from a received share (openReconstruction above);
+// there is no manual route that feeds it two files from disk.
 export const share1Preview = document.getElementById('share1Preview');
 export const share2Preview = document.getElementById('share2Preview');
 export const downloadShare1Btn = document.getElementById('downloadShare1Btn');
 export const downloadShare2Btn = document.getElementById('downloadShare2Btn');
-
-if (selectShare1Btn) selectShare1Btn.addEventListener('click', () => share1Input.click());
-if (selectShare2Btn) selectShare2Btn.addEventListener('click', () => share2Input.click());
-
-function readSharePick(input, preview, downloadBtn, assign) {
-    if (!input) return;
-    input.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (file && file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const dataUrl = e.target.result;
-                if (preview) preview.src = dataUrl;
-                if (!shared.currentShares) shared.currentShares = { share1Url: null, share2Live: null };
-                assign(dataUrl);
-                setShareDownload(downloadBtn, dataUrl);
-            };
-            reader.readAsDataURL(file);
-        }
-        input.value = '';
-    });
-}
-
-readSharePick(share1Input, share1Preview, downloadShare1Btn, url => { shared.currentShares.share1Url = url; });
-readSharePick(share2Input, share2Preview, downloadShare2Btn, url => { shared.currentShares.share2Live = url; });
 
 /** Arm (or disable) a download button for a share image. */
 export function setShareDownload(button, dataUrl) {

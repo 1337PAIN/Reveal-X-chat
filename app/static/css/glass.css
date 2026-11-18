@@ -60,9 +60,20 @@
     box-shadow: var(--glass-shadow-lg);
 }
 
+/* The band runs to the panel's edges. Inside the panel's 16px padding it
+   read as a separate box floating in the corner, its square ends showing
+   against the panel's rounded ones. */
 .panel-header {
     background: var(--glass-1);
     border-bottom: 1px solid var(--glass-border);
+    border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
+    margin: -16px -16px 16px;
+    padding: 10px 12px 10px 16px;
+}
+
+/* The result is its own section, not a caption on the button above it. */
+.reconstructed-display {
+    margin-top: 20px;
 }
 
 .sidebar-profile,
@@ -158,7 +169,6 @@ body[data-theme="light"] option {
 .btn-settings,
 .btn-close,
 .share-action,
-.btn-share-select,
 .reaction-pill {
     background: var(--glass-2);
     border: 1px solid var(--glass-border);
@@ -175,7 +185,6 @@ body[data-theme="light"] option {
 .btn-settings:hover,
 .btn-close:hover,
 .share-action:hover:not(:disabled),
-.btn-share-select:hover,
 .reaction-pill:hover {
     background: var(--glass-3);
     border-color: var(--glass-border-strong);

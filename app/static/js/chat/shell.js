@@ -2,16 +2,12 @@
 // Split out of chat.js; main.js loads the modules in order.
 
 import { registerLate } from './late.js';
-import { shared } from './shared.js';
 import {
     accountsSidebar,
     authModal,
-    downloadReconstructedBtn,
     logoutBtn,
     messageSearchInput,
     messagesContainer,
-    reconstructBtn,
-    reconstructionPanel,
     sidebarOverlay,
     sidebarToggle,
     socket,
@@ -31,14 +27,6 @@ import {
 import {
     setChatEnabled,
 } from './presence.js';
-import {
-    downloadShare1Btn,
-    downloadShare2Btn,
-    setReconstructionMode,
-    setShareDownload,
-    share1Preview,
-    share2Preview,
-} from './reconstruction.js';
 import {
     getPref,
     lockScreen,
@@ -225,30 +213,6 @@ if (logoutBtn) {
 const modalSettingsBtn = document.getElementById('settingsBtn');
 if (modalSettingsBtn) {
     modalSettingsBtn.addEventListener('click', openSettings);
-}
-
-// Devices & keys toggle links inside templates
-const reconstructPanelBtn = document.getElementById('reconstructImageBtn');
-if (reconstructPanelBtn) {
-    reconstructPanelBtn.addEventListener('click', () => {
-        // Manual mode: the user supplies both shares from disk.
-        shared.currentShares = { share1Url: null, share2Live: null };
-        setReconstructionMode('manual');
-        if (share1Preview) share1Preview.src = '';
-        if (share2Preview) share2Preview.src = '';
-        setShareDownload(downloadShare1Btn, null);
-        setShareDownload(downloadShare2Btn, null);
-        setShareDownload(downloadReconstructedBtn, null);
-        const recPreview = document.getElementById('reconstructedPreview');
-        if (recPreview) recPreview.src = '';
-        reconstructBtn.disabled = false;
-        const warning = document.getElementById('reconstructionWarning');
-        if (warning) {
-            warning.textContent = 'Select both shares manually to reconstruct.';
-            warning.className = 'warning-text';
-        }
-        reconstructionPanel.classList.add('active');
-    });
 }
 
 // Key manager link in the sidebar footer. (A phone button beside it opened a

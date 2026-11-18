@@ -118,7 +118,6 @@
                 </ul>
 
                 <div class="sidebar-footer">
-                    <button id="reconstructImageBtn" class="icon-btn footer-btn" type="button" title="Rebuild an image from two shares" aria-label="Rebuild an image from two shares"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-rebuild"></use></svg><span class="btn-label">Rebuild</span></button>
                     <button id="themeToggle" class="icon-btn theme-btn footer-btn" type="button" title="Toggle theme" aria-label="Switch to light theme"><svg class="icon theme-icon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg><span class="btn-label">Theme</span></button>
                 </div>
             </aside>
@@ -201,18 +200,16 @@
                     <button id="closePanel" class="btn-close" aria-label="Close reconstruction panel"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-close"></use></svg></button>
                 </div>
                 <div class="panel-content">
-                    <!-- "Select Image" only appears in manual mode (the 🔄 button).
-                         When the panel is opened from a chat message both shares are
-                         already loaded, so picking files there made no sense.
-                         Revoking belongs to the sender, on their own message bubble. -->
+                    <!-- Opened only from a received image share, with both shares
+                         already loaded. Manual reconstruction from two files on disk
+                         was removed on 19 Nov 2026. Revoking belongs to the sender,
+                         on their own message bubble. -->
                     <div class="share-display">
                         <div class="share-box">
                             <h4>Share 1</h4>
                             <img id="share1Preview" class="preview-img" src="" alt="Share 1">
                             <p class="preview-placeholder">Not loaded yet</p>
                             <div class="share-box-actions">
-                                <button id="selectShare1Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
-                                <input type="file" id="share1Input" accept="image/*" hidden>
                                 <button id="downloadShare1Btn" class="btn btn-secondary btn-share-download" type="button" disabled>Download</button>
                             </div>
                         </div>
@@ -221,8 +218,6 @@
                             <img id="share2Preview" class="preview-img" src="" alt="Share 2">
                             <p class="preview-placeholder">Not loaded yet</p>
                             <div class="share-box-actions">
-                                <button id="selectShare2Btn" class="btn btn-secondary btn-share-select" type="button">Select Image</button>
-                                <input type="file" id="share2Input" accept="image/*" hidden>
                                 <button id="downloadShare2Btn" class="btn btn-secondary btn-share-download" type="button" disabled>Download</button>
                             </div>
                         </div>

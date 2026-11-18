@@ -1332,13 +1332,6 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     border-radius: 4px;
 }
 
-.btn-share-select {
-    width: 100%;
-    margin-top: 8px;
-    font-size: 12px;
-    padding: 8px 12px;
-}
-
 .reconstructed-display img {
     width: 100%;
     max-height: 200px;
@@ -1697,11 +1690,24 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
         max-width: 88%;
     }
 
+    /* Below 900px the panel takes the whole width of the main area, so the
+       conversation is not beside it -- there is nothing to share the height
+       with. It used to be capped at 45vh, left over from when it stacked
+       under the chat: the reconstructed image was cut off behind an inner
+       scroll with half the screen empty beneath it. Full height; the panel
+       still scrolls if a small screen cannot hold it. */
     .reconstruction-panel {
         border-left: none;
         border-top: 1px solid var(--border);
-        max-height: 45vh;
+        max-height: none;
         width: 100%;
+    }
+
+    /* And the conversation steps aside while it is open. Left in the row it
+       was squeezed to about 2px wide rather than hidden: invisible, but still
+       a scrollable region in the tab order with nothing in it to focus. */
+    .main-content:has(> .reconstruction-panel.active) > .chat-section {
+        display: none;
     }
 }
 

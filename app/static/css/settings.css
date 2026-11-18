@@ -220,18 +220,6 @@ body[data-theme="light"] .lock-screen {
     padding: 7px 10px;
 }
 
-/* File pickers belong to manual reconstruction only. Opened from a message,
-   both shares load themselves, so offering "Select Image" there was noise. */
-.btn-share-select {
-    display: none;
-}
-
-.reconstruction-panel.manual-mode .btn-share-select {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
 /* --- Firebase sign-in ------------------------------------------------------ */
 
 .firebase-auth {

@@ -142,6 +142,45 @@ def test_settings(browser, server, width, theme):
 
 @pytest.mark.parametrize('theme', THEMES)
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
+def test_reconstruction_panel(browser, server, width, theme, tmp_path):
+    from test_flows import send_image
+
+    alice = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, ALICE)
+    page = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, BOB)
+    try:
+        for who, peer in ((alice, BOB[0]), (page, ALICE[0])):
+            if width == 'phone':
+                who.click('#sidebarToggle')
+            who.locator('#usersList button', has_text=peer).click()
+        send_image(alice, tmp_path)
+        share = page.locator('#messagesContainer .message:has([data-role="tamper-panel"])').last
+        share.locator('[data-action="reconstruct"]:not([disabled])').click(timeout=30000)
+        page.wait_for_selector('#reconstructionPanel.active')
+        # Nothing is cut off while the screen has room for it: on a phone the
+        # panel was capped at 45% of the height, which hid the reconstructed
+        # image below an inner scroll with half the screen empty beneath it.
+        # And the header band reaches the panel's edges instead of sitting
+        # inset as a box of its own.
+        box = page.evaluate('''() => {
+            const panel = document.getElementById('reconstructionPanel');
+            const main = panel.parentElement.getBoundingClientRect();
+            const p = panel.getBoundingClientRect();
+            const h = panel.querySelector('.panel-header').getBoundingClientRect();
+            return {hidden: panel.scrollHeight - panel.clientHeight,
+                    room: main.bottom - p.bottom,
+                    left: h.left - p.left, right: p.right - h.right, top: h.top - p.top};
+        }''')
+        assert box['hidden'] <= 1 or box['room'] <= 1, box
+        for edge in ('left', 'right', 'top'):
+            assert box[edge] <= 2, box
+        check(page, f'reconstruction-{width}-{theme}')
+    finally:
+        alice.context.close()
+        page.context.close()
+
+
+@pytest.mark.parametrize('theme', THEMES)
+@pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
 def test_image_share(browser, server, width, theme, tmp_path):
     """The send dialog, and the recipient's share card with its evidence open."""
     from test_flows import png_bytes

@@ -361,6 +361,20 @@ its own label (a negative margin meant for a hint under a heading).
   the bottom of its label, at 1440 px and 375 px in both themes, alongside the
   axe scan (AAA contrast on): **0 violations**.
 
+### Reconstruction panel on a phone
+
+Fixed on 19 Nov 2026, from a phone screenshot.
+
+- **The panel uses the whole screen.** It was capped at 45% of the height, a
+  leftover from when it stacked under the chat, so the reconstructed image
+  was cut off behind an inner scroll with half the screen empty below it.
+- **The conversation is hidden while the panel is open,** not squeezed. It had
+  been left about 2 px wide: invisible, but still a scrollable region with
+  nothing to focus, which axe reports as `scrollable-region-focusable`.
+- **The header band reaches the panel's edges** instead of sitting inset as a
+  separate box. `test_reconstruction_panel` measures both, at 1440 px and
+  375 px in both themes, alongside the axe scan: **0 violations**.
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

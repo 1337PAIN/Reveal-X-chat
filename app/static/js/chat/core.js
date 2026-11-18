@@ -124,7 +124,6 @@ export const settingsBio = document.getElementById('settingsBio');
 export const settingsStatus = document.getElementById('settingsStatus');
 const settingsNotifications = document.getElementById('settingsNotifications');
 export const themeToggle = document.getElementById('themeToggle');
-const reconstructImageBtn = document.getElementById('reconstructImageBtn');
 export const logoutBtn = document.getElementById('logoutBtn');
 export const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 export const profileImageInput = document.getElementById('profileImageInput');

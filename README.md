@@ -263,7 +263,7 @@ Reconstructed = Share 1 XOR Share 2
 
 - Share 1 is served through an unguessable capability token and has **one-time access**: once downloaded, the link is dead.
 - **Revoking is the sender's control**, on their own message bubble, which reads "Only <name> can rebuild this image. You can revoke it until they open it." Revoke is a secondary button that asks first, not a red one: it is a choice, not an alarm. The recipient legitimately holds both shares, so their panel offers **Download** for Share 1, Share 2 and the reconstruction instead.
-- The reconstruction panel has two modes. Opened from a message, both shares load themselves and no file pickers are shown. Opened from the 🔄 button in the sidebar it is a manual tool, and the **Select Image** pickers appear.
+- The reconstruction panel opens only from a received image share, with both shares already loaded. The manual tool (the sidebar's **Rebuild** button and its **Select Image** pickers, which took two share files from disk) was removed on 19 Nov 2026: in the app, a share only ever arrives in a message. On a phone the panel takes the full screen while it is open.
 
 ### 5. AI/ML Tamper Detection
 

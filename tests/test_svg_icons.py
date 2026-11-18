@@ -43,7 +43,6 @@ def test_the_sprite_is_hidden_from_everyone():
 
 @pytest.mark.parametrize('element_id,name', [
     ('settingsBtn', 'settings'),
-    ('reconstructImageBtn', 'rebuild'),
     ('themeToggle', 'moon'),
     ('shareImageBtn', 'camera'),
     ('voiceBtn', 'mic'),
