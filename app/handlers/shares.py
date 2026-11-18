@@ -129,10 +129,11 @@ def handle_send_share(data):
             'client_split': True,
         }
         extra.update(envelope_fields)
-        reply_to_id = data.get('reply_to')
-        if reply_to_id:
-            extra['reply_to'] = reply_preview(
-                chat_room.get_message_for_user(reply_to_id, current_user['id']))
+        # The browser never sends a reply with a share; an invalid one is
+        # dropped rather than failing an upload already on disk.
+        reply, _ = reply_for(data.get('reply_to'), current_user['id'], peer_id=recipient_id)
+        if reply:
+            extra['reply_to'] = reply
 
         message = chat_room.add_message(current_user['id'], recipient_id, 'share', envelope, extra)
     except Exception as exc:

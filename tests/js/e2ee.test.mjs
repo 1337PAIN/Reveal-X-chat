@@ -366,6 +366,38 @@ test('a field containing the separator is refused, not encoded ambiguously', asy
 });
 
 // ----------------------------------------------------------------------
+// Replies: the message a reply answers is part of what is authenticated
+// ----------------------------------------------------------------------
+
+function sendReply(from, to, text, replyTo) {
+    return from.session.encrypt(to.publicKey, text, { recipientId: to.id, replyTo });
+}
+
+test('a reply opens only with the message it was sent in reply to', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await sendReply(alice, bob, 'yes, one is fine', 'msg-123');
+    assert.equal(await open(bob, alice, bob, sent, { replyTo: 'msg-123' }), 'yes, one is fine');
+    // A server that re-points the reply, or strips it, breaks authentication.
+    assert.equal(await open(bob, alice, bob, sent, { replyTo: 'msg-999' }), null);
+    assert.equal(await open(bob, alice, bob, sent), null);
+});
+
+test('a server cannot turn a plain message into a reply', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    const sent = await send(alice, bob, 'not a reply');
+    assert.equal(await open(bob, alice, bob, sent), 'not a reply');
+    assert.equal(await open(bob, alice, bob, sent, { replyTo: 'msg-123' }), null);
+});
+
+test('a reply id containing the separator is refused', async () => {
+    const alice = await newSession('alice');
+    const bob = await newSession('bob');
+    assert.equal(await sendReply(alice, bob, 'x', 'msg|other'), null);
+});
+
+// ----------------------------------------------------------------------
 // Forward secrecy for the sender's key, and what it does not cover
 // ----------------------------------------------------------------------
 

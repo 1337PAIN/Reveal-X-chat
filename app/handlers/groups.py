@@ -187,10 +187,9 @@ def handle_group_send(data):
         return
 
     extra = {'encrypted': True} if encrypted else {}
-    reply_to_id = data.get('reply_to')
-    if reply_to_id:
-        extra['reply_to'] = reply_preview(
-            chat_room.get_message_for_user(reply_to_id, user['id']))
+    reply, _ = reply_for(data.get('reply_to'), user['id'], group_id=group_id)
+    if reply:
+        extra['reply_to'] = reply
 
     fanned = chat_room.add_group_message(user['id'], group_id, 'text', cleaned, extra)
     if not fanned:

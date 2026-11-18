@@ -204,6 +204,14 @@ is the entire point of having it.
   turns them on; the rules above then apply to them.
 - Every message read goes through `get_message_for_user`, which filters on
   `sender_id OR recipient_id`. Knowing a message id is not access.
+- **A reply may only quote a message from its own conversation** (19 Nov
+  2026). The server attaches a short preview of the quoted message -- sender
+  name, type, and for a message that was not end-to-end encrypted its first
+  120 characters -- and delivers it to the recipient. It used to accept any
+  message the sender had taken part in, so a reply to Carol could carry the
+  opening of something Bob had written. `reply_for` (`handlers/common.py`) now
+  requires the same two people, or the same group, and refuses anything else
+  (`tests/test_replies.py`).
 - Revoking, deleting and reading are each tested from the perspective of an
   uninvolved third user (`test_message_lifecycle.py`).
 
@@ -335,6 +343,11 @@ public key (`e2ee.js`). So the server cannot reflect a message back to its
 author, move it to another conversation, relabel its sender, recipient or
 uuid, change its time or swap its ephemeral key: any of those breaks the tag.
 No field may contain `|`, so two different contexts cannot encode alike.
+A reply appends `|reply=<message id>` naming the message it answers, so the
+server cannot re-point a reply, strip it, or turn a plain message into one;
+a message that is not a reply has exactly the data above (19 Nov 2026,
+`tests/js/e2ee.test.mjs`). The quote a reply shows is drawn from the
+reader's own decrypted copy of the original, never from the server.
 
 The chat opens every encrypted row through `openMessage`, in this order:
 decrypt (only `v: 4` is ever tried -- v1 to v3 decryption is removed, not

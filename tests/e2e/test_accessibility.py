@@ -181,6 +181,34 @@ def test_reconstruction_panel(browser, server, width, theme, tmp_path):
 
 @pytest.mark.parametrize('theme', THEMES)
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
+def test_reply(browser, server, width, theme):
+    """A sent reply's quote, and the reply bar open on the next one."""
+    from test_flows import menu_action, message_with, send_text
+
+    alice = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, ALICE)
+    bob = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, BOB)
+    try:
+        for page, peer in ((alice, BOB[0]), (bob, ALICE[0])):
+            if width == 'phone':
+                page.click('#sidebarToggle')
+            page.locator('#usersList button', has_text=peer).click()
+        send_text(bob, 'lunch at one?')
+        original = message_with(alice, 'lunch at one?')
+        original.wait_for()
+        menu_action(alice, original, 'reply')
+        send_text(alice, 'yes')
+        reply = message_with(alice, 'yes')
+        reply.locator('.message-reply >> text=lunch at one?').wait_for(timeout=15000)
+        menu_action(alice, reply, 'reply')
+        alice.wait_for_selector('#replyBar:not(.hidden)')
+        check(alice, f'reply-{width}-{theme}')
+    finally:
+        alice.context.close()
+        bob.context.close()
+
+
+@pytest.mark.parametrize('theme', THEMES)
+@pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
 def test_image_share(browser, server, width, theme, tmp_path):
     """The send dialog, and the recipient's share card with its evidence open."""
     from test_flows import png_bytes

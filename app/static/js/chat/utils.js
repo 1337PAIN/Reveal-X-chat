@@ -8,9 +8,6 @@ import {
     state,
     userSearchInput,
 } from './core.js';
-import {
-    announceToScreenReader,
-} from './basics.js';
 
 // ==========================================
 // 7. Search Debouncing & Utilities
@@ -42,20 +39,9 @@ messagesContainer.addEventListener('touchend', (event) => {
         const messageNode = event.target.closest('.message');
         if (messageNode) {
             const messageId = messageNode.dataset.messageId;
-            if (messageId) {
-                // Trigger swipe reply preview shortcut
-                announceToScreenReader('Swipe gesture triggered reply.');
-                const replyTitle = document.getElementById('replyTitle');
-                const replyText = document.getElementById('replyText');
-                const replyBar = document.getElementById('replyBar');
-                
-                if (replyBar && replyText && replyTitle) {
-                    const contentNode = messageNode.querySelector('.message-content');
-                    replyText.textContent = contentNode ? contentNode.textContent : 'File Share';
-                    replyBar.classList.remove('hidden');
-                    state.pendingReplyId = messageId;
-                }
-            }
+            // Swipe to reply: the same reply as the menu's Reply. This used
+            // to show the bar and set an id nothing ever sent.
+            if (messageId) late.startReply(messageId);
         }
     }
 }, { passive: true });

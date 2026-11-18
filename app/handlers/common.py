@@ -421,6 +421,37 @@ def deliver_message(msg_obj, sender_id, recipient_id):
         emit('new_message', recipient_payload, to=session_id)
 
 
+REPLY_REFUSED = 'That message cannot be replied to here'
+
+
+def reply_for(reply_to_id, user_id, peer_id=None, group_id=None):
+    """Return (preview, error) for a reply to reply_to_id.
+
+    The preview is built from a message the sender can see and delivered to
+    the recipient, so the quoted message must belong to the same conversation:
+    the same two people for a direct message, the same group for a group one.
+    This used to accept any message the sender had taken part in, which let a
+    reply to Carol carry the sender name, type and (for a message that was not
+    end-to-end encrypted) the opening text of something Bob wrote.
+    """
+    if not reply_to_id:
+        return None, None
+    if not isinstance(reply_to_id, str) or len(reply_to_id) > 64:
+        return None, REPLY_REFUSED
+    original = chat_room.get_message_for_user(reply_to_id, user_id)
+    if not original:
+        return None, REPLY_REFUSED
+    original_group = chat_room.message_group_id(reply_to_id)
+    if group_id is not None:
+        same = original_group == group_id
+    else:
+        same = (original_group is None
+                and {original['sender_id'], original['recipient_id']} == {user_id, peer_id})
+    if not same:
+        return None, REPLY_REFUSED
+    return reply_preview(original), None
+
+
 def reply_preview(message):
     if not message:
         return None

@@ -255,7 +255,10 @@ UUID), `sent_at` (the sender's clock, integer milliseconds since the epoch)
 and `epk` (the message's ephemeral public key, base64 SPKI on P-256). All four
 are stored and handed back in `extra` unchanged, because the recipient
 derives the message key with `epk` and authenticates the ciphertext against
-`v4|dm|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>|<epk>`. The server
+`v4|dm|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>|<epk>`, followed by
+`|reply=<reply_to>` when the message is a reply. `reply_to` must name a
+message in the same conversation (the same group, for `group_send`); text and
+voice answer `message_error` otherwise. The server
 answers `message_error` for a missing or malformed envelope, for `v` other
 than 4 ("Unsupported encryption version"; v1 to v3 are retired), for an `epk`
 that is not a point on P-256 or is the sender's own long-term key, for a `sent_at`

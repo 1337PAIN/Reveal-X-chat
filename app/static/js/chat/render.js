@@ -125,6 +125,8 @@ export function e2eeContext(msg) {
         msgUuid: extra.msg_uuid,
         sentAt: extra.sent_at,
         epk: extra.epk,
+        // A reply authenticates the message it answers (e2ee.js).
+        replyTo: extra.reply_to ? extra.reply_to.id : undefined,
     };
 }
 
@@ -160,6 +162,7 @@ async function fillTextContent(node, msg) {
 
     if (!msg.encrypted) {
         node.textContent = msg.content;
+        rememberText(msg.id, msg.content);
         return;
     }
 
@@ -168,6 +171,7 @@ async function fillTextContent(node, msg) {
 
     if (opened.status === 'ok') {
         node.textContent = opened.text;
+        rememberText(msg.id, opened.text);
     } else {
         node.textContent = OPEN_NOTICES[opened.status]
             || 'Encrypted message - cannot be opened with the current key pair.';
@@ -462,6 +466,7 @@ export function displayMessage(msg) {
 
     const isSent = msg.sender_id === state.currentUser.id;
     messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+    messageDiv.dataset.type = msg.type;
     if (isSent) messageDiv.dataset.read = msg.read_at ? 'true' : 'false';
 
     // Every message gets one status chip (chips.js) saying in words what
@@ -485,7 +490,7 @@ export function displayMessage(msg) {
                 <span class="message-menu-wrap">
                     <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-more"></use></svg></button>
                     <span class="message-menu" role="menu" hidden>
-                        <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
+                        ${messageMenuItems(msg, isSent)}
                     </span>
                 </span>
             </div>
@@ -500,13 +505,7 @@ export function displayMessage(msg) {
         // phone; deleteMessage then asks in an in-app dialog.
         const menuBtn = messageDiv.querySelector('.btn-message-menu');
         const menu = messageDiv.querySelector('.message-menu');
-        if (menuBtn && menu) {
-            const control = window.revealxDialogs.wireMenu(menuBtn, menu);
-            menu.querySelector('[role="menuitem"]').addEventListener('click', () => {
-                control.close(true);
-                late.deleteMessage(msg.id, isSent);
-            });
-        }
+        if (menuBtn && menu) wireMessageMenu(menuBtn, menu, msg, isSent);
 
         const reactBtn = messageDiv.querySelector('.btn-react');
         if (reactBtn) reactBtn.addEventListener('click', () => toggleReactionPicker(msg.id, reactBtn));
@@ -531,7 +530,7 @@ export function displayMessage(msg) {
                 <span class="message-menu-wrap">
                     <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-more"></use></svg></button>
                     <span class="message-menu" role="menu" hidden>
-                        <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
+                        ${messageMenuItems(msg, isSent)}
                     </span>
                 </span>
             </div>
@@ -557,13 +556,7 @@ export function displayMessage(msg) {
         // phone; deleteMessage then asks in an in-app dialog.
         const menuBtn = messageDiv.querySelector('.btn-message-menu');
         const menu = messageDiv.querySelector('.message-menu');
-        if (menuBtn && menu) {
-            const control = window.revealxDialogs.wireMenu(menuBtn, menu);
-            menu.querySelector('[role="menuitem"]').addEventListener('click', () => {
-                control.close(true);
-                late.deleteMessage(msg.id, isSent);
-            });
-        }
+        if (menuBtn && menu) wireMessageMenu(menuBtn, menu, msg, isSent);
 
         const reactBtn = messageDiv.querySelector('.btn-react');
         if (reactBtn) reactBtn.addEventListener('click', () => toggleReactionPicker(msg.id, reactBtn));
@@ -611,7 +604,7 @@ export function displayMessage(msg) {
                 <span class="message-menu-wrap">
                     <button class="btn-message-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for this message"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-more"></use></svg></button>
                     <span class="message-menu" role="menu" hidden>
-                        <button class="message-menu-item danger" type="button" role="menuitem">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>
+                        ${messageMenuItems(msg, isSent)}
                     </span>
                 </span>
             </div>
@@ -653,13 +646,7 @@ export function displayMessage(msg) {
         // phone; deleteMessage then asks in an in-app dialog.
         const menuBtn = messageDiv.querySelector('.btn-message-menu');
         const menu = messageDiv.querySelector('.message-menu');
-        if (menuBtn && menu) {
-            const control = window.revealxDialogs.wireMenu(menuBtn, menu);
-            menu.querySelector('[role="menuitem"]').addEventListener('click', () => {
-                control.close(true);
-                late.deleteMessage(msg.id, isSent);
-            });
-        }
+        if (menuBtn && menu) wireMessageMenu(menuBtn, menu, msg, isSent);
 
         const reactBtn = messageDiv.querySelector('.btn-react');
         if (reactBtn) reactBtn.addEventListener('click', () => toggleReactionPicker(msg.id, reactBtn));
@@ -679,9 +666,188 @@ export function displayMessage(msg) {
 
     }));
 
+    addReplyQuote(messageDiv, msg);
     messagesContainer.appendChild(messageDiv);
     filterVisibleMessages();
 }
+
+// ==========================================
+// Replies and the message menu
+// ==========================================
+
+// What each message says, once this page has it in clear: {messageId: text}.
+// Memory only, like everything else decrypted. A reply's quote is drawn from
+// here, because for an E2EE original the server only ever holds "Encrypted
+// message".
+const plainText = new Map();
+let pendingReply = null; // {id} while the reply bar is showing
+
+const REPLY_LABELS = { voice: 'Voice message', share: 'Image share' };
+
+function rememberText(messageId, text) {
+    plainText.set(String(messageId), text);
+    messagesContainer.querySelectorAll(`.message-reply[data-reply-to="${CSS.escape(String(messageId))}"] .reply-snippet`)
+        .forEach((node) => { node.textContent = text; });
+}
+
+/** The words to show for a quoted message: its text if this page has it. */
+function quoteText(id, preview) {
+    const known = plainText.get(String(id));
+    if (known !== undefined) return known;
+    if (preview && REPLY_LABELS[preview.type]) return REPLY_LABELS[preview.type];
+    if (preview && preview.content && preview.content !== 'Encrypted message') return preview.content;
+    return 'Original message';
+}
+
+function quoteAuthor(username) {
+    return username && state.currentUser && username === state.currentUser.username ? 'You' : (username || '');
+}
+
+/** A tappable quote at the top of a reply, which jumps to the original. */
+function addReplyQuote(messageDiv, msg) {
+    const preview = msg.extra && msg.extra.reply_to;
+    const content = messageDiv.querySelector('.message-content');
+    if (!preview || !preview.id || !content) return;
+    const quote = document.createElement('button');
+    quote.type = 'button';
+    quote.className = 'message-reply';
+    quote.dataset.replyTo = String(preview.id);
+    const who = document.createElement('strong');
+    who.textContent = quoteAuthor(preview.username);
+    const snippet = document.createElement('span');
+    snippet.className = 'reply-snippet';
+    snippet.textContent = quoteText(preview.id, preview);
+    quote.append(who, snippet);
+    // Named by what it shows (the author and the quoted words); what pressing
+    // it does is the title, not a replacement name.
+    quote.title = 'Show the original message';
+    quote.addEventListener('click', () => {
+        const original = messagesContainer.querySelector(`[data-message-id="${CSS.escape(String(preview.id))}"]`);
+        if (!original) {
+            window.revealxDialogs.toast('The original message is no longer in this chat.');
+            return;
+        }
+        original.scrollIntoView({ block: 'center' });
+        original.classList.add('flash');
+        setTimeout(() => original.classList.remove('flash'), 1600);
+    });
+    content.prepend(quote);
+}
+
+/** Show the reply bar for a message and put the cursor in the composer. */
+export function startReply(messageId) {
+    const node = messagesContainer.querySelector(`[data-message-id="${CSS.escape(String(messageId))}"]`);
+    const bar = document.getElementById('replyBar');
+    if (!node || !bar) return;
+    const author = node.querySelector('.message-username');
+    document.getElementById('replyTitle').textContent =
+        `Replying to ${author ? author.textContent : 'message'}`;
+    document.getElementById('replyText').textContent =
+        quoteText(messageId, { type: node.dataset.type });
+    pendingReply = { id: String(messageId) };
+    bar.classList.remove('hidden');
+    const input = document.getElementById('messageInput');
+    if (input) input.focus();
+    announceToScreenReader('Replying. Press Escape to cancel.');
+}
+
+export function clearReply() {
+    pendingReply = null;
+    const bar = document.getElementById('replyBar');
+    if (bar) bar.classList.add('hidden');
+}
+
+/** The id of the message being replied to, or undefined. */
+export function pendingReplyId() {
+    return pendingReply ? pendingReply.id : undefined;
+}
+
+const cancelReplyBtn = document.getElementById('cancelReplyBtn');
+if (cancelReplyBtn) {
+    cancelReplyBtn.addEventListener('click', () => {
+        clearReply();
+        const input = document.getElementById('messageInput');
+        if (input) input.focus();
+    });
+}
+const replyInput = document.getElementById('messageInput');
+if (replyInput) {
+    replyInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && pendingReply) {
+            event.preventDefault();
+            clearReply();
+        }
+    });
+}
+
+async function copyText(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch (error) {
+        // No async clipboard (an insecure origin, or a refused permission):
+        // the selection route still works in every browser this supports.
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.append(area);
+        area.select();
+        let done = false;
+        try { done = document.execCommand('copy'); } catch (ignored) { done = false; }
+        area.remove();
+        return done;
+    }
+}
+
+/** The items of a message's "more" menu: Reply, Copy for text, Delete. */
+function messageMenuItems(msg, isSent) {
+    const copy = msg.type === 'text'
+        ? '<button class="message-menu-item" type="button" role="menuitem" data-menu="copy">Copy</button>'
+        : '';
+    return '<button class="message-menu-item" type="button" role="menuitem" data-menu="reply">Reply</button>'
+        + copy
+        + `<button class="message-menu-item danger" type="button" role="menuitem" data-menu="delete">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>`;
+}
+
+function wireMessageMenu(menuBtn, menu, msg, isSent) {
+    const control = window.revealxDialogs.wireMenu(menuBtn, menu);
+    // The menu opens upwards from its button. On a message near the top of
+    // the conversation that put it under the chat header, where it could be
+    // seen but not pressed; there it opens downwards instead. Registered
+    // after wireMenu's own click handler, so the menu is already shown.
+    menuBtn.addEventListener('click', () => {
+        menu.classList.remove('opens-down');
+        if (menu.hidden) return;
+        if (menu.getBoundingClientRect().top < messagesContainer.getBoundingClientRect().top) {
+            menu.classList.add('opens-down');
+        }
+    });
+    menu.querySelectorAll('[data-menu]').forEach((item) => {
+        item.addEventListener('click', async () => {
+            const action = item.dataset.menu;
+            if (action === 'delete') {
+                control.close(true);
+                late.deleteMessage(msg.id, isSent);
+            } else if (action === 'reply') {
+                control.close(false);
+                startReply(msg.id);
+            } else if (action === 'copy') {
+                control.close(true);
+                const text = plainText.get(String(msg.id));
+                if (text === undefined) {
+                    window.revealxDialogs.toast('This message cannot be copied: it is not open on this device.');
+                    return;
+                }
+                window.revealxDialogs.toast(await copyText(text) ? 'Copied.' : 'Copying is not available here.');
+            }
+        });
+    });
+}
+
+registerLate({ startReply });
+
 
 function filterVisibleMessages() {
     const query = messageSearchInput.value.trim().toLowerCase();

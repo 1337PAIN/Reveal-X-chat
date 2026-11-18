@@ -1329,6 +1329,12 @@ class ChatRoom:
             return None
         return self._row_to_message(row)
 
+    def message_group_id(self, message_id):
+        """The group a message row belongs to, or None for a direct message."""
+        with self._connect() as db:
+            row = db.execute("SELECT group_id FROM messages WHERE id = ?", (message_id,)).fetchone()
+        return row['group_id'] if row else None
+
     def update_message_extra(self, message_id, extra):
         extra = {k: v for k, v in (extra or {}).items() if k not in FORBIDDEN_EXTRA_KEYS}
         with self._connect() as db:

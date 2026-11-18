@@ -153,6 +153,68 @@ def test_a_rebuilt_share_is_spent_and_keeps_its_verdict(pair, tmp_path):
     assert not alice.errors and not bob.errors, alice.errors + bob.errors
 
 
+def menu_action(page, bubble, action):
+    """Open a message's "more" menu and pick an action, by its data-menu name."""
+    bubble.locator('.btn-message-menu').click()
+    bubble.locator(f'[data-menu="{action}"]').click()
+
+
+def test_a_reply_quotes_the_message_it_answers(pair):
+    """The quote is drawn from each side's own decrypted copy: the server only
+    ever holds "Encrypted message" for an E2EE original."""
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    open_chat_by_keyboard(bob, ALICE[0])
+    send_text(bob, 'lunch at one?')
+    original = message_with(alice, 'lunch at one?')
+    original.wait_for()
+
+    menu_action(alice, original, 'reply')
+    alice.wait_for_selector('#replyBar:not(.hidden)')
+    assert 'lunch at one?' in alice.locator('#replyBar').inner_text()
+    send_text(alice, 'yes, see you there')
+    alice.wait_for_selector('#replyBar.hidden', state='attached')
+
+    for page in (alice, bob):
+        reply = message_with(page, 'yes, see you there')
+        reply.wait_for()
+        quote = reply.locator('.message-reply')
+        quote.locator('text=lunch at one?').wait_for(timeout=15000)
+        assert 'E2EE' in reply.locator('.msg-chip').inner_text()
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_a_reply_can_be_cancelled(pair):
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    open_chat_by_keyboard(bob, ALICE[0])
+    send_text(bob, 'first')
+    original = message_with(alice, 'first')
+    original.wait_for()
+    menu_action(alice, original, 'reply')
+    alice.wait_for_selector('#replyBar:not(.hidden)')
+    alice.click('#cancelReplyBtn')
+    alice.wait_for_selector('#replyBar.hidden', state='attached')
+    send_text(alice, 'not a reply')
+    sent = message_with(bob, 'not a reply')
+    sent.wait_for()
+    assert sent.locator('.message-reply').count() == 0
+
+
+def test_copy_puts_the_decrypted_text_on_the_clipboard(pair):
+    alice, bob = pair
+    alice.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+    open_chat_by_keyboard(alice, BOB[0])
+    open_chat_by_keyboard(bob, ALICE[0])
+    send_text(bob, 'the code is 4471')
+    message = message_with(alice, 'the code is 4471')
+    message.wait_for()
+    menu_action(alice, message, 'copy')
+    alice.wait_for_function(
+        "async () => (await navigator.clipboard.readText()) === 'the code is 4471'")
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
 def test_a_revoked_share_can_no_longer_be_opened(pair, tmp_path):
     alice, bob = pair
     open_chat_by_keyboard(alice, BOB[0])

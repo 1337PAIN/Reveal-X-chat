@@ -41,8 +41,12 @@
  *   AES-GCM additional data is
  *   "v4|<conversation>|<sender_id>|<recipient_id>|<msg_uuid>|<sent_at>|<epk>",
  *   where conversation is "dm" ("group:<id>" is reserved) and epk is the
- *   ephemeral public key, base64 SPKI. It also names the direction in the
- *   HKDF info, so a message cannot be reflected back to its author.
+ *   ephemeral public key, base64 SPKI. A reply appends "|reply=<message id>"
+ *   naming the message it answers, so a server that re-points a reply,
+ *   strips it, or turns a plain message into one breaks authentication;
+ *   a message that is not a reply has exactly the data above. It also names
+ *   the direction in the HKDF info, so a message cannot be reflected back to
+ *   its author.
  *
  *   openMessage then refuses anything whose authenticated sent_at is more
  *   than 65 minutes old or 5 minutes ahead, and anything whose msg_uuid it
@@ -86,8 +90,14 @@ function associatedData(context) {
     if (!Number.isSafeInteger(context.sentAt) || context.sentAt < 0) return null;
     const fields = [context.senderId, context.recipientId, context.msgUuid, context.epk].map(aadField);
     if (fields.some((field) => field === null || field === '' || field === 'undefined')) return null;
+    let reply = '';
+    if (context.replyTo !== undefined && context.replyTo !== null && context.replyTo !== '') {
+        const id = aadField(context.replyTo);
+        if (id === null || id === 'undefined') return null;
+        reply = `|reply=${id}`;
+    }
     return new TextEncoder().encode(
-        `v4|${conversation}|${fields[0]}|${fields[1]}|${fields[2]}|${context.sentAt}|${fields[3]}`);
+        `v4|${conversation}|${fields[0]}|${fields[1]}|${fields[2]}|${context.sentAt}|${fields[3]}${reply}`);
 }
 
 // What a reader has already been shown, keyed
@@ -424,6 +434,7 @@ class E2EESession {
             msgUuid,
             sentAt,
             epk,
+            replyTo: context.replyTo,
         });
         if (!additionalData) return null;
 

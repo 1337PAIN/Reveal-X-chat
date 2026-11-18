@@ -31,8 +31,10 @@ import {
     updateUsersList,
 } from './presence.js';
 import {
+    clearReply,
     displayMessage,
     openEncrypted,
+    pendingReplyId,
     scrollToBottom,
 } from './render.js';
 
@@ -277,7 +279,11 @@ async function sendMessage() {
     messageInput.value = '';
     updateComposerCounter();
 
+    // A reply names the message it answers; for E2EE the id is also bound
+    // into the authenticated data, so the server cannot re-point it.
+    const replyTo = pendingReplyId();
     let payload = { recipient_id: recipientId, message: text };
+    if (replyTo) payload.reply_to = replyTo;
 
     if (mode === 'encrypt') {
         // This used to catch an encryption error, log it, and send the
@@ -285,7 +291,7 @@ async function sendMessage() {
         // gives the text back; see send-policy.js.
         let sealed;
         try {
-            sealed = await window.revealxE2EE.encrypt(peerPublicKey(recipientId), text, { recipientId });
+            sealed = await window.revealxE2EE.encrypt(peerPublicKey(recipientId), text, { recipientId, replyTo });
         } catch (error) {
             sealed = error;
         }
@@ -305,9 +311,11 @@ async function sendMessage() {
             sent_at: sealed.sent_at,
             epk: sealed.epk,
         };
+        if (replyTo) payload.reply_to = replyTo;
     }
 
     socket.emit('send_message', payload);
+    clearReply();
 }
 
 /**
@@ -627,6 +635,7 @@ async function sendVoiceMessage(blob, recipientId) {
     if (!mode) return;
 
     const mime = (blob.type || 'audio/webm').split(';')[0];
+    const replyTo = pendingReplyId();
 
     if (mode === 'encrypt') {
         // As for text: a failure stops the send rather than falling back to
@@ -634,7 +643,7 @@ async function sendVoiceMessage(blob, recipientId) {
         let sealed;
         try {
             sealed = await window.revealxE2EE.encryptBytes(
-                peerPublicKey(recipientId), await blob.arrayBuffer(), { recipientId });
+                peerPublicKey(recipientId), await blob.arrayBuffer(), { recipientId, replyTo });
         } catch (error) {
             sealed = error;
         }
@@ -653,13 +662,17 @@ async function sendVoiceMessage(blob, recipientId) {
             msg_uuid: sealed.msg_uuid,
             sent_at: sealed.sent_at,
             epk: sealed.epk,
+            ...(replyTo ? { reply_to: replyTo } : {}),
         });
+        clearReply();
         return;
     }
 
     socket.emit('send_voice', {
         recipient_id: recipientId,
         audio: await late.blobToDataUrl(blob),
+        ...(replyTo ? { reply_to: replyTo } : {}),
     });
+    clearReply();
 }
 

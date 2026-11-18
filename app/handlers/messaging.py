@@ -59,6 +59,10 @@ def handle_message(data):
     if not chat_room.can_message(current_user['id'], recipient_id):
         emit('message_error', {'error': NOT_A_CONTACT})
         return
+    reply, reply_error = reply_for(reply_to_id, current_user['id'], peer_id=recipient_id)
+    if reply_error:
+        emit('message_error', {'error': reply_error})
+        return
     if not _take_send_token(current_user['id'], 'message'):
         emit('message_error', {'error': SEND_TOO_FAST})
         return
@@ -75,8 +79,8 @@ def handle_message(data):
         extra['encrypted'] = True
         extra['iv'] = iv
         extra.update(envelope)
-    if reply_to_id:
-        extra['reply_to'] = reply_preview(chat_room.get_message_for_user(reply_to_id, current_user['id']))
+    if reply:
+        extra['reply_to'] = reply
 
     msg_obj = chat_room.add_message(current_user['id'], recipient_id, 'text', message, extra)
     if not msg_obj:
@@ -110,6 +114,10 @@ def handle_voice(data):
         return
     if not chat_room.can_message(current_user['id'], recipient_id):
         emit('message_error', {'error': NOT_A_CONTACT})
+        return
+    reply, reply_error = reply_for(reply_to_id, current_user['id'], peer_id=recipient_id)
+    if reply_error:
+        emit('message_error', {'error': reply_error})
         return
     if not _take_send_token(current_user['id'], 'voice'):
         emit('message_error', {'error': SEND_TOO_FAST})
@@ -158,8 +166,8 @@ def handle_voice(data):
             emit('message_error', {'error': 'Voice message is too large'})
             return
 
-    if reply_to_id:
-        extra['reply_to'] = reply_preview(chat_room.get_message_for_user(reply_to_id, current_user['id']))
+    if reply:
+        extra['reply_to'] = reply
 
     msg_obj = chat_room.add_message(current_user['id'], recipient_id, 'voice', audio_data, extra)
     if not msg_obj:
