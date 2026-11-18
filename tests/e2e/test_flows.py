@@ -63,9 +63,9 @@ def png_bytes(width=320, height=240):
             + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
 
 
-def send_image(page, tmp_path, name='picture.png'):
+def send_image(page, tmp_path, name='picture.png', size=(320, 240)):
     path = tmp_path / name
-    path.write_bytes(png_bytes())
+    path.write_bytes(png_bytes(*size))
     page.set_input_files('#imageInput', str(path))
     page.wait_for_selector('#imagePreviewModal:not(.hidden)')
     page.click('#confirmImageBtn')
@@ -117,6 +117,39 @@ def test_an_image_is_split_checked_and_reconstructed(pair, tmp_path):
         "() => (document.getElementById('reconstructedPreview').src || '').startsWith('data:image')",
         timeout=30000)
     shot(bob, 'image-reconstructed')
+    assert not alice.errors and not bob.errors, alice.errors + bob.errors
+
+
+def test_a_rebuilt_share_is_spent_and_keeps_its_verdict(pair, tmp_path):
+    """Opening a share uses up Share 1. Afterwards the bubble must not offer
+    Reconstruct or Re-check again (the server would only answer "already
+    opened"), must keep the verdict it showed, and frames a portrait picture
+    without bands down its sides."""
+    alice, bob = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    open_chat_by_keyboard(bob, ALICE[0])
+    send_image(alice, tmp_path, size=(180, 320))
+
+    share = bob.locator('#messagesContainer .message:has([data-role="tamper-panel"])').last
+    share.wait_for()
+    panel = share.locator('[data-role="tamper-panel"]')
+    panel.locator('text=verified intact').wait_for(timeout=30000)
+    share.locator('[data-action="reconstruct"]').click()
+    bob.wait_for_function("() => !document.getElementById('reconstructBtn').disabled", timeout=30000)
+    bob.click('#reconstructBtn')
+    share.locator('.share-card.revealed').wait_for(timeout=30000)
+
+    assert share.locator('[data-action="reconstruct"]').is_disabled()
+    assert share.locator('[data-action="recheck"]').is_disabled()
+    assert 'verified intact' in panel.inner_text()
+    assert 'already opened' not in panel.inner_text()
+
+    fit = share.evaluate('''el => {
+        const tile = el.querySelector('.share-tile').getBoundingClientRect();
+        const img = el.querySelector('.share-image').getBoundingClientRect();
+        return {tile: tile.width, img: img.width};
+    }''')
+    assert fit['tile'] - fit['img'] <= 3, fit
     assert not alice.errors and not bob.errors, alice.errors + bob.errors
 
 

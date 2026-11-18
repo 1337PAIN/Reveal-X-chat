@@ -1158,17 +1158,22 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
 
 .share-lock .icon { width: 22px; height: 22px; }
 
+/* Once rebuilt, the frame takes the picture's own shape. A fixed-width tile
+   letterboxed a portrait photo with dark bands down both sides. */
 .share-card.revealed .share-tile {
+    align-self: center;
     aspect-ratio: auto;
-    max-height: 320px;
-    background: var(--bg-tertiary);
+    background: none;
+    max-width: 100%;
+    width: fit-content;
 }
 
 .share-tile .share-image {
     display: block;
-    width: 100%;
+    width: auto;
+    height: auto;
+    max-width: 100%;
     max-height: 320px;
-    object-fit: contain;
     border: 0;
     border-radius: 0;
 }

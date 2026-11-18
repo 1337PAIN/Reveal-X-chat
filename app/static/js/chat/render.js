@@ -323,7 +323,18 @@ export async function runShareAnalysis(msg, { force = false, panel = null } = {}
         if (!response.ok || !data.ok) {
             // 404 means the share is spent, revoked or expired - there is
             // nothing left to reconstruct, so stop offering the action.
-            if (response.status === 404) setShareActionsDisabled(panel, true);
+            if (response.status === 404) {
+                setShareActionsDisabled(panel, true);
+                // Opening a share uses it up. The verdict it was opened on
+                // still holds, so keep showing that rather than replacing it
+                // with the server's "already opened".
+                if (cached) {
+                    renderTamperPanel(panel, cached);
+                    return cached;
+                }
+                throw new Error('This share was already opened, revoked or has expired, '
+                    + 'so it can no longer be checked.');
+            }
             throw new Error(data.error || 'Integrity check failed');
         }
 
@@ -375,7 +386,8 @@ export async function runLocalShareVerification(messageId, share1DataUrl, panel)
 function setShareActionsDisabled(panel, disabled) {
     const bubble = panel.closest('.message');
     if (!bubble) return;
-    bubble.querySelectorAll('.share-action[data-action="reconstruct"]').forEach(button => {
+    bubble.querySelectorAll('.share-action[data-action="reconstruct"], '
+        + '.share-action[data-action="recheck"]').forEach(button => {
         button.disabled = disabled;
     });
 }
@@ -405,6 +417,11 @@ export function revealShareImage(messageId, src) {
         caption: root.querySelector('.share-caption'),
         detail: root.querySelector('.share-detail'),
     }, src);
+    // Share 1 was fetched once to build this; it cannot be fetched or
+    // checked again, so neither action is offered any more.
+    root.closest('.message').querySelectorAll(
+        '.share-action[data-action="reconstruct"], .share-action[data-action="recheck"]'
+    ).forEach(button => { button.disabled = true; });
 }
 
 /** Draw a status chip from chips.js: an aria-hidden glyph and the words. */
