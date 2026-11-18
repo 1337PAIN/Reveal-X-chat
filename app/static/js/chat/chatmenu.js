@@ -97,10 +97,16 @@ async function openContactInfo(user) {
     }
 }
 
+function closeContactInfo() {
+    infoModal.classList.add('hidden');
+    if (menuBtn && !menuBtn.hidden) menuBtn.focus();
+}
+
 if (infoModal) {
-    document.getElementById('contactInfoCloseBtn').addEventListener('click', () => {
-        infoModal.classList.add('hidden');
-        if (menuBtn && !menuBtn.hidden) menuBtn.focus();
+    document.getElementById('contactInfoCloseBtn').addEventListener('click', closeContactInfo);
+    // Escape closes it, as it does every other dialog; it was the one left out.
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !infoModal.classList.contains('hidden')) closeContactInfo();
     });
 }
 

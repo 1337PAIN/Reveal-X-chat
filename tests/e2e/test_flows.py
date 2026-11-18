@@ -421,6 +421,19 @@ def row_names(page, selector='#usersList'):
     return page.eval_on_selector_all(f'{selector} .user-name', 'els => els.map(e => e.textContent)')
 
 
+def test_escape_closes_contact_info_and_returns_focus(pair):
+    """Every other dialog closed on Escape; Contact info did not, so a keyboard
+    user had to find its close button to get back to the conversation."""
+    alice, _ = pair
+    open_chat_by_keyboard(alice, BOB[0])
+    alice.click('#chatMenuBtn')
+    alice.locator('#chatMenu [data-action="info"]').click()
+    alice.wait_for_selector('#contactInfoModal:not(.hidden)')
+    alice.keyboard.press('Escape')
+    alice.wait_for_selector('#contactInfoModal.hidden', state='attached')
+    assert alice.evaluate('() => document.activeElement.id') == 'chatMenuBtn'
+
+
 def test_the_chat_menu_pins_archives_locks_and_blocks(pair):
     alice, bob = pair
     open_chat_by_keyboard(alice, BOB[0])
