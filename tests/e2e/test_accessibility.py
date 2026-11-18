@@ -333,6 +333,24 @@ def test_chat_menu_and_contact_info(browser, server, width, theme):
         page.context.close()
 
 
+@pytest.mark.parametrize('theme', THEMES)
+@pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
+def test_encryption_keys(browser, server, width, theme):
+    """The key manager, with a contact's safety number and its "Mark as
+    verified" control: the one dialog the scan had never opened."""
+    alice = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, ALICE)
+    bob = sign_in(themed(new_page(browser, *WIDTHS[width]), theme), server, BOB)
+    try:
+        if width == 'phone':
+            alice.click('#sidebarToggle')
+        alice.locator('button[title="Encryption keys"]').click()
+        alice.wait_for_selector('#keyManagerModal:not(.hidden) .key-verified-toggle')
+        check(alice, f'keys-{width}-{theme}')
+    finally:
+        alice.context.close()
+        bob.context.close()
+
+
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
 def test_lab(browser, server, width):
     page = new_page(browser, *WIDTHS[width])

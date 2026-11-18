@@ -3266,3 +3266,66 @@ body[data-theme="light"] .username-status.bad {
         white-space: nowrap;
     }
 }
+
+/* --- Encryption keys dialog -----------------------------------------------
+   On a phone it read as unfinished: oversized centred headings beside
+   left-aligned rows, "Regenerate Key Pair" jammed against the next heading,
+   and the "Mark as verified" checkbox on a line of its own, apart from its
+   words. It now follows the settings panel: small section headings, left
+   aligned, spaced sections, and the checkbox beside its label as one 44px
+   control. */
+#keyManagerModal .key-manager-content {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    margin: 4px 0 18px;
+    text-align: left;
+}
+
+#keyManagerModal .key-manager-content h3 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    margin: 0 0 10px;
+    text-transform: uppercase;
+}
+
+#keyManagerModal .key-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#keyManagerModal #regenerateKeyBtn {
+    align-self: flex-start;
+}
+
+#keyManagerModal .key-exchange-row {
+    gap: 4px 12px;
+    padding: 10px 0;
+}
+
+#keyManagerModal .key-exchange-name {
+    font-weight: 600;
+}
+
+#keyManagerModal .key-exchange-fingerprint {
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+#keyManagerModal .key-verified-toggle {
+    align-items: center;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 13px;
+    gap: 10px;
+    min-height: 44px;
+}
+
+#keyManagerModal .key-verified-toggle input {
+    accent-color: var(--accent);
+    height: 20px;
+    margin: 0;
+    width: 20px;
+}

@@ -397,6 +397,21 @@ a tall box with the "..." alone on a second row.
 - `test_a_phone_bubble_footer_stays_on_one_line` checks every footer at
   360 px on an emulated touch screen; it fails on the previous stylesheet.
 
+### Contact info and the encryption keys dialog
+
+Found on the second phone pass, 19 Nov 2026.
+
+- **Escape closes Contact info** and returns focus to the chat menu button.
+  Every other dialog closed on Escape; this one did not, so a keyboard user
+  had to find its close button (`test_escape_closes_contact_info_and_returns_focus`).
+- **The encryption keys dialog follows the settings panel**: small
+  left-aligned section headings instead of oversized centred ones, spaced
+  sections, and "Mark as verified" as one 44 px control with its checkbox
+  beside its words; on a phone the checkbox had sat on a line of its own.
+- **The dialog is now in the axe scan** (`test_encryption_keys`, 1440 px and
+  375 px, both themes, AAA contrast on): **0 violations**. It was the one
+  dialog the scan had never opened.
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on
