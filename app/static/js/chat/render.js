@@ -336,8 +336,18 @@ export async function runShareAnalysis(msg, { force = false, panel = null } = {}
                     renderTamperPanel(panel, cached);
                     return cached;
                 }
-                throw new Error('This share was already opened, revoked or has expired, '
-                    + 'so it can no longer be checked.');
+                // Nothing left to open or check: say so on the card and stop
+                // offering two buttons that can only be disabled.
+                const bubble = panel.closest('.message');
+                if (bubble) {
+                    const actions = bubble.querySelector('.share-actions');
+                    if (actions) actions.hidden = true;
+                    const status = bubble.querySelector('.share-status');
+                    if (status) status.textContent = 'Already opened, revoked or expired.';
+                }
+                panel.className = 'tamper-panel unknown';
+                panel.textContent = 'It can no longer be opened or checked.';
+                return null;
             }
             throw new Error(data.error || 'Integrity check failed');
         }
@@ -422,10 +432,14 @@ export function revealShareImage(messageId, src) {
         detail: root.querySelector('.share-detail'),
     }, src);
     // Share 1 was fetched once to build this; it cannot be fetched or
-    // checked again, so neither action is offered any more.
-    root.closest('.message').querySelectorAll(
+    // checked again, so neither action is offered any more -- disabled, and
+    // the row hidden rather than left as two dead buttons.
+    const bubble = root.closest('.message');
+    bubble.querySelectorAll(
         '.share-action[data-action="reconstruct"], .share-action[data-action="recheck"]'
     ).forEach(button => { button.disabled = true; });
+    const actions = bubble.querySelector('.share-actions');
+    if (actions && !actions.querySelector('.share-action:not([disabled])')) actions.hidden = true;
 }
 
 /** Draw a status chip from chips.js: an aria-hidden glyph and the words. */
@@ -806,7 +820,10 @@ function messageMenuItems(msg, isSent) {
     const copy = msg.type === 'text'
         ? '<button class="message-menu-item" type="button" role="menuitem" data-menu="copy">Copy</button>'
         : '';
+    // React is in the menu on touch screens only (CSS .touch-only); with a
+    // mouse the smiley beside the time is still there.
     return '<button class="message-menu-item" type="button" role="menuitem" data-menu="reply">Reply</button>'
+        + '<button class="message-menu-item touch-only" type="button" role="menuitem" data-menu="react">React</button>'
         + copy
         + `<button class="message-menu-item danger" type="button" role="menuitem" data-menu="delete">${isSent ? 'Delete for everyone' : 'Delete for me'}</button>`;
 }
@@ -825,9 +842,15 @@ function wireMessageMenu(menuBtn, menu, msg, isSent) {
         }
     });
     menu.querySelectorAll('[data-menu]').forEach((item) => {
-        item.addEventListener('click', async () => {
+        item.addEventListener('click', async (event) => {
             const action = item.dataset.menu;
-            if (action === 'delete') {
+            if (action === 'react') {
+                // Stopped here: the click would otherwise reach the page's
+                // "click outside closes the picker" handler and shut it again.
+                event.stopPropagation();
+                control.close(false);
+                toggleReactionPicker(msg.id, menuBtn);
+            } else if (action === 'delete') {
                 control.close(true);
                 late.deleteMessage(msg.id, isSent);
             } else if (action === 'reply') {

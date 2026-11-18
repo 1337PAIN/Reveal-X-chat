@@ -992,6 +992,38 @@ button.message-reply {
     bottom: auto;
 }
 
+/* The bubble's bottom row on a phone. Every small button there is 44px tall
+   on a touch screen (the touch-target rule above), and the row was allowed
+   to wrap: on a narrow phone, or with larger system text, the "..." dropped
+   to a second 44px row and a one-word message became a tall box with a gap
+   in it. The button keeps its 44px target but no longer sets the row's
+   height (negative block margin), and React moves into the "..." menu, which
+   leaves room for the row to fit on one line. */
+.message-reactions:empty {
+    display: none;
+}
+
+.message-menu-item.touch-only {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    .message-meta .btn-react {
+        display: none;
+    }
+
+    .message-menu-item.touch-only {
+        display: block;
+    }
+
+    /* Still a 44px target, but only about 22px of the row: the rest
+       overlaps the gap and the bubble's own padding. */
+    .message-meta .btn-message-menu {
+        margin-block: -10px;
+        margin-inline: -12px -10px;
+    }
+}
+
 .message-menu-item {
     background: none;
     border: none;
@@ -1231,6 +1263,10 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     font-size: 12px;
     line-height: 1.45;
     color: var(--text-secondary);
+}
+
+.share-actions[hidden] {
+    display: none;
 }
 
 .share-actions {
@@ -1989,9 +2025,14 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
+/* A plain line, not a bordered box: "can no longer be checked" is a state,
+   not an alarm, and the box read as an error. */
 .tamper-panel.unknown {
-    border-color: var(--text-secondary);
+    background: none;
+    border: 0;
     color: var(--text-secondary);
+    font-size: 13px;
+    padding: 0;
 }
 
 .tamper-verdict {
@@ -3155,3 +3196,73 @@ body[data-theme="light"] .username-status.bad {
 
 #changeChatLockPinBtn + #forgotChatLockPinBtn { margin-top: 8px; }
 
+/* --- Phone bubbles (kept last: they override the general rules above) -----
+   A little wider and less padded, as in any phone messenger. At 88% with
+   16px padding an image share's footer (the "Opens once - 60 min left" chip,
+   the time, Read and the menu) and its Reconstruct and Re-check buttons did
+   not fit a 360px screen and wrapped onto extra lines. */
+@media (max-width: 560px) {
+    .message {
+        max-width: 92%;
+        padding: 10px 12px;
+    }
+
+    .message-meta {
+        column-gap: 5px;
+    }
+
+    .share-actions {
+        flex-wrap: nowrap;
+    }
+
+    /* "Re-check" broke into "Re-" and "check" inside its button at 320px. */
+    .share-action {
+        padding: 6px 10px;
+        white-space: nowrap;
+    }
+
+    .share-content {
+        width: 100%;
+    }
+
+    /* An image share's footer is the widest: the chip alone is ~170px. The
+       conversation's 20px side padding is 10px on a phone, and the chip is a
+       little tighter, which is what lets that footer fit one line at 360px. */
+    .messages-container {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    .message:has(> .share-content) {
+        width: 92%;
+    }
+
+    .msg-chip {
+        gap: 3px;
+        padding: 1px 6px;
+    }
+
+    /* One line, always. Wrapping put the menu on a line of its own; now, if a
+       very narrow screen or large system text leaves too little room, the
+       chip's words shorten with an ellipsis and the time, Read and the menu
+       stay whole. */
+    .message-meta {
+        flex-wrap: nowrap;
+    }
+
+    .message-meta > * {
+        flex-shrink: 0;
+    }
+
+    .message-meta > .msg-chip {
+        flex-shrink: 1;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .message-meta > .msg-chip > span:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}

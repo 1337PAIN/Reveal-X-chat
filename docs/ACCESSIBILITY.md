@@ -375,6 +375,28 @@ Fixed on 19 Nov 2026, from a phone screenshot.
   separate box. `test_reconstruction_panel` measures both, at 1440 px and
   375 px in both themes, alongside the axe scan: **0 violations**.
 
+### Message bubbles on a phone
+
+Fixed on 19 Nov 2026, from a phone screenshot of a one-word message drawn as
+a tall box with the "..." alone on a second row.
+
+- **The footer is one line.** On a touch screen every small button is a 44 px
+  target, and the footer was allowed to wrap, so each wrapped line was 44 px
+  tall. The "..." keeps its 44 px target but no longer sets the row's height
+  or most of its width (negative margins over the bubble's padding), and on a
+  very narrow screen the status chip's words shorten with an ellipsis rather
+  than pushing the time, Read or the menu onto another line.
+- **React is in the "..." menu on a touch screen**, with Reply, Copy and
+  Delete; with a mouse the smiley beside the time is still there.
+- **Bubbles are wider and less padded on a phone** (92 %, 12 px), the
+  conversation's side padding is 10 px, and an image share takes the full
+  bubble width, so its Reconstruct and Re-check sit on one line.
+- **A share that can no longer be opened says so in a line of text**, not a
+  bordered box that read as an error, and its dead buttons are hidden, as
+  they are once the image has been rebuilt.
+- `test_a_phone_bubble_footer_stays_on_one_line` checks every footer at
+  360 px on an emulated touch screen; it fails on the previous stylesheet.
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

@@ -207,6 +207,53 @@ def test_reply(browser, server, width, theme):
         bob.context.close()
 
 
+def touch_page(browser, width=360, height=780):
+    """A phone: touch, so (pointer: coarse) applies as on a real device."""
+    context = browser.new_context(service_workers='block', is_mobile=True, has_touch=True,
+                                  viewport={'width': width, 'height': height})
+    context.set_default_timeout(15000)
+    page = context.new_page()
+    page.errors = []
+    page.on('pageerror', lambda error: page.errors.append(str(error)))
+    return page
+
+
+def test_a_phone_bubble_footer_stays_on_one_line(browser, server, tmp_path):
+    """On a phone the footer (chip, time, Read, "...") was allowed to wrap, and
+    each wrapped line was a 44px touch-target tall: a one-word message became
+    a tall box with the menu alone on a second row. Every footer is one line
+    now, for text and for an image share, the widest."""
+    from test_flows import message_with, send_image, send_text
+
+    alice = sign_in(touch_page(browser), server, ALICE)
+    bob = sign_in(touch_page(browser), server, BOB)
+    try:
+        for page, peer in ((alice, BOB[0]), (bob, ALICE[0])):
+            page.click('#sidebarToggle')
+            page.locator('#usersList button', has_text=peer).click()
+        send_text(bob, 'lunch?')
+        message_with(alice, 'lunch?').wait_for()
+        send_text(alice, 'Hge')
+        message_with(bob, 'Hge').wait_for()
+        alice.wait_for_timeout(2100)
+        send_image(alice, tmp_path)
+        bob.locator('#messagesContainer .message:has([data-role="tamper-panel"]) '
+                    '[data-role="tamper-panel"] >> text=verified intact').wait_for(timeout=30000)
+        for page in (alice, bob):
+            rows = page.evaluate('''() => [...document.querySelectorAll('#messagesContainer .message')]
+                .map(m => [...m.querySelector('.message-meta').children]
+                    .filter(c => c.getBoundingClientRect().width > 0)
+                    .map(c => { const r = c.getBoundingClientRect(); return r.top + r.height / 2; }))''')
+            assert len(rows) == 3, rows
+            for centres in rows:
+                assert max(centres) - min(centres) <= 4, rows
+            # React lives in the menu on a touch screen, not beside the time.
+            assert page.locator('.message-meta .btn-react:visible').count() == 0
+    finally:
+        alice.context.close()
+        bob.context.close()
+
+
 @pytest.mark.parametrize('theme', THEMES)
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
 def test_image_share(browser, server, width, theme, tmp_path):
