@@ -613,6 +613,7 @@ python -c "import sqlite3;print([dict(r) for r in sqlite3.connect('app/data/reve
 
 | Document | What it covers |
 | --- | --- |
+| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | The 27 functional and 14 non-functional requirements from the FYP report, each with the test that verifies it or its measured outcome |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model: assets, adversaries, every control mapped to the code and test that holds it — and an explicit list of what is **not** defended |
 | [docs/API.md](docs/API.md) | All 9 HTTP routes and 57 Socket.IO events, with the fields each reads |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, Render, and running it from Windows behind a tunnel, on a fixed address on your own domain |
