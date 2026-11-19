@@ -165,3 +165,22 @@ document.addEventListener('keydown', (event) => {
 // chat.js every top-level function was a window property by default; module
 // functions are not, so the one that is used from outside is exposed here.
 window.announceToScreenReader = announceToScreenReader;
+
+// The wordmark is whole or not shown. A narrow top bar truncated it to
+// "Reveal..." -- and on a phone with large system text that happened at
+// widths where it otherwise fits, so no width breakpoint could catch it. When
+// it would be cut, it is hidden visually beside the logo mark (still the
+// page's heading for a screen reader) instead.
+const wordmark = document.querySelector('.logo h1');
+function fitWordmark() {
+    if (!wordmark) return;
+    const logo = wordmark.parentElement;
+    logo.classList.remove('wordmark-hidden');
+    if (wordmark.scrollWidth > wordmark.clientWidth + 1) logo.classList.add('wordmark-hidden');
+}
+if (wordmark) {
+    fitWordmark();
+    window.addEventListener('resize', fitWordmark);
+    if (window.ResizeObserver) new ResizeObserver(fitWordmark).observe(document.querySelector('.header') || document.body);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitWordmark);
+}

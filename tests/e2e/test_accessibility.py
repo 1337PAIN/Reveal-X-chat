@@ -351,6 +351,29 @@ def test_encryption_keys(browser, server, width, theme):
         bob.context.close()
 
 
+@pytest.mark.parametrize('size', [(1440, 900), (320, 640)], ids=['desktop', 'narrow'])
+def test_the_wordmark_is_whole_or_not_shown(browser, server, size):
+    """A narrow top bar truncated the wordmark to "Reveal..." (and on a phone
+    with large system text, at widths where it would otherwise fit). It is now
+    shown whole or, when it cannot fit, visually hidden beside the logo mark,
+    still read out as the page's heading."""
+    page = sign_in(new_page(browser, *size), server, ALICE)
+    try:
+        page.wait_for_timeout(300)
+        state = page.evaluate('''() => {
+            const h1 = document.querySelector('.logo h1');
+            const r = h1.getBoundingClientRect();
+            return {cut: h1.scrollWidth > h1.clientWidth + 1, width: r.width, text: h1.textContent};
+        }''')
+        assert state['text'] == 'Reveal-X'
+        visible = state['width'] > 1
+        assert not (visible and state['cut']), state
+        if size[0] == 1440:
+            assert visible, state
+    finally:
+        page.context.close()
+
+
 @pytest.mark.parametrize('width', WIDTHS, ids=list(WIDTHS))
 def test_lab(browser, server, width):
     page = new_page(browser, *WIDTHS[width])

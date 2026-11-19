@@ -412,6 +412,16 @@ Found on the second phone pass, 19 Nov 2026.
   375 px, both themes, AAA contrast on): **0 violations**. It was the one
   dialog the scan had never opened.
 
+### The wordmark in the top bar
+
+19 Nov 2026, from a phone screenshot showing "Reveal...". A narrow top bar
+truncated the wordmark with an ellipsis, and on a phone with large system
+text that happened at widths where it would otherwise fit, so no width
+breakpoint could catch it. `basics.js` now checks whether it would be cut
+and, if so, hides it visually beside the logo mark (it stays the page's
+heading for a screen reader). It is whole or not shown, never "Reveal..."
+(`test_the_wordmark_is_whole_or_not_shown`, 1440 px and 320 px).
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

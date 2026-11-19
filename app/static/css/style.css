@@ -3329,3 +3329,17 @@ body[data-theme="light"] .username-status.bad {
     margin: 0;
     width: 20px;
 }
+
+/* --- The wordmark, whole or not at all -------------------------------------
+   basics.js adds .wordmark-hidden when the heading would be truncated; it
+   is then clipped out of sight (the .sr-only pattern) rather than shown as
+   "Reveal...", and the logo mark stands alone. */
+.logo.wordmark-hidden h1 {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+}
