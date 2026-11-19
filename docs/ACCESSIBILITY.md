@@ -422,6 +422,14 @@ and, if so, hides it visually beside the logo mark (it stays the page's
 heading for a screen reader). It is whole or not shown, never "Reveal..."
 (`test_the_wordmark_is_whole_or_not_shown`, 1440 px and 320 px).
 
+### The recording clock
+
+19 Nov 2026, from a phone screenshot. While recording a voice note, the
+clock was allowed to shrink when the bar was short of room, and "0:01" ran
+into the level meter beside it. The clock keeps its natural width now and
+the meter gives way, dropping its oldest bars off the left
+(`test_the_recording_clock_does_not_run_into_the_meter`, 320 and 360 px).
+
 ## Keyboard-only walkthrough
 
 Done with real key presses, no pointer, in the in-app browser on

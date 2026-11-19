@@ -130,3 +130,28 @@ def test_the_voice_note_fits_a_phone(mic_browser, server):
     finally:
         alice.context.close()
         bob.context.close()
+
+
+@pytest.mark.parametrize('width', (320, 360))
+def test_the_recording_clock_does_not_run_into_the_meter(mic_browser, server, width):
+    """The clock was allowed to shrink (min-width: 0), so on a phone "0:01"
+    ran into the level meter beside it."""
+    alice = sign_in(new_page(mic_browser, width, 780), server, ALICE)
+    bob = sign_in(new_page(mic_browser), server, BOB)
+    try:
+        alice.click('#sidebarToggle')
+        open_chat_by_keyboard(alice, BOB[0])
+        alice.click('#voiceBtn')
+        alice.wait_for_selector('#voiceRecorder:not(.hidden)')
+        alice.wait_for_function(r"() => /\d:\d\d/.test(document.getElementById('voiceTimer').textContent)")
+        gap = alice.evaluate("""() => {
+            const timer = document.getElementById('voiceTimer');
+            const levels = document.getElementById('voiceLevels').getBoundingClientRect();
+            return {fits: timer.scrollWidth <= timer.clientWidth + 1,
+                    gap: levels.left - timer.getBoundingClientRect().right};
+        }""")
+        assert gap['fits'] and gap['gap'] >= 4, gap
+        alice.click('#voiceCancelBtn')
+    finally:
+        alice.context.close()
+        bob.context.close()

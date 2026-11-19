@@ -2514,9 +2514,14 @@ body[data-theme="light"] .message.sent[data-read="true"] .message-status {
     animation: voice-pulse 1.2s ease-in-out infinite;
 }
 
+/* Its natural width, always. With min-width: 0 it shrank when the bar was
+   short of room, and on a phone "0:01" ran into the level meter. The meter
+   is the part that gives way (it drops its oldest bars off the left). */
 .voice-recorder .voice-timer {
-    min-width: 0;
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
     padding: 0;
+    white-space: nowrap;
 }
 
 .voice-levels-host {

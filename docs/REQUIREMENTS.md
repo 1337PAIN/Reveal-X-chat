@@ -64,7 +64,7 @@ the report.
 | NFR-10 | Accessibility | Text contrast shall meet WCAG 2.1 Level AAA in both themes | Met — 0 below AAA across 229 elements; axe-core AAA gate in CI |
 | NFR-11 | Usability | The interface shall be usable at phone widths and honour reduced-motion and reduced-transparency preferences | Met — audited, §5.7 |
 | NFR-12 | Portability | The system shall run on SQLite in development and PostgreSQL in production from one codebase | Met — asserted in CI |
-| NFR-13 | Maintainability | Automated test code shall be comparable in size to application code | Met — 16,585 vs 17,707 lines; 1,459 tests |
+| NFR-13 | Maintainability | Automated test code shall be comparable in size to application code | Met — 16,610 vs 17,707 lines; 1,459 tests |
 | NFR-14 | Reliability | The full suite shall pass on every change, on two Python versions | Met — CI green |
 
 ## Running the checks
