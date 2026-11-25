@@ -225,7 +225,7 @@ def render_markdown(r):
         'statistic the classifier measures where it was, so no threshold on these',
         'features can see it. That is why the HMAC exists: it catches every change,',
         'noise included, and the classifier is the second opinion that localises',
-        'damage and survives re-encoding. ' + _other_misses(r, missed),
+        'the damage and explains its verdict. ' + _other_misses(r, missed),
         '',
         '### Confusion matrix',
         '',
