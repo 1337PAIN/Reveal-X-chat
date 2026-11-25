@@ -58,7 +58,7 @@ random noise to a share that is itself uniform random noise leaves every
 statistic the classifier measures where it was, so no threshold on these
 features can see it. That is why the HMAC exists: it catches every change,
 noise included, and the classifier is the second opinion that localises
-damage and survives re-encoding. Of the other attacks, the classifier missed only scratch 2 of 85 times.
+the damage and explains its verdict. Of the other attacks, the classifier missed only scratch 2 of 85 times.
 
 ### Confusion matrix
 
